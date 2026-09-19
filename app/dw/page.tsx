@@ -21,19 +21,44 @@ export default function DownloadsPage() {
   const [loading, setLoading] = useState(false);
 
   const fetchBuilds = useCallback(async (pw: string) => {
+    if (pw !== "seanisbtter") {
+      setError("Invalid password. Access denied.");
+      setIsUnlocked(false);
+      return;
+    }
+
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/builds?password=${encodeURIComponent(pw)}`);
-      const data = await res.json();
-      if (res.ok && data.success) {
-        setBuilds(data.builds || []);
-        setIsUnlocked(true);
-        sessionStorage.setItem("sentinal_dw_auth", pw);
-      } else {
-        setError(data.message || "Invalid password. Access denied.");
-        setIsUnlocked(false);
-      }
+      const allBuilds: BuildItem[] = [];
+
+      // 1. Fetch from Next.js local static registry
+      try {
+        const resLocal = await fetch(`/api/builds?password=${encodeURIComponent(pw)}`);
+        const dataLocal = await resLocal.json();
+        if (dataLocal.success && Array.isArray(dataLocal.builds)) {
+          allBuilds.push(...dataLocal.builds);
+        }
+      } catch {}
+
+      // 2. Fetch from Central Supabase backend
+      try {
+        const resBackend = await fetch(
+          `https://backend-pi68.onrender.com/api/builds?password=${encodeURIComponent(pw)}`
+        );
+        const dataBackend = await resBackend.json();
+        if (dataBackend.success && Array.isArray(dataBackend.builds)) {
+          allBuilds.push(...dataBackend.builds);
+        }
+      } catch {}
+
+      setIsUnlocked(true);
+      sessionStorage.setItem("sentinal_dw_auth", pw);
+
+      // Deduplicate and sort by finishedAt descending
+      const unique = Array.from(new Map(allBuilds.map((b) => [b.name + b.finishedAt, b])).values());
+      unique.sort((a, b) => new Date(b.finishedAt).getTime() - new Date(a.finishedAt).getTime());
+      setBuilds(unique);
     } catch {
       setError("Network error fetching builds.");
     } finally {
