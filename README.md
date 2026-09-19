@@ -52,3 +52,9 @@ npm run build
 # Run linter
 npm run lint
 ```
+
+## 5. Jira Project Tracking & Smart Commits
+* Jira Board: [Sentinel Security (SS) Board](https://ractopen.atlassian.net/jira/software/projects/SS/boards/2)
+* Active Sprint: `SS Sprint 3 - UI/UX Design`
+* GitHub Integration: Commits pushed to `Sentinal-Security/web` automatically synchronize with Jira tickets.
+* Commit Convention: Include the Jira issue key in square brackets (e.g., `feat(ui): style registration form [SS-45]`) to link commits directly to the ticket.
