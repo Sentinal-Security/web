@@ -14,6 +14,7 @@ Web client for the Sentinal Security system, functioning as an enterprise Identi
 * `/register`: Functional registration form. Accepts Full Name, Email, and Password. Sends credentials to backend `POST /api/auth/register`.
 * `/login`: Functional login form. Accepts Email and Password. Verifies credentials against backend `POST /api/auth/login`, stores session data in `localStorage`, and redirects to `/dashboard`.
 * `/dashboard`: Protected route requiring an active session. Displays user profile information, Multi-Factor Authentication (MFA) pairing status, and a sign-out trigger.
+* `/dw`: Protected internal build downloads portal. Requires authorization password `seanisbtter`. Displays all CI/CD build outputs with 12-hour formatted timestamps (`hh:mm:ss a`). **Strict No-Design and No-Edit policy applies to this utility.**
 
 ## 3. Backend Integration
 The frontend connects to the centralized Spring Boot API via `lib/api.ts`.
