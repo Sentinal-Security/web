@@ -1,0 +1,11 @@
+[
+  {
+    "id": "build-001",
+    "name": "sentinal-authenticator-test-output.html",
+    "type": "HTML Test Output",
+    "branch": "development",
+    "commit": "54704e1",
+    "downloadUrl": "/builds/test-build.html",
+    "finishedAt": "2026-09-19T19:05:00.000Z"
+  }
+]
