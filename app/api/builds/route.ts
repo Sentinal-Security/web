@@ -15,13 +15,35 @@ export interface BuildRecord {
   finishedAt: string;
 }
 
+function formatHumanReadable12h(dateInput?: string | Date): string {
+  try {
+    const d = dateInput ? new Date(dateInput) : new Date();
+    if (isNaN(d.getTime())) return String(dateInput);
+    return d.toLocaleString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: true,
+    });
+  } catch {
+    return String(dateInput);
+  }
+}
+
 function getBuilds(): BuildRecord[] {
   try {
     if (!fs.existsSync(BUILDS_FILE)) {
       return [];
     }
     const data = fs.readFileSync(BUILDS_FILE, "utf-8");
-    return JSON.parse(data);
+    const parsed: BuildRecord[] = JSON.parse(data);
+    return parsed.map((b) => ({
+      ...b,
+      finishedAt: formatHumanReadable12h(b.finishedAt),
+    }));
   } catch {
     return [];
   }
@@ -47,7 +69,7 @@ export async function GET(request: Request) {
   }
 
   const builds = getBuilds();
-  return NextResponse.json({ success: true, builds });
+  return NextResponse.json({ success: true, count: builds.length, builds });
 }
 
 export async function POST(request: Request) {
@@ -69,6 +91,8 @@ export async function POST(request: Request) {
       );
     }
 
+    const formattedTime = formatHumanReadable12h(finishedAt);
+
     const newBuild: BuildRecord = {
       id: `build-${Date.now()}`,
       name,
@@ -76,14 +100,18 @@ export async function POST(request: Request) {
       branch: branch || "development",
       commit: commit ? commit.slice(0, 7) : "HEAD",
       downloadUrl,
-      finishedAt: finishedAt || new Date().toISOString(),
+      finishedAt: formattedTime,
     };
 
     const builds = getBuilds();
     builds.unshift(newBuild);
     saveBuilds(builds);
 
-    return NextResponse.json({ success: true, message: "Build registered successfully", build: newBuild });
+    return NextResponse.json({
+      success: true,
+      message: "Build registered successfully",
+      build: newBuild,
+    });
   } catch (err: unknown) {
     return NextResponse.json(
       { success: false, message: err instanceof Error ? err.message : "Internal error" },
