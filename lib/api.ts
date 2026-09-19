@@ -8,6 +8,15 @@ export interface AuthResponse {
   email?: string;
   fullName?: string;
   mfaEnabled?: boolean;
+  mfaRequired?: boolean;
+}
+
+export interface MfaSetupResponse {
+  success: boolean;
+  message: string;
+  secretKey?: string;
+  otpAuthUri?: string;
+  accountEmail?: string;
 }
 
 export interface HealthResponse {
@@ -48,6 +57,49 @@ export async function loginUser(data: {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
+  });
+  return res.json();
+}
+
+export async function setupMfa(userId: number): Promise<MfaSetupResponse> {
+  const res = await fetch(`${API_BASE_URL}/api/mfa/setup`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ userId }),
+  });
+  return res.json();
+}
+
+export async function verifyMfaSetup(
+  userId: number,
+  code: string
+): Promise<AuthResponse> {
+  const res = await fetch(`${API_BASE_URL}/api/mfa/verify-setup`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ userId, code }),
+  });
+  return res.json();
+}
+
+export async function verifyMfaLogin(data: {
+  userId?: number;
+  email?: string;
+  code: string;
+}): Promise<AuthResponse> {
+  const res = await fetch(`${API_BASE_URL}/api/mfa/verify-login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  return res.json();
+}
+
+export async function disableMfa(userId: number): Promise<AuthResponse> {
+  const res = await fetch(`${API_BASE_URL}/api/mfa/disable`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ userId }),
   });
   return res.json();
 }
