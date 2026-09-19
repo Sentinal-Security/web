@@ -1,11 +1,20 @@
 [
   {
+    "id": "build-002",
+    "name": "sentinal-mobile-fast-test.html",
+    "type": "HTML Fast Test (8s Build)",
+    "branch": "main",
+    "commit": "5b41b87",
+    "downloadUrl": "https://github.com/Sentinal-Security/mobile/actions/runs/35439259114",
+    "finishedAt": "2026-09-19T11:08:06.000Z"
+  },
+  {
     "id": "build-001",
     "name": "sentinal-authenticator-test-output.html",
     "type": "HTML Test Output",
     "branch": "development",
     "commit": "54704e1",
     "downloadUrl": "/builds/test-build.html",
-    "finishedAt": "2026-09-19T19:05:00.000Z"
+    "finishedAt": "2026-09-19T11:05:00.000Z"
   }
 ]
