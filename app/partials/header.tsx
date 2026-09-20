@@ -10,11 +10,14 @@ export default function Header() {
     <header className="sticky top-0 z-50 w-full bg-black/90 backdrop-blur-md border-b border-white/10 transition-colors">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
         {/* Brand Logo */}
-        <Link href="/landingpage" className="flex items-center gap-2 group">
+        <Link href="/landingpage" className="flex items-center gap-2.5 group">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo.png" alt="Sentinel Logo" className="w-8 h-8 rounded-lg object-contain" />
           <span className="text-2xl font-bold tracking-tight text-[#54f4fc] group-hover:brightness-110 transition-all">
             Sentinel
           </span>
         </Link>
+
 
         {/* Desktop Navigation Links */}
         <nav className="hidden md:flex items-center space-x-8 text-sm font-medium text-gray-300">

@@ -30,10 +30,13 @@ export default function LoginPage() {
       <header className="w-full max-w-6xl mx-auto px-4 sm:px-8 pt-8 pb-6 flex items-center justify-between relative z-10">
         <Link
           href="/"
-          className="text-2xl font-bold tracking-tight text-[#38e1ff] hover:opacity-90 transition-opacity"
+          className="text-2xl font-bold tracking-tight text-[#38e1ff] hover:opacity-90 transition-opacity flex items-center gap-2.5"
         >
-          Sentinel
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo.png" alt="Sentinel Logo" className="w-8 h-8 rounded-lg object-contain" />
+          <span>Sentinel</span>
         </Link>
+
 
         <nav className="flex items-center gap-7 sm:gap-10 text-xs sm:text-sm text-slate-300 font-medium">
           <Link href="#" className="hover:text-white transition-colors">
