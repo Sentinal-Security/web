@@ -2,207 +2,464 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { loginUser, verifyMfaLogin } from "@/lib/api";
 
 export default function LoginPage() {
-  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  // MFA Challenge State
-  const [mfaChallenge, setMfaChallenge] = useState(false);
-  const [pendingUserId, setPendingUserId] = useState<number | null>(null);
-  const [totpCode, setTotpCode] = useState("");
-
-  const handlePasswordSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
-    setLoading(true);
-
-    try {
-      const res = await loginUser({ email, password });
-      if (res.success) {
-        if (res.mfaRequired) {
-          setMfaChallenge(true);
-          setPendingUserId(res.userId || null);
-        } else {
-          localStorage.setItem(
-            "sentinal_user",
-            JSON.stringify({
-              userId: res.userId,
-              email: res.email,
-              fullName: res.fullName,
-              mfaEnabled: res.mfaEnabled,
-            })
-          );
-          router.push("/dashboard");
-        }
-      } else {
-        setError(res.message || "Invalid credentials.");
-      }
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Network error. Please try again.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleMfaSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
-    setLoading(true);
-
-    try {
-      const res = await verifyMfaLogin({
-        userId: pendingUserId || undefined,
-        email: email,
-        code: totpCode,
-      });
-
-      if (res.success) {
-        localStorage.setItem(
-          "sentinal_user",
-          JSON.stringify({
-            userId: res.userId,
-            email: res.email,
-            fullName: res.fullName,
-            mfaEnabled: true,
-          })
-        );
-        router.push("/dashboard");
-      } else {
-        setError(res.message || "Invalid MFA code. Please try again.");
-      }
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Verification failed. Please try again.");
-    } finally {
-      setLoading(false);
-    }
-  };
+  const [rememberMe, setRememberMe] = useState(false);
 
   return (
-    <div style={{ maxWidth: 420, margin: "40px auto", padding: 24, fontFamily: "sans-serif" }}>
-      <h2>Sign In</h2>
-      <p style={{ color: "#666", marginBottom: 20 }}>Sentinal Security IAM Portal</p>
+    <div className="min-h-screen bg-[#030712] text-white flex flex-col justify-between selection:bg-cyan-400 selection:text-black font-sans antialiased relative overflow-hidden">
+      {/* Background ambient glowing blue aura */}
+      <div
+        className="absolute top-1/3 left-1/4 -translate-x-1/2 -translate-y-1/3 w-[650px] h-[450px] pointer-events-none rounded-full blur-[140px] opacity-70"
+        style={{
+          background:
+            "radial-gradient(circle, rgba(21, 93, 252, 0.8) 0%, rgba(13, 53, 150, 0.5) 50%, rgba(5, 20, 66, 0) 80%)",
+        }}
+      />
+      <div
+        className="absolute bottom-1/4 right-1/4 w-[500px] h-[350px] pointer-events-none rounded-full blur-[130px] opacity-50"
+        style={{
+          background:
+            "radial-gradient(circle, rgba(14, 165, 233, 0.6) 0%, rgba(10, 60, 160, 0.3) 60%, transparent 80%)",
+        }}
+      />
 
-      {error && (
-        <div style={{ padding: 12, background: "#ffebee", color: "#c62828", marginBottom: 16, borderRadius: 4 }}>
-          {error}
-        </div>
-      )}
-
-      {!mfaChallenge ? (
-        <form onSubmit={handlePasswordSubmit}>
-          <div style={{ marginBottom: 14 }}>
-            <label style={{ display: "block", marginBottom: 4, fontWeight: "bold" }}>Email Address</label>
-            <input
-              type="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              style={{ width: "100%", padding: 8, boxSizing: "border-box" }}
-              placeholder="user@example.com"
-            />
-          </div>
-
-          <div style={{ marginBottom: 20 }}>
-            <label style={{ display: "block", marginBottom: 4, fontWeight: "bold" }}>Password</label>
-            <input
-              type="password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              style={{ width: "100%", padding: 8, boxSizing: "border-box" }}
-              placeholder="Your password"
-            />
-          </div>
-
-          <button
-            type="submit"
-            disabled={loading}
-            style={{
-              width: "100%",
-              padding: 10,
-              background: "#000",
-              color: "#fff",
-              border: "none",
-              cursor: loading ? "not-allowed" : "pointer",
-              fontWeight: "bold",
-            }}
-          >
-            {loading ? "Signing in..." : "Sign In"}
-          </button>
-        </form>
-      ) : (
-        <form onSubmit={handleMfaSubmit}>
-          <div style={{ padding: 12, background: "#e3f2fd", marginBottom: 16, borderRadius: 4 }}>
-            <strong>Two-Factor Authentication Required</strong>
-            <p style={{ margin: "6px 0 0 0", fontSize: 13 }}>
-              Enter the 6-digit verification code from your Sentinal Mobile Authenticator app for <strong>{email}</strong>.
-            </p>
-          </div>
-
-          <div style={{ marginBottom: 20 }}>
-            <label style={{ display: "block", marginBottom: 4, fontWeight: "bold" }}>6-Digit Security Code</label>
-            <input
-              type="text"
-              required
-              maxLength={6}
-              pattern="[0-9]{6}"
-              autoFocus
-              value={totpCode}
-              onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, ""))}
-              style={{ width: "100%", padding: 10, fontSize: 18, letterSpacing: 4, textAlign: "center", boxSizing: "border-box" }}
-              placeholder="123456"
-            />
-          </div>
-
-          <button
-            type="submit"
-            disabled={loading || totpCode.length !== 6}
-            style={{
-              width: "100%",
-              padding: 10,
-              background: "#1976d2",
-              color: "#fff",
-              border: "none",
-              cursor: loading || totpCode.length !== 6 ? "not-allowed" : "pointer",
-              fontWeight: "bold",
-            }}
-          >
-            {loading ? "Verifying..." : "Verify & Complete Sign In"}
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              setMfaChallenge(false);
-              setTotpCode("");
-              setError(null);
-            }}
-            style={{
-              width: "100%",
-              marginTop: 10,
-              padding: 8,
-              background: "transparent",
-              border: "1px solid #ccc",
-              cursor: "pointer",
-            }}
-          >
-            Cancel & Back to Password
-          </button>
-        </form>
-      )}
-
-      <p style={{ marginTop: 20, fontSize: 14 }}>
-        Don&apos;t have an account?{" "}
-        <Link href="/register" style={{ color: "#0066cc" }}>
-          Register here
+      {/* Top Navigation Bar */}
+      <header className="w-full max-w-6xl mx-auto px-4 sm:px-8 pt-8 pb-6 flex items-center justify-between relative z-10">
+        <Link
+          href="/"
+          className="text-2xl font-bold tracking-tight text-[#38e1ff] hover:opacity-90 transition-opacity"
+        >
+          Sentinel
         </Link>
-      </p>
+
+        <nav className="flex items-center gap-7 sm:gap-10 text-xs sm:text-sm text-slate-300 font-medium">
+          <Link href="#" className="hover:text-white transition-colors">
+            Pricing
+          </Link>
+          <div className="relative group cursor-pointer flex items-center gap-1.5 hover:text-white transition-colors">
+            <span>Features</span>
+            <svg
+              className="w-3.5 h-3.5 text-slate-400 group-hover:text-white transition-colors"
+              viewBox="0 0 20 20"
+              fill="currentColor"
+            >
+              <path
+                fillRule="evenodd"
+                d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"
+                clipRule="evenodd"
+              />
+            </svg>
+          </div>
+          <Link href="#" className="hover:text-white transition-colors">
+            Support
+          </Link>
+          <Link href="#" className="hover:text-white transition-colors">
+            Blog
+          </Link>
+          <Link href="#" className="hover:text-white transition-colors">
+            Partners
+          </Link>
+        </nav>
+      </header>
+
+      {/* Main Login Content Area */}
+      <main className="flex-1 flex items-center justify-center px-4 sm:px-6 lg:px-8 py-8 sm:py-14 relative z-10">
+        <div className="max-w-6xl w-full mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-center">
+          
+          {/* Left Column: Headline */}
+          <div className="lg:col-span-6 flex flex-col justify-center">
+            <h1 className="text-3xl sm:text-4xl lg:text-[42px] font-bold text-white tracking-tight leading-[1.2] max-w-lg">
+              Experience Seamless
+              <br />
+              Centralized Identity Governance,
+              <br />
+              and Real-Time Device
+              <br />
+              Monitoring
+            </h1>
+          </div>
+
+          {/* Right Column: Glassmorphic Login Card */}
+          <div className="lg:col-span-6 flex justify-center lg:justify-end">
+            <div className="w-full max-w-[460px] rounded-[32px] sm:rounded-[36px] bg-[#0c1424]/85 border border-white/15 shadow-2xl backdrop-blur-xl p-7 sm:p-9 md:p-10">
+              
+              {/* Top Shield Emblem */}
+              <div className="flex justify-center mb-3">
+                <svg
+                  className="w-13 h-13 text-[#38e1ff]"
+                  viewBox="0 0 64 64"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  {/* Outer Shield Outline */}
+                  <path
+                    d="M32 4 L50 12 C50 36 32 58 32 58 C32 58 14 36 14 12 Z"
+                    className="stroke-[#38e1ff]"
+                    fill="rgba(56, 225, 255, 0.05)"
+                  />
+                  {/* Visor and Crest Inner Grid */}
+                  <path d="M32 4 V32" />
+                  <path d="M22 18 H42" />
+                  <path d="M20 27 H44" />
+                  <path d="M24 36 H40" />
+                  <path d="M28 44 H36" />
+                  {/* Visor Side Accents */}
+                  <path d="M24 20 L27 34" />
+                  <path d="M40 20 L37 34" />
+                </svg>
+              </div>
+
+              {/* Title & Subtitle */}
+              <h2 className="text-2xl sm:text-[26px] font-bold text-white text-center tracking-tight">
+                Welcome to <span className="text-[#38e1ff]">Sentinel</span>
+              </h2>
+              <p className="text-xs sm:text-sm text-slate-400 font-normal text-center mt-1 mb-6">
+                Sign in to continue to your account
+              </p>
+
+              {/* 3 Horizontal Social Buttons */}
+              <div className="grid grid-cols-3 gap-2.5 mb-5">
+                {[1, 2, 3].map((item) => (
+                  <button
+                    key={item}
+                    type="button"
+                    className="w-full py-2.5 px-3 bg-[#242c3d]/90 hover:bg-[#2c364b] active:scale-[0.98] border border-slate-700/40 rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                  >
+                    <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24">
+                      <path
+                        fill="#4285F4"
+                        d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.8-2.4 3.66v3.05h3.88c2.27-2.09 3.66-5.17 3.66-9.15z"
+                      />
+                      <path
+                        fill="#34A853"
+                        d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.33 24 12 24z"
+                      />
+                      <path
+                        fill="#FBBC05"
+                        d="M5.28 14.27a7.18 7.18 0 0 1 0-4.54V6.58H1.25a11.96 11.96 0 0 0 0 10.84l4.03-3.15z"
+                      />
+                      <path
+                        fill="#EA4335"
+                        d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"
+                      />
+                    </svg>
+                    <span className="text-xs font-semibold text-white">Google</span>
+                  </button>
+                ))}
+              </div>
+
+              {/* Divider: or continue with email */}
+              <div className="relative flex items-center mb-5">
+                <div className="flex-grow border-t border-slate-700/60"></div>
+                <span className="flex-shrink mx-3 text-[11px] sm:text-xs text-slate-400 font-normal">
+                  or continue with email
+                </span>
+                <div className="flex-grow border-t border-slate-700/60"></div>
+              </div>
+
+              {/* Form */}
+              <div>
+                {/* Email Address */}
+                <div className="mb-3.5">
+                  <label className="block text-xs font-medium text-slate-300 mb-1.5 text-left">
+                    Email Address
+                  </label>
+                  <div className="relative flex items-center bg-[#18293d]/60 border border-slate-600/40 rounded-xl px-3.5 py-3 focus-within:border-cyan-400 focus-within:ring-1 focus-within:ring-cyan-400 transition-all">
+                    <svg
+                      className="w-4 h-4 text-slate-400 mr-2.5 shrink-0"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth="1.6"
+                        d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
+                      />
+                    </svg>
+                    <input
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="you@example.com"
+                      className="w-full bg-transparent border-none outline-none text-white text-sm placeholder-slate-400/80"
+                    />
+                  </div>
+                </div>
+
+                {/* Password */}
+                <div className="mb-3.5">
+                  <label className="block text-xs font-medium text-slate-300 mb-1.5 text-left">
+                    Password
+                  </label>
+                  <div className="relative flex items-center bg-[#18293d]/60 border border-slate-600/40 rounded-xl px-3.5 py-3 focus-within:border-cyan-400 focus-within:ring-1 focus-within:ring-cyan-400 transition-all">
+                    <svg
+                      className="w-4 h-4 text-slate-400 mr-2.5 shrink-0"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth="1.6"
+                        d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"
+                      />
+                    </svg>
+                    <input
+                      type="password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="Enter your password"
+                      className="w-full bg-transparent border-none outline-none text-white text-sm placeholder-slate-400/80"
+                    />
+                  </div>
+                </div>
+
+                {/* Remember Me & Forgot Password */}
+                <div className="flex items-center justify-between mt-3 mb-6 text-xs">
+                  <div className="flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      id="rememberMe"
+                      checked={rememberMe}
+                      onChange={(e) => setRememberMe(e.target.checked)}
+                      className="w-4 h-4 rounded border-slate-600 bg-[#18293d] text-cyan-400 accent-cyan-400 cursor-pointer"
+                    />
+                    <label
+                      htmlFor="rememberMe"
+                      className="text-slate-300 ml-2 cursor-pointer select-none"
+                    >
+                      Remember Me
+                    </label>
+                  </div>
+
+                  <Link
+                    href="#"
+                    className="text-cyan-400 hover:text-cyan-300 font-medium transition-colors"
+                  >
+                    Forgot password?
+                  </Link>
+                </div>
+
+                {/* Sign In Button */}
+                <button
+                  type="button"
+                  className="w-full py-3.5 px-4 bg-[#3bf0ff] hover:bg-[#2fe0ef] active:scale-[0.99] text-slate-950 font-bold text-sm sm:text-base rounded-xl transition-all shadow-lg shadow-cyan-500/20 cursor-pointer"
+                >
+                  Sign in
+                </button>
+
+                {/* Bottom link: Don't have an account? Create one */}
+                <p className="text-center text-xs sm:text-sm text-slate-400 mt-5">
+                  Don&apos;t have an account?{" "}
+                  <Link
+                    href="/register"
+                    className="text-white hover:text-cyan-400 font-semibold transition-colors"
+                  >
+                    Create one
+                  </Link>
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+
+      {/* Footer */}
+      <footer className="w-full max-w-6xl mx-auto px-4 sm:px-8 pt-16 pb-10 border-t border-slate-800/60 mt-12 relative z-10">
+        {/* Footer Navigation Columns */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mb-12">
+          {/* Solutions */}
+          <div>
+            <h4 className="text-white font-semibold text-sm mb-4">Solutions</h4>
+            <ul className="space-y-2.5 text-xs sm:text-sm text-slate-400">
+              <li>
+                <Link href="#" className="hover:text-white transition-colors">
+                  Application Services
+                </Link>
+              </li>
+              <li>
+                <Link href="#" className="hover:text-white transition-colors">
+                  Security Servers
+                </Link>
+              </li>
+              <li>
+                <Link href="#" className="hover:text-white transition-colors">
+                  Security FireWalls
+                </Link>
+              </li>
+              <li>
+                <Link href="#" className="hover:text-white transition-colors">
+                  Cloud Services
+                </Link>
+              </li>
+              <li>
+                <Link href="#" className="hover:text-white transition-colors">
+                  Integrations
+                </Link>
+              </li>
+            </ul>
+          </div>
+
+          {/* Partners */}
+          <div>
+            <h4 className="text-white font-semibold text-sm mb-4">Partners</h4>
+            <ul className="space-y-2.5 text-xs sm:text-sm text-slate-400">
+              <li>
+                <Link href="#" className="hover:text-white transition-colors">
+                  Amazon
+                </Link>
+              </li>
+              <li>
+                <Link href="#" className="hover:text-white transition-colors">
+                  Figma
+                </Link>
+              </li>
+              <li>
+                <Link href="#" className="hover:text-white transition-colors">
+                  Twitter
+                </Link>
+              </li>
+              <li>
+                <Link href="#" className="hover:text-white transition-colors">
+                  CloudRail-IIOT
+                </Link>
+              </li>
+            </ul>
+          </div>
+
+          {/* Resources */}
+          <div>
+            <h4 className="text-white font-semibold text-sm mb-4">Resources</h4>
+            <ul className="space-y-2.5 text-xs sm:text-sm text-slate-400">
+              <li>
+                <Link href="#" className="hover:text-white transition-colors">
+                  Academy
+                </Link>
+              </li>
+              <li>
+                <Link href="#" className="hover:text-white transition-colors">
+                  Blog
+                </Link>
+              </li>
+              <li>
+                <Link href="#" className="hover:text-white transition-colors">
+                  Themes
+                </Link>
+              </li>
+              <li>
+                <Link href="#" className="hover:text-white transition-colors">
+                  Hosting
+                </Link>
+              </li>
+              <li>
+                <Link href="#" className="hover:text-white transition-colors">
+                  Developers
+                </Link>
+              </li>
+              <li>
+                <Link href="#" className="hover:text-white transition-colors">
+                  Support
+                </Link>
+              </li>
+            </ul>
+          </div>
+
+          {/* Company */}
+          <div>
+            <h4 className="text-white font-semibold text-sm mb-4">Company</h4>
+            <ul className="space-y-2.5 text-xs sm:text-sm text-slate-400">
+              <li>
+                <Link href="#" className="hover:text-white transition-colors">
+                  About Us
+                </Link>
+              </li>
+              <li>
+                <Link href="#" className="hover:text-white transition-colors">
+                  Careers
+                </Link>
+              </li>
+              <li>
+                <Link href="#" className="hover:text-white transition-colors">
+                  FAQs
+                </Link>
+              </li>
+              <li>
+                <Link href="#" className="hover:text-white transition-colors">
+                  Teams
+                </Link>
+              </li>
+              <li>
+                <Link href="#" className="hover:text-white transition-colors">
+                  Contact Us
+                </Link>
+              </li>
+            </ul>
+          </div>
+        </div>
+
+        {/* Thin Divider Line */}
+        <div className="border-t border-slate-800/80 mb-8"></div>
+
+        {/* Copyright and Social Icons */}
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-500">
+          <p>© 2024 All Rights Reserved</p>
+
+          <div className="flex items-center gap-3">
+            {/* Facebook */}
+            <a
+              href="#"
+              aria-label="Facebook"
+              className="w-7 h-7 rounded-full bg-white text-slate-950 flex items-center justify-center hover:opacity-85 transition-opacity"
+            >
+              <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24">
+                <path d="M22 12c0-5.523-4.477-10-10-10S2 6.477 2 12c0 4.991 3.657 9.128 8.438 9.878v-6.987h-2.54V12h2.54V9.797c0-2.506 1.492-3.89 3.777-3.89 1.094 0 2.238.195 2.238.195v2.46h-1.26c-1.243 0-1.63.771-1.63 1.562V12h2.773l-.443 2.89h-2.33v6.988C18.343 21.128 22 16.991 22 12z" />
+              </svg>
+            </a>
+
+            {/* Telegram */}
+            <a
+              href="#"
+              aria-label="Telegram"
+              className="w-7 h-7 rounded-full bg-white text-slate-950 flex items-center justify-center hover:opacity-85 transition-opacity"
+            >
+              <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24">
+                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69a.2.2 0 00-.05-.18c-.06-.05-.14-.03-.21-.02-.09.02-1.49.95-4.22 2.79-.4.27-.76.41-1.08.4-.36-.01-1.04-.2-1.55-.37-.63-.2-1.12-.31-1.08-.66.02-.18.27-.36.75-.55 2.92-1.27 4.86-2.11 5.83-2.51 2.78-1.16 3.35-1.36 3.73-1.36.08 0 .27.02.39.12.1.08.13.19.14.27-.01.06.01.24 0 .38z" />
+              </svg>
+            </a>
+
+            {/* Instagram */}
+            <a
+              href="#"
+              aria-label="Instagram"
+              className="w-7 h-7 rounded-full bg-white text-slate-950 flex items-center justify-center hover:opacity-85 transition-opacity"
+            >
+              <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24">
+                <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z" />
+              </svg>
+            </a>
+
+            {/* ProductHunt / Figma */}
+            <a
+              href="#"
+              aria-label="ProductHunt"
+              className="w-7 h-7 rounded-full bg-white text-slate-950 flex items-center justify-center hover:opacity-85 transition-opacity"
+            >
+              <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24">
+                <path d="M13.6 8.4h-3.4v4.4h3.4c1.2 0 2.2-1 2.2-2.2s-1-2.2-2.2-2.2zM12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zm1.6 13.2h-3.4v3.2H7.8V6h5.8c2.5 0 4.6 2.1 4.6 4.6 0 2.5-2.1 4.6-4.6 4.6z" />
+              </svg>
+            </a>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }
