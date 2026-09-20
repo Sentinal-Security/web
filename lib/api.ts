@@ -103,3 +103,13 @@ export async function disableMfa(userId: number): Promise<AuthResponse> {
   });
   return res.json();
 }
+
+export async function validateSsoSession(userId: number): Promise<AuthResponse> {
+  const res = await fetch(`${API_BASE_URL}/api/auth/validate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ userId }),
+  });
+  return res.json();
+}
+
