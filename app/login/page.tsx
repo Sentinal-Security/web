@@ -2,11 +2,95 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useAuth } from "@/hooks/useAuth";
+import { useMfa } from "@/hooks/useMfa";
+import { saveSession } from "@/lib/session";
 
 export default function LoginPage() {
+  const router = useRouter();
+  const { login, loading: authLoading, error: authError, setError: setAuthError } = useAuth();
+  const { verifyLogin, loading: mfaLoading, error: mfaError, setError: setMfaError } = useMfa();
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(false);
+  const [validationError, setValidationError] = useState("");
+
+  // MFA Challenge State
+  const [mfaChallenge, setMfaChallenge] = useState<{
+    required: boolean;
+    userId?: number;
+    email?: string;
+  } | null>(null);
+  const [totpCode, setTotpCode] = useState("");
+
+  const handleLoginSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setValidationError("");
+    setAuthError(null);
+
+    if (!email.trim()) {
+      setValidationError("Please enter your email address.");
+      return;
+    }
+    if (!password) {
+      setValidationError("Please enter your password.");
+      return;
+    }
+
+    const res = await login({
+      email: email.trim(),
+      password,
+    });
+
+    if (res.success) {
+      if (res.mfaEnabled || res.mfaRequired) {
+        setMfaChallenge({
+          required: true,
+          userId: res.userId,
+          email: res.email || email.trim(),
+        });
+      } else {
+        router.push("/dashboard");
+      }
+    }
+  };
+
+  const handleMfaSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setValidationError("");
+    setMfaError(null);
+
+    if (!totpCode.trim()) {
+      setValidationError("Please enter the 6-digit authenticator code.");
+      return;
+    }
+
+    const cleanCode = totpCode.replace(/\D/g, "");
+    if (cleanCode.length !== 6) {
+      setValidationError("Code must be exactly 6 digits.");
+      return;
+    }
+
+    const res = await verifyLogin(
+      mfaChallenge?.userId,
+      mfaChallenge?.email,
+      cleanCode
+    );
+
+    if (res.success) {
+      if (mfaChallenge?.userId) {
+        saveSession({
+          userId: res.userId || mfaChallenge.userId,
+          email: mfaChallenge.email || email.trim(),
+          fullName: res.fullName || "",
+          mfaEnabled: true,
+        });
+      }
+      router.push("/dashboard");
+    }
+  };
 
   return (
     <div className="min-h-screen bg-[#030712] text-white flex flex-col justify-between selection:bg-cyan-400 selection:text-black font-sans antialiased relative overflow-hidden">
@@ -166,111 +250,210 @@ export default function LoginPage() {
                 <div className="flex-grow border-t border-slate-700/60"></div>
               </div>
 
-              {/* Form */}
-              <div>
-                {/* Email Address */}
-                <div className="mb-3.5">
-                  <label className="block text-xs font-medium text-slate-300 mb-1.5 text-left">
-                    Email Address
-                  </label>
-                  <div className="relative flex items-center bg-[#18293d]/60 border border-slate-600/40 rounded-xl px-3.5 py-3 focus-within:border-cyan-400 focus-within:ring-1 focus-within:ring-cyan-400 transition-all">
-                    <svg
-                      className="w-4 h-4 text-slate-400 mr-2.5 shrink-0"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth="1.6"
-                        d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
-                      />
-                    </svg>
-                    <input
-                      type="email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      placeholder="you@example.com"
-                      className="w-full bg-transparent border-none outline-none text-white text-sm placeholder-slate-400/80"
-                    />
+              {/* Conditional: MFA 2FA Challenge vs Standard Login Form */}
+              {mfaChallenge?.required ? (
+                <form onSubmit={handleMfaSubmit} noValidate>
+                  {/* MFA Challenge Header */}
+                  <div className="text-center mb-5">
+                    <div className="inline-flex p-3 rounded-2xl bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 mb-3">
+                      <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                      </svg>
+                    </div>
+                    <h3 className="text-lg font-bold text-white tracking-tight">Two-Factor Authentication</h3>
+                    <p className="text-xs text-slate-400 mt-1 max-w-xs mx-auto">
+                      Enter the 6-digit TOTP code generated by your paired mobile authenticator.
+                    </p>
                   </div>
-                </div>
 
-                {/* Password */}
-                <div className="mb-3.5">
-                  <label className="block text-xs font-medium text-slate-300 mb-1.5 text-left">
-                    Password
-                  </label>
-                  <div className="relative flex items-center bg-[#18293d]/60 border border-slate-600/40 rounded-xl px-3.5 py-3 focus-within:border-cyan-400 focus-within:ring-1 focus-within:ring-cyan-400 transition-all">
-                    <svg
-                      className="w-4 h-4 text-slate-400 mr-2.5 shrink-0"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth="1.6"
-                        d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"
-                      />
-                    </svg>
-                    <input
-                      type="password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      placeholder="Enter your password"
-                      className="w-full bg-transparent border-none outline-none text-white text-sm placeholder-slate-400/80"
-                    />
-                  </div>
-                </div>
+                  {/* Alert: Validation or MFA Error */}
+                  {(validationError || mfaError) && (
+                    <div className="mb-4 p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-300 text-xs flex items-center gap-2">
+                      <svg className="w-4 h-4 shrink-0 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                      </svg>
+                      <span>{validationError || mfaError}</span>
+                    </div>
+                  )}
 
-                {/* Remember Me & Forgot Password */}
-                <div className="flex items-center justify-between mt-3 mb-6 text-xs">
-                  <div className="flex items-center cursor-pointer">
-                    <input
-                      type="checkbox"
-                      id="rememberMe"
-                      checked={rememberMe}
-                      onChange={(e) => setRememberMe(e.target.checked)}
-                      className="w-4 h-4 rounded border-slate-600 bg-[#18293d] text-cyan-400 accent-cyan-400 cursor-pointer"
-                    />
-                    <label
-                      htmlFor="rememberMe"
-                      className="text-slate-300 ml-2 cursor-pointer select-none"
-                    >
-                      Remember Me
+                  {/* 6-digit Code Input */}
+                  <div className="mb-5">
+                    <label className="block text-xs font-medium text-slate-300 mb-2 text-center">
+                      Security Verification Code
                     </label>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      autoComplete="one-time-code"
+                      autoFocus
+                      maxLength={6}
+                      value={totpCode}
+                      onChange={(e) => setTotpCode(e.target.value)}
+                      placeholder="000000"
+                      className="w-full text-center text-2xl tracking-[0.4em] font-mono font-bold bg-[#18293d]/80 border border-cyan-500/40 rounded-xl py-3 text-cyan-300 placeholder-slate-600 focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400 transition-all shadow-inner"
+                    />
                   </div>
 
-                  <Link
-                    href="#"
-                    className="text-cyan-400 hover:text-cyan-300 font-medium transition-colors"
+                  {/* Verify & Unlock Button */}
+                  <button
+                    type="submit"
+                    disabled={mfaLoading}
+                    className="w-full py-3.5 px-4 bg-[#3bf0ff] hover:bg-[#2fe0ef] disabled:opacity-60 disabled:cursor-not-allowed active:scale-[0.99] text-slate-950 font-bold text-sm sm:text-base rounded-xl transition-all shadow-lg shadow-cyan-500/20 cursor-pointer flex items-center justify-center gap-2"
                   >
-                    Forgot password?
-                  </Link>
-                </div>
+                    {mfaLoading ? (
+                      <>
+                        <svg className="animate-spin h-5 w-5 text-slate-950" viewBox="0 0 24 24" fill="none">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        <span>Verifying code...</span>
+                      </>
+                    ) : (
+                      <span>Verify & Unlock</span>
+                    )}
+                  </button>
 
-                {/* Sign In Button */}
-                <button
-                  type="button"
-                  className="w-full py-3.5 px-4 bg-[#3bf0ff] hover:bg-[#2fe0ef] active:scale-[0.99] text-slate-950 font-bold text-sm sm:text-base rounded-xl transition-all shadow-lg shadow-cyan-500/20 cursor-pointer"
-                >
-                  Sign in
-                </button>
-
-                {/* Bottom link: Don't have an account? Create one */}
-                <p className="text-center text-xs sm:text-sm text-slate-400 mt-5">
-                  Don&apos;t have an account?{" "}
-                  <Link
-                    href="/register"
-                    className="text-white hover:text-cyan-400 font-semibold transition-colors"
+                  {/* Cancel / Back to Login */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMfaChallenge(null);
+                      setTotpCode("");
+                      setValidationError("");
+                      setMfaError(null);
+                    }}
+                    className="w-full mt-3 py-2.5 px-4 bg-transparent hover:bg-white/5 text-slate-400 hover:text-white text-xs font-medium rounded-xl transition-colors cursor-pointer"
                   >
-                    Create one
-                  </Link>
-                </p>
-              </div>
+                    Back to Login
+                  </button>
+                </form>
+              ) : (
+                <form onSubmit={handleLoginSubmit} noValidate>
+                  {/* Alert: Validation or Login Error */}
+                  {(validationError || authError) && (
+                    <div className="mb-4 p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-300 text-xs flex items-center gap-2">
+                      <svg className="w-4 h-4 shrink-0 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                      </svg>
+                      <span>{validationError || authError}</span>
+                    </div>
+                  )}
+
+                  {/* Email Address */}
+                  <div className="mb-3.5">
+                    <label className="block text-xs font-medium text-slate-300 mb-1.5 text-left">
+                      Email Address
+                    </label>
+                    <div className="relative flex items-center bg-[#18293d]/60 border border-slate-600/40 rounded-xl px-3.5 py-3 focus-within:border-cyan-400 focus-within:ring-1 focus-within:ring-cyan-400 transition-all">
+                      <svg
+                        className="w-4 h-4 text-slate-400 mr-2.5 shrink-0"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth="1.6"
+                          d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
+                        />
+                      </svg>
+                      <input
+                        type="email"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        placeholder="you@example.com"
+                        className="w-full bg-transparent border-none outline-none text-white text-sm placeholder-slate-400/80"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Password */}
+                  <div className="mb-3.5">
+                    <label className="block text-xs font-medium text-slate-300 mb-1.5 text-left">
+                      Password
+                    </label>
+                    <div className="relative flex items-center bg-[#18293d]/60 border border-slate-600/40 rounded-xl px-3.5 py-3 focus-within:border-cyan-400 focus-within:ring-1 focus-within:ring-cyan-400 transition-all">
+                      <svg
+                        className="w-4 h-4 text-slate-400 mr-2.5 shrink-0"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth="1.6"
+                          d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"
+                        />
+                      </svg>
+                      <input
+                        type="password"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        placeholder="Enter your password"
+                        className="w-full bg-transparent border-none outline-none text-white text-sm placeholder-slate-400/80"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Remember Me & Forgot Password */}
+                  <div className="flex items-center justify-between mt-3 mb-6 text-xs">
+                    <div className="flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        id="rememberMe"
+                        checked={rememberMe}
+                        onChange={(e) => setRememberMe(e.target.checked)}
+                        className="w-4 h-4 rounded border-slate-600 bg-[#18293d] text-cyan-400 accent-cyan-400 cursor-pointer"
+                      />
+                      <label
+                        htmlFor="rememberMe"
+                        className="text-slate-300 ml-2 cursor-pointer select-none"
+                      >
+                        Remember Me
+                      </label>
+                    </div>
+
+                    <Link
+                      href="#"
+                      className="text-cyan-400 hover:text-cyan-300 font-medium transition-colors"
+                    >
+                      Forgot password?
+                    </Link>
+                  </div>
+
+                  {/* Sign In Button */}
+                  <button
+                    type="submit"
+                    disabled={authLoading}
+                    className="w-full py-3.5 px-4 bg-[#3bf0ff] hover:bg-[#2fe0ef] disabled:opacity-60 disabled:cursor-not-allowed active:scale-[0.99] text-slate-950 font-bold text-sm sm:text-base rounded-xl transition-all shadow-lg shadow-cyan-500/20 cursor-pointer flex items-center justify-center gap-2"
+                  >
+                    {authLoading ? (
+                      <>
+                        <svg className="animate-spin h-5 w-5 text-slate-950" viewBox="0 0 24 24" fill="none">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        <span>Signing in...</span>
+                      </>
+                    ) : (
+                      <span>Sign in</span>
+                    )}
+                  </button>
+
+                  {/* Bottom link: Don't have an account? Create one */}
+                  <p className="text-center text-xs sm:text-sm text-slate-400 mt-5">
+                    Don&apos;t have an account?{" "}
+                    <Link
+                      href="/register"
+                      className="text-white hover:text-cyan-400 font-semibold transition-colors"
+                    >
+                      Create one
+                    </Link>
+                  </p>
+                </form>
+              )}
             </div>
           </div>
         </div>
