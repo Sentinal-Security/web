@@ -2,10 +2,61 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useAuth } from "@/hooks/useAuth";
 
 export default function RegisterPage() {
+  const router = useRouter();
+  const { register, loading, error, setError } = useAuth();
+
+  const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [agreed, setAgreed] = useState(false);
+  const [validationError, setValidationError] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setValidationError("");
+    setError(null);
+
+    if (!fullName.trim()) {
+      setValidationError("Full name is required.");
+      return;
+    }
+    if (!email.trim()) {
+      setValidationError("Email is required.");
+      return;
+    }
+    if (!password) {
+      setValidationError("Password is required.");
+      return;
+    }
+    if (password.length < 6) {
+      setValidationError("Password must be at least 6 characters.");
+      return;
+    }
+    if (!agreed) {
+      setValidationError("Please agree to the Terms and Privacy Policy.");
+      return;
+    }
+
+    const res = await register({
+      email: email.trim(),
+      password,
+      fullName: fullName.trim(),
+    });
+
+    if (res.success) {
+      setSuccessMessage(
+        res.message || "Account registered successfully! Redirecting to login..."
+      );
+      setTimeout(() => {
+        router.push("/login");
+      }, 1500);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-[#030712] text-white flex flex-col justify-between selection:bg-cyan-400 selection:text-black font-sans antialiased">
@@ -136,7 +187,56 @@ export default function RegisterPage() {
             </div>
 
             {/* Form */}
-            <div>
+            <form onSubmit={handleSubmit} noValidate>
+              {/* Alert: Validation or API Error */}
+              {(validationError || error) && (
+                <div className="mb-4 p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-300 text-xs flex items-center gap-2">
+                  <svg className="w-4 h-4 shrink-0 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                  </svg>
+                  <span>{validationError || error}</span>
+                </div>
+              )}
+
+              {/* Alert: Success Message */}
+              {successMessage && (
+                <div className="mb-4 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs flex items-center gap-2">
+                  <svg className="w-4 h-4 shrink-0 text-emerald-400" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                  </svg>
+                  <span>{successMessage}</span>
+                </div>
+              )}
+
+              {/* Full Name Input Field */}
+              <div className="mb-4">
+                <label className="block text-xs font-medium text-slate-300 mb-2">
+                  Full Name
+                </label>
+                <div className="relative flex items-center bg-[#131926] border border-slate-700/60 rounded-xl px-4 py-3.5 focus-within:border-cyan-400 focus-within:ring-1 focus-within:ring-cyan-400 transition-all">
+                  <svg
+                    className="w-5 h-5 text-slate-400 mr-3 shrink-0"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="1.6"
+                      d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+                    />
+                  </svg>
+                  <input
+                    type="text"
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                    placeholder="Enter your full name"
+                    className="w-full bg-transparent border-none outline-none text-white text-sm placeholder-slate-500"
+                  />
+                </div>
+              </div>
+
               {/* Email Input Field */}
               <div className="mb-4">
                 <label className="block text-xs font-medium text-slate-300 mb-2">
@@ -161,6 +261,35 @@ export default function RegisterPage() {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="Enter your email address"
+                    className="w-full bg-transparent border-none outline-none text-white text-sm placeholder-slate-500"
+                  />
+                </div>
+              </div>
+
+              {/* Password Input Field */}
+              <div className="mb-4">
+                <label className="block text-xs font-medium text-slate-300 mb-2">
+                  Password
+                </label>
+                <div className="relative flex items-center bg-[#131926] border border-slate-700/60 rounded-xl px-4 py-3.5 focus-within:border-cyan-400 focus-within:ring-1 focus-within:ring-cyan-400 transition-all">
+                  <svg
+                    className="w-5 h-5 text-slate-400 mr-3 shrink-0"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="1.6"
+                      d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
+                    />
+                  </svg>
+                  <input
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Create a strong password (min. 6 characters)"
                     className="w-full bg-transparent border-none outline-none text-white text-sm placeholder-slate-500"
                   />
                 </div>
@@ -191,11 +320,23 @@ export default function RegisterPage() {
 
               {/* Continue Button */}
               <button
-                type="button"
-                className="w-full py-3.5 px-4 bg-[#3bf0ff] hover:bg-[#2fe0ef] active:scale-[0.99] text-slate-950 font-bold text-sm rounded-xl transition-all shadow-lg shadow-cyan-500/20 cursor-pointer"
+                type="submit"
+                disabled={loading}
+                className="w-full py-3.5 px-4 bg-[#3bf0ff] hover:bg-[#2fe0ef] disabled:opacity-60 disabled:cursor-not-allowed active:scale-[0.99] text-slate-950 font-bold text-sm rounded-xl transition-all shadow-lg shadow-cyan-500/20 cursor-pointer flex items-center justify-center gap-2"
               >
-                Continue
+                {loading ? (
+                  <>
+                    <svg className="animate-spin h-4 w-4 text-slate-950" viewBox="0 0 24 24" fill="none">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <span>Creating account...</span>
+                  </>
+                ) : (
+                  <span>Continue</span>
+                )}
               </button>
+            </form>
 
               {/* Divider: or sign up with */}
               <div className="relative flex py-5 items-center">
@@ -246,8 +387,7 @@ export default function RegisterPage() {
               </p>
             </div>
           </div>
-        </div>
-      </main>
+        </main>
 
       {/* Footer (Matches registerpage.png reference UI) */}
       <footer className="w-full max-w-6xl mx-auto px-4 sm:px-8 pt-16 pb-10 border-t border-slate-800/60 mt-12">
