@@ -20,7 +20,7 @@ export default function LandingPage() {
         {/* =========================================================
             SECTION 1: HERO (From Landing Page 1)
         ========================================================= */}
-        <section className="relative pt-12 pb-20 md:pt-20 md:pb-28 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <section className="relative pt-12 pb-20 md:pt-20 md:pb-28 max-w-[1600px] mx-auto px-6 sm:px-10 lg:px-16">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-8 items-center">
             {/* Left Hero Content */}
             <div className="lg:col-span-7">
@@ -83,7 +83,7 @@ export default function LandingPage() {
         {/* =========================================================
             SECTION 2: TRUSTED PLATFORMS (From Landing Page 1)
         ========================================================= */}
-        <section className="py-12 border-t border-white/5 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <section className="py-12 border-t border-white/5 max-w-[1600px] mx-auto px-6 sm:px-10 lg:px-16">
           <p className="text-center text-xs sm:text-sm text-gray-400 font-medium tracking-wide mb-10">
             Compatible with The World&apos;s Most Trusted Platforms
           </p>
@@ -139,8 +139,8 @@ export default function LandingPage() {
         {/* =========================================================
             SECTION 3: MISSION STATEMENT (From Landing Page 1)
         ========================================================= */}
-        <section className="py-16 max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <p className="text-gray-300 text-sm sm:text-base md:text-lg lg:text-[19px] leading-relaxed">
+        <section className="py-20 max-w-[1400px] mx-auto px-6 sm:px-10 lg:px-16 text-center">
+          <p className="text-gray-300 text-sm sm:text-base md:text-lg lg:text-[20px] leading-relaxed">
             At <span className="text-[#54f4fc] font-semibold">Sentinel</span>, we are dedicated
             to redefining how modern organizations protect their digital infrastructure,
             unifying identity, device management, and real-time security into a seamless
@@ -153,7 +153,7 @@ export default function LandingPage() {
         {/* =========================================================
             SECTION 4: STATS BANNER (From Landing Page 1)
         ========================================================= */}
-        <section className="py-8 max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+        <section className="py-10 max-w-[1600px] mx-auto px-6 sm:px-10 lg:px-16">
           <div className="bg-gradient-to-r from-[#83f2fd] via-[#64dcf2] to-[#45a8e6] rounded-[28px] py-10 px-6 sm:px-12 shadow-[0_0_50px_rgba(84,244,252,0.25)]">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8 md:gap-4 text-center divide-y md:divide-y-0 md:divide-x divide-black/10">
               <div className="pt-2 md:pt-0">
@@ -189,12 +189,12 @@ export default function LandingPage() {
         {/* =========================================================
             SECTION 5: SERVICES WE OFFER (From Landing Page 2)
         ========================================================= */}
-        <section id="services" className="py-24 max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-          <h2 className="text-3xl sm:text-4xl font-bold text-center text-white mb-16">
+        <section id="services" className="py-24 max-w-[1600px] mx-auto px-6 sm:px-10 lg:px-16">
+          <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-center text-white mb-16 tracking-tight">
             Services we offer
           </h2>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-6xl mx-auto">
             {/* Card 1: IAM */}
             <div className="bg-[#03060a] border border-[#1f595e] hover:border-[#54f4fc] rounded-2xl p-8 sm:p-10 flex flex-col items-center text-center transition-all duration-300 hover:shadow-[0_0_30px_rgba(84,244,252,0.15)] group">
               <div className="w-14 h-14 flex items-center justify-center text-[#54f4fc] group-hover:scale-110 transition-transform">
@@ -206,7 +206,7 @@ export default function LandingPage() {
               <h3 className="text-[#54f4fc] font-bold text-lg sm:text-xl mt-6 mb-3">
                 Identity & Access Management (IAM)
               </h3>
-              <p className="text-gray-400 text-xs sm:text-sm leading-relaxed max-w-xs">
+              <p className="text-gray-400 text-xs sm:text-sm leading-relaxed max-w-md">
                 Centralize user identity lifecycles with granular Role-Based
                 Access Control (RBAC), directory services, and Single Sign-On
                 (SSO) for enterprise applications.
@@ -225,7 +225,7 @@ export default function LandingPage() {
               <h3 className="text-[#54f4fc] font-bold text-lg sm:text-xl mt-6 mb-3">
                 Unified Device Management (MDM)
               </h3>
-              <p className="text-gray-400 text-xs sm:text-sm leading-relaxed max-w-xs">
+              <p className="text-gray-400 text-xs sm:text-sm leading-relaxed max-w-md">
                 Maintain cross-platform endpoint compliance through a lightweight
                 desktop agent that enables real-time device health tracking and
                 remote administration.
@@ -246,7 +246,7 @@ export default function LandingPage() {
               <h3 className="text-[#54f4fc] font-bold text-lg sm:text-xl mt-6 mb-3">
                 Multi-Factor Authentication (MFA)
               </h3>
-              <p className="text-gray-400 text-xs sm:text-sm leading-relaxed max-w-xs">
+              <p className="text-gray-400 text-xs sm:text-sm leading-relaxed max-w-md">
                 Protect accounts from unauthorized access with adaptive MFA,
                 customizable authentication policies, and instant push
                 notifications via our mobile app.
@@ -276,7 +276,7 @@ export default function LandingPage() {
               <h3 className="text-[#54f4fc] font-bold text-lg sm:text-xl mt-6 mb-3">
                 Session & Security Policy Governance
               </h3>
-              <p className="text-gray-400 text-xs sm:text-sm leading-relaxed max-w-xs">
+              <p className="text-gray-400 text-xs sm:text-sm leading-relaxed max-w-md">
                 Enforce organization-wide security baselines, monitor active login
                 sessions, and manage automated access revocation policies from a
                 single dashboard.
@@ -304,7 +304,7 @@ export default function LandingPage() {
               <h3 className="text-[#54f4fc] font-bold text-lg sm:text-xl mt-6 mb-3">
                 Real-Time Audit & Event Monitoring
               </h3>
-              <p className="text-gray-400 text-xs sm:text-sm leading-relaxed max-w-xs">
+              <p className="text-gray-400 text-xs sm:text-sm leading-relaxed max-w-md">
                 Track user and device activity continuously with centralized audit
                 logging, real-time threat reporting, and instant security event alerts.
               </p>
@@ -315,8 +315,8 @@ export default function LandingPage() {
         {/* =========================================================
             SECTION 6: QUOTE & TESTIMONIAL (From Landing Page 3)
         ========================================================= */}
-        <section className="py-20 max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <blockquote className="text-2xl sm:text-3xl md:text-4xl font-normal text-[#54f4fc] leading-relaxed tracking-tight max-w-3xl mx-auto">
+        <section className="py-24 max-w-[1400px] mx-auto px-6 sm:px-10 lg:px-16 text-center">
+          <blockquote className="text-2xl sm:text-3xl md:text-4xl lg:text-[40px] font-normal text-[#54f4fc] leading-relaxed tracking-tight max-w-4xl mx-auto">
             &ldquo;As for the future, your task is not to foresee it, but to enable it..&rdquo;
           </blockquote>
 
@@ -353,15 +353,15 @@ export default function LandingPage() {
         {/* =========================================================
             SECTION 7: CTA BANNER (From Landing Page 3)
         ========================================================= */}
-        <section id="contact" className="py-12 max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="relative overflow-hidden bg-gradient-to-r from-[#031520] via-[#052535] to-[#02131d] border border-[#0d4050] rounded-2xl p-8 sm:p-12 lg:p-16">
+        <section id="contact" className="py-16 max-w-[1600px] mx-auto px-6 sm:px-10 lg:px-16">
+          <div className="relative overflow-hidden bg-gradient-to-r from-[#031520] via-[#052535] to-[#02131d] border border-[#0d4050] rounded-3xl p-8 sm:p-14 lg:p-20 shadow-[0_0_50px_rgba(84,244,252,0.12)]">
             {/* Ambient inner teal highlight */}
             <div className="absolute -right-20 -top-20 w-96 h-96 bg-[#54f4fc]/10 rounded-full blur-3xl pointer-events-none" />
 
-            <div className="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+            <div className="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-center">
               {/* Left Title */}
-              <div className="lg:col-span-6">
-                <h2 className="text-3xl sm:text-4xl lg:text-5xl font-black text-white leading-[1.15] tracking-tight">
+              <div className="lg:col-span-6 xl:col-span-7">
+                <h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-black text-white leading-[1.15] tracking-tight">
                   How to choose<br />
                   cybersecurity<br />
                   solution
@@ -369,21 +369,21 @@ export default function LandingPage() {
               </div>
 
               {/* Right Questions & Actions */}
-              <div className="lg:col-span-6 lg:pl-6 space-y-6">
-                <p className="text-gray-200 text-base sm:text-lg font-medium">
+              <div className="lg:col-span-6 xl:col-span-5 lg:pl-6 space-y-6">
+                <p className="text-gray-200 text-base sm:text-lg md:text-xl font-medium">
                   Having difficulties choosing the right solution for your business?
                 </p>
 
                 <div className="flex flex-wrap items-center gap-4">
                   <Link
                     href="/register"
-                    className="bg-[#54f4fc] hover:bg-[#32edf7] text-black font-bold text-xs sm:text-sm tracking-wider uppercase px-7 py-3.5 rounded transition-all duration-200 shadow-[0_0_25px_rgba(84,244,252,0.35)]"
+                    className="bg-[#54f4fc] hover:bg-[#32edf7] text-black font-bold text-xs sm:text-sm tracking-wider uppercase px-8 py-4 rounded transition-all duration-200 shadow-[0_0_25px_rgba(84,244,252,0.35)]"
                   >
                     BOOK AN APPOINTMENT
                   </Link>
                   <Link
                     href="#contact"
-                    className="border border-[#54f4fc] text-[#54f4fc] hover:bg-[#54f4fc]/10 font-bold text-xs sm:text-sm tracking-wider uppercase px-7 py-3.5 rounded transition-all duration-200"
+                    className="border border-[#54f4fc] text-[#54f4fc] hover:bg-[#54f4fc]/10 font-bold text-xs sm:text-sm tracking-wider uppercase px-8 py-4 rounded transition-all duration-200"
                   >
                     TALK WITH US
                   </Link>

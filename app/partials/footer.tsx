@@ -47,7 +47,7 @@ export default function Footer() {
 
   return (
     <footer className="w-full bg-black text-gray-400 text-xs border-t border-white/5 pt-16 pb-12 transition-colors">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="max-w-[1600px] mx-auto px-6 sm:px-10 lg:px-16">
         {/* Navigation Columns */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mb-16">
           {footerSections.map((section, idx) => (
