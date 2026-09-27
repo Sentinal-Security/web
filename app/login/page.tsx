@@ -111,7 +111,7 @@ export default function LoginPage() {
       />
 
       {/* Top Navigation Bar */}
-      <header className="w-full max-w-6xl mx-auto px-4 sm:px-8 pt-8 pb-6 flex items-center justify-between relative z-10">
+      <header className="w-full max-w-[1600px] mx-auto px-6 sm:px-10 lg:px-16 pt-8 pb-6 flex items-center justify-between relative z-10">
         <Link
           href="/"
           className="text-2xl font-bold tracking-tight text-[#38e1ff] hover:opacity-90 transition-opacity flex items-center gap-2.5"
@@ -153,12 +153,12 @@ export default function LoginPage() {
       </header>
 
       {/* Main Login Content Area */}
-      <main className="flex-1 flex items-center justify-center px-4 sm:px-6 lg:px-8 py-8 sm:py-14 relative z-10">
-        <div className="max-w-6xl w-full mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-center">
+      <main className="flex-1 flex items-center justify-center w-full px-6 sm:px-10 lg:px-16 py-8 sm:py-14 relative z-10">
+        <div className="max-w-[1600px] w-full mx-auto grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-14 xl:gap-20 items-center">
           
           {/* Left Column: Headline */}
           <div className="lg:col-span-6 flex flex-col justify-center">
-            <h1 className="text-3xl sm:text-4xl lg:text-[42px] font-bold text-white tracking-tight leading-[1.2] max-w-lg">
+            <h1 className="text-3xl sm:text-4xl lg:text-5xl xl:text-[54px] font-bold text-white tracking-tight leading-[1.18] max-w-xl xl:max-w-2xl">
               Experience Seamless
               <br />
               Centralized Identity Governance,
@@ -171,7 +171,7 @@ export default function LoginPage() {
 
           {/* Right Column: Glassmorphic Login Card */}
           <div className="lg:col-span-6 flex justify-center lg:justify-end">
-            <div className="w-full max-w-[460px] rounded-[32px] sm:rounded-[36px] bg-[#0c1424]/85 border border-white/15 shadow-2xl backdrop-blur-xl p-7 sm:p-9 md:p-10">
+            <div className="w-full max-w-xl xl:max-w-2xl rounded-[32px] sm:rounded-[36px] bg-[#0c1424]/85 border border-white/15 shadow-2xl backdrop-blur-xl p-8 sm:p-10 md:p-12">
               
               {/* Top Shield Emblem */}
               <div className="flex justify-center mb-3">
@@ -460,7 +460,7 @@ export default function LoginPage() {
       </main>
 
       {/* Footer */}
-      <footer className="w-full max-w-6xl mx-auto px-4 sm:px-8 pt-16 pb-10 border-t border-slate-800/60 mt-12 relative z-10">
+      <footer className="w-full max-w-[1600px] mx-auto px-6 sm:px-10 lg:px-16 pt-16 pb-10 border-t border-slate-800/60 mt-12 relative z-10">
         {/* Footer Navigation Columns */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mb-12">
           {/* Solutions */}

@@ -61,7 +61,7 @@ export default function RegisterPage() {
   return (
     <div className="min-h-screen bg-[#030712] text-white flex flex-col justify-between selection:bg-cyan-400 selection:text-black font-sans antialiased">
       {/* Top Navigation Bar */}
-      <header className="w-full max-w-6xl mx-auto px-4 sm:px-8 pt-8 pb-6 flex items-center justify-between">
+      <header className="w-full max-w-[1600px] mx-auto px-6 sm:px-10 lg:px-16 pt-8 pb-6 flex items-center justify-between">
         <Link
           href="/"
           className="text-2xl font-bold tracking-tight text-[#38e1ff] hover:opacity-90 transition-opacity flex items-center gap-2.5"
@@ -103,13 +103,13 @@ export default function RegisterPage() {
       </header>
 
       {/* Main Registration Content */}
-      <main className="flex-1 flex items-center justify-center px-4 sm:px-6 lg:px-8 py-6 sm:py-10">
-        <div className="max-w-6xl w-full mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-14 items-center">
+      <main className="flex-1 flex items-center justify-center w-full px-6 sm:px-10 lg:px-16 py-8 sm:py-14">
+        <div className="w-full max-w-[1600px] mx-auto grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-14 xl:gap-20 items-center">
           
           {/* Left Column: Glowing Blue Hero Card with Stepper */}
-          <div className="lg:col-span-6 w-full max-w-lg mx-auto">
+          <div className="lg:col-span-6 w-full flex justify-center">
             <div
-              className="relative rounded-[36px] px-8 sm:px-12 pt-28 sm:pt-36 pb-12 overflow-hidden border border-blue-500/20 shadow-2xl flex flex-col justify-end min-h-[580px] lg:min-h-[620px]"
+              className="relative w-full max-w-xl xl:max-w-2xl 2xl:max-w-3xl rounded-[36px] px-8 sm:px-14 pt-24 sm:pt-32 pb-14 overflow-hidden border border-blue-500/20 shadow-2xl flex flex-col justify-end min-h-[580px] lg:min-h-[660px] xl:min-h-[720px]"
               style={{
                 background:
                   "radial-gradient(135% 85% at 50% 0%, #1e5bff 0%, #0d2875 36%, #061239 68%, #03081a 100%)",
@@ -131,7 +131,7 @@ export default function RegisterPage() {
               </div>
 
               {/* Vertical Stepper Container */}
-              <div className="w-full max-w-[320px] mx-auto flex flex-col items-center relative z-10">
+              <div className="w-full max-w-md xl:max-w-lg mx-auto flex flex-col items-center relative z-10">
                 {/* Step 1 Pill (Active) */}
                 <div className="w-full rounded-2xl p-3.5 sm:p-4 flex items-center bg-white text-slate-900 shadow-xl shadow-black/20">
                   <div className="w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm shrink-0 mr-4 bg-black text-white">
@@ -172,7 +172,7 @@ export default function RegisterPage() {
           </div>
 
           {/* Right Column: Sign Up Account Form Area */}
-          <div className="lg:col-span-6 w-full max-w-[430px] mx-auto flex flex-col justify-center">
+          <div className="lg:col-span-6 w-full max-w-xl xl:max-w-2xl mx-auto flex flex-col justify-center">
             
             {/* Header Titles */}
             <div className="text-center mb-6">
@@ -390,7 +390,7 @@ export default function RegisterPage() {
         </main>
 
       {/* Footer (Matches registerpage.png reference UI) */}
-      <footer className="w-full max-w-6xl mx-auto px-4 sm:px-8 pt-16 pb-10 border-t border-slate-800/60 mt-12">
+      <footer className="w-full max-w-[1600px] mx-auto px-6 sm:px-10 lg:px-16 pt-16 pb-10 border-t border-slate-800/60 mt-12">
         {/* Footer Navigation Columns */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mb-12">
           {/* Solutions */}
