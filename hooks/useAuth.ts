@@ -1,23 +1,24 @@
 "use client";
 
 import { useState } from "react";
-import { registerUser, loginUser, AuthResponse } from "@/lib/api";
+import { registerUser, loginUser, AuthResponse, RegisterPayload, LoginPayload } from "@/lib/api";
+import { saveSession, clearSession } from "@/lib/session";
 
 export function useAuth() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const register = async (email: string, password: string, fullName: string): Promise<AuthResponse> => {
+  const register = async (data: RegisterPayload): Promise<AuthResponse> => {
     setLoading(true);
     setError(null);
     try {
-      const res = await registerUser({ email, password, fullName });
+      const res = await registerUser(data);
       if (!res.success) {
         setError(res.message);
       }
       return res;
-    } catch (err: any) {
-      const msg = err.message || "Failed to register.";
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to register.";
       setError(msg);
       return { success: false, message: msg };
     } finally {
@@ -25,27 +26,40 @@ export function useAuth() {
     }
   };
 
-  const login = async (email: string, password: string): Promise<AuthResponse> => {
+  const login = async (data: LoginPayload): Promise<AuthResponse> => {
     setLoading(true);
     setError(null);
     try {
-      const res = await loginUser({ email, password });
+      const res = await loginUser(data);
       if (!res.success) {
         setError(res.message);
+      } else if (res.userId && !res.mfaEnabled && !res.mfaRequired) {
+        // If MFA is not required/enabled, establish session immediately
+        saveSession({
+          userId: res.userId,
+          email: res.email || data.email,
+          fullName: res.fullName || "",
+          mfaEnabled: false,
+        });
       }
       return res;
-    } catch (err: any) {
-      const msg = err.message || "Failed to log in.";
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to log in.";
       setError(msg);
       return { success: false, message: msg };
     } finally {
       setLoading(false);
     }
+  };
+
+  const logout = (): void => {
+    clearSession();
   };
 
   return {
     register,
     login,
+    logout,
     loading,
     error,
     setError,

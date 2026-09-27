@@ -1,7 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import { setupMfa, verifyMfaSetup, verifyMfaLogin, disableMfa, AuthResponse, MfaSetupResponse } from "@/lib/api";
+import {
+  setupMfa,
+  verifyMfaSetup,
+  verifyMfaLogin,
+  disableMfa,
+  AuthResponse,
+  MfaSetupResponse,
+} from "@/lib/api";
 
 export function useMfa() {
   const [loading, setLoading] = useState(false);
@@ -16,8 +23,8 @@ export function useMfa() {
         setError(res.message);
       }
       return res;
-    } catch (err: any) {
-      const msg = err.message || "Failed to setup MFA.";
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to setup MFA.";
       setError(msg);
       return { success: false, message: msg };
     } finally {
@@ -25,17 +32,21 @@ export function useMfa() {
     }
   };
 
-  const verifySetup = async (userId: number, code: string): Promise<AuthResponse> => {
+  const verifySetup = async (
+    userId: number,
+    code: string
+  ): Promise<AuthResponse> => {
     setLoading(true);
     setError(null);
     try {
-      const res = await verifyMfaSetup(userId, code);
+      const res = await verifyMfaSetup({ userId, code });
       if (!res.success) {
         setError(res.message);
       }
       return res;
-    } catch (err: any) {
-      const msg = err.message || "Failed to verify MFA setup.";
+    } catch (err: unknown) {
+      const msg =
+        err instanceof Error ? err.message : "Failed to verify MFA setup.";
       setError(msg);
       return { success: false, message: msg };
     } finally {
@@ -43,7 +54,11 @@ export function useMfa() {
     }
   };
 
-  const verifyLogin = async (userId: number | undefined, email: string | undefined, code: string): Promise<AuthResponse> => {
+  const verifyLogin = async (
+    userId: number | undefined,
+    email: string | undefined,
+    code: string
+  ): Promise<AuthResponse> => {
     setLoading(true);
     setError(null);
     try {
@@ -52,8 +67,9 @@ export function useMfa() {
         setError(res.message);
       }
       return res;
-    } catch (err: any) {
-      const msg = err.message || "Failed to verify MFA login code.";
+    } catch (err: unknown) {
+      const msg =
+        err instanceof Error ? err.message : "Failed to verify MFA login code.";
       setError(msg);
       return { success: false, message: msg };
     } finally {
@@ -70,8 +86,8 @@ export function useMfa() {
         setError(res.message);
       }
       return res;
-    } catch (err: any) {
-      const msg = err.message || "Failed to disable MFA.";
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to disable MFA.";
       setError(msg);
       return { success: false, message: msg };
     } finally {
