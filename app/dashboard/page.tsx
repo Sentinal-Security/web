@@ -1,6 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { User, MfaSetupResponse } from "@/types/auth";
+import { getStoredSession, updateStoredUser, clearSession } from "@/lib/session";
+import { useMfa } from "@/hooks/useMfa";
 
 interface AppIntegration {
   id: string;
@@ -47,14 +51,89 @@ const DASHBOARD_APPS: AppIntegration[] = [
 ];
 
 export default function DashboardPage() {
+  const router = useRouter();
+  const { setup, verifySetup, loading: mfaLoading, error: mfaError, setError: setMfaError } = useMfa();
+
+  const [user, setUser] = useState<User | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
+
+  // MFA Pairing Modal State
+  const [pairingModalOpen, setPairingModalOpen] = useState(false);
+  const [setupData, setSetupData] = useState<MfaSetupResponse | null>(null);
+  const [totpCode, setTotpCode] = useState("");
+  const [copiedKey, setCopiedKey] = useState(false);
+  const [pairingSuccess, setPairingSuccess] = useState("");
+  const [pairingValidationErr, setPairingValidationErr] = useState("");
+
+  useEffect(() => {
+    const session = getStoredSession();
+    if (!session || !session.user) {
+      router.push("/login");
+      return;
+    }
+    setUser(session.user);
+  }, [router]);
+
+  const handleOpenPairingModal = async () => {
+    if (!user) return;
+    setPairingModalOpen(true);
+    setProfileDropdownOpen(false);
+    setPairingSuccess("");
+    setPairingValidationErr("");
+    setTotpCode("");
+    setMfaError(null);
+    setCopiedKey(false);
+
+    const res = await setup(user.userId);
+    if (res.success) {
+      setSetupData(res);
+    }
+  };
+
+  const handleVerifyPairing = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user) return;
+    setPairingValidationErr("");
+    setMfaError(null);
+
+    const cleanCode = totpCode.replace(/\D/g, "");
+    if (cleanCode.length !== 6) {
+      setPairingValidationErr("Code must be exactly 6 digits.");
+      return;
+    }
+
+    const res = await verifySetup(user.userId, cleanCode);
+    if (res.success) {
+      setPairingSuccess(res.message || "MFA device paired and activated successfully!");
+      updateStoredUser({ mfaEnabled: true });
+      setUser((prev) => (prev ? { ...prev, mfaEnabled: true } : null));
+      setTimeout(() => {
+        setPairingModalOpen(false);
+      }, 1600);
+    }
+  };
+
+  const handleCopySecret = () => {
+    if (!setupData?.secretKey) return;
+    navigator.clipboard.writeText(setupData.secretKey);
+    setCopiedKey(true);
+    setTimeout(() => setCopiedKey(false), 2000);
+  };
+
+  const handleLogout = () => {
+    clearSession();
+    router.push("/login");
+  };
 
   const filteredApps = DASHBOARD_APPS.filter(
     (app) =>
       app.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       app.category.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  const displayName = user?.fullName || user?.email?.split("@")[0] || "User";
 
   return (
     <div
@@ -72,45 +151,82 @@ export default function DashboardPage() {
         />
       )}
 
-      {/* Left Sidebar - Full height, fills top, left, and bottom completely */}
+      {/* Left Sidebar */}
       <aside
         className={`fixed md:relative inset-y-0 left-0 z-40 w-64 sm:w-72 md:w-[290px] lg:w-[306px] bg-black self-stretch min-h-screen shrink-0 shadow-[4px_0_24px_rgba(0,0,0,0.5)] border-r border-white/5 transition-transform duration-300 ease-in-out md:translate-x-0 ${
           sidebarOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
         }`}
       >
-        <div className="sticky top-0 flex flex-col pt-9 pb-6 px-5 sm:px-6 w-full">
-          {/* Brand Shield & Title */}
-          <div className="flex flex-col items-center select-none">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src="/images/sentinel-shield.png"
-              alt="Sentinel Shield"
-              className="w-16 h-16 object-contain drop-shadow-[0_0_16px_rgba(46,224,236,0.6)]"
-            />
-            <span className="mt-3 text-2xl font-bold tracking-tight text-[#2ee0ec] drop-shadow-[0_0_12px_rgba(46,224,236,0.45)]">
-              Sentinel
-            </span>
+        <div className="sticky top-0 flex flex-col justify-between h-screen pt-9 pb-6 px-5 sm:px-6 w-full">
+          <div>
+            {/* Brand Shield & Title */}
+            <div className="flex flex-col items-center select-none">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/images/sentinel-shield.png"
+                alt="Sentinel Shield"
+                className="w-16 h-16 object-contain drop-shadow-[0_0_16px_rgba(46,224,236,0.6)]"
+              />
+              <span className="mt-3 text-2xl font-bold tracking-tight text-[#2ee0ec] drop-shadow-[0_0_12px_rgba(46,224,236,0.45)]">
+                Sentinel
+              </span>
+            </div>
+
+            {/* Navigation Items */}
+            <div className="mt-10 w-full space-y-2">
+              <button
+                type="button"
+                className="w-full flex items-center gap-3.5 px-5 py-3.5 rounded-2xl bg-gradient-to-r from-[#175beb] via-[#1249c5] to-[#0c338e] text-white font-semibold text-base shadow-[0_4px_24px_rgba(23,91,235,0.55)] transition-all cursor-pointer text-left"
+              >
+                <svg
+                  className="w-5 h-5 text-white shrink-0"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <rect x="2" y="3" width="20" height="15" rx="2" />
+                  <path d="M6 14l3.5-4.5 3 3 4-5" />
+                </svg>
+                <span>Dashboard</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleOpenPairingModal}
+                className="w-full flex items-center gap-3.5 px-5 py-3.5 rounded-2xl hover:bg-white/5 text-slate-300 hover:text-white font-medium text-sm transition-all cursor-pointer text-left border border-transparent hover:border-white/10"
+              >
+                <svg
+                  className="w-5 h-5 text-cyan-400 shrink-0"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
+                  />
+                </svg>
+                <span>Pair Authenticator</span>
+              </button>
+            </div>
           </div>
 
-          {/* Active Navigation Item */}
-          <div className="mt-10 w-full">
+          {/* Bottom Sign Out Trigger in Sidebar */}
+          <div className="pt-4 border-t border-white/10">
             <button
               type="button"
-              className="w-full flex items-center gap-3.5 px-5 py-3.5 rounded-2xl bg-gradient-to-r from-[#175beb] via-[#1249c5] to-[#0c338e] text-white font-semibold text-base shadow-[0_4px_24px_rgba(23,91,235,0.55)] transition-all cursor-pointer text-left"
+              onClick={handleLogout}
+              className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-red-500/10 text-slate-400 hover:text-red-400 transition-colors text-xs font-medium cursor-pointer"
             >
-              <svg
-                className="w-5 h-5 text-white shrink-0"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <rect x="2" y="3" width="20" height="15" rx="2" />
-                <path d="M6 14l3.5-4.5 3 3 4-5" />
+              <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
               </svg>
-              <span>Dashboard</span>
+              <span>Sign out</span>
             </button>
           </div>
         </div>
@@ -152,7 +268,7 @@ export default function DashboardPage() {
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search"
+                placeholder="Search integrated applications"
                 className="bg-transparent text-xs sm:text-sm text-slate-200 placeholder-slate-400 outline-none w-full"
               />
               {searchQuery ? (
@@ -172,9 +288,9 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* Right: Notification Bell, Settings Gear, Profile Pill */}
-          <div className="flex items-center gap-3 sm:gap-5 md:gap-6">
-            {/* Bell Icon with Blue Dot */}
+          {/* Right: Notifications, Settings & Interactive Profile Pill */}
+          <div className="flex items-center gap-3 sm:gap-5 md:gap-6 relative">
+            {/* Bell Icon */}
             <button
               type="button"
               className="relative p-1.5 sm:p-2 text-slate-200 hover:text-white transition-colors cursor-pointer"
@@ -183,15 +299,16 @@ export default function DashboardPage() {
               <svg className="w-5 h-5 fill-current" viewBox="0 0 24 24">
                 <path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z" />
               </svg>
-              {/* Vibrant Blue Dot */}
               <span className="absolute top-1 sm:top-1.5 right-1 sm:right-1.5 w-2 h-2 rounded-full bg-[#0066ff] shadow-[0_0_8px_#0066ff]" />
             </button>
 
             {/* Gear Icon */}
             <button
               type="button"
+              onClick={handleOpenPairingModal}
               className="p-1.5 sm:p-2 text-slate-200 hover:text-white transition-colors cursor-pointer"
-              aria-label="Settings"
+              aria-label="Security Settings"
+              title="Security Settings"
             >
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8">
                 <path
@@ -203,36 +320,117 @@ export default function DashboardPage() {
               </svg>
             </button>
 
-            {/* Nadia Profile Pill */}
-            <div className="flex items-center gap-2 sm:gap-2.5 bg-black py-1 sm:py-1.5 pl-1.5 pr-2.5 sm:pr-3.5 rounded-full border border-white/5 cursor-pointer hover:border-white/15 transition-all select-none">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src="/images/nadia-clean.png"
-                alt="Nadia"
-                className="w-6 h-6 sm:w-7 sm:h-7 rounded-full object-cover shrink-0"
-              />
-              <span className="text-xs sm:text-sm font-medium text-white">Nadia</span>
-              <svg
-                className="w-3.5 h-3.5 text-slate-400 shrink-0"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth="2"
+            {/* Profile Pill with Dropdown Trigger */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setProfileDropdownOpen((prev) => !prev)}
+                className="flex items-center gap-2 sm:gap-2.5 bg-black py-1 sm:py-1.5 pl-1.5 pr-2.5 sm:pr-3.5 rounded-full border border-white/5 cursor-pointer hover:border-white/15 transition-all select-none"
               >
-                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-              </svg>
+                <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center text-xs font-bold text-slate-950 uppercase shrink-0">
+                  {displayName.charAt(0)}
+                </div>
+                <span className="text-xs sm:text-sm font-medium text-white truncate max-w-[120px]">{displayName}</span>
+                <svg
+                  className={`w-3.5 h-3.5 text-slate-400 shrink-0 transition-transform ${profileDropdownOpen ? "rotate-180" : ""}`}
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+
+              {/* Profile Dropdown Menu */}
+              {profileDropdownOpen && (
+                <div className="absolute right-0 mt-2 w-64 rounded-2xl bg-[#0c1424] border border-white/15 shadow-2xl backdrop-blur-xl p-3 z-50 animate-in fade-in slide-in-from-top-2 duration-150">
+                  <div className="px-3 py-2 border-b border-white/10 mb-2">
+                    <p className="text-xs font-bold text-white truncate">{user?.fullName || displayName}</p>
+                    <p className="text-[11px] text-slate-400 truncate">{user?.email}</p>
+                  </div>
+
+                  <div className="px-3 py-1.5 mb-2 flex items-center justify-between text-xs">
+                    <span className="text-slate-400">MFA Status</span>
+                    <span
+                      className={`font-semibold px-2 py-0.5 rounded-full text-[10px] ${
+                        user?.mfaEnabled
+                          ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/30"
+                          : "bg-amber-500/10 text-amber-400 border border-amber-500/30"
+                      }`}
+                    >
+                      {user?.mfaEnabled ? "Enabled" : "Disabled"}
+                    </span>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleOpenPairingModal}
+                    className="w-full text-left px-3 py-2 rounded-xl text-xs text-slate-200 hover:text-white hover:bg-white/5 transition-colors flex items-center gap-2 cursor-pointer"
+                  >
+                    <svg className="w-4 h-4 text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                    </svg>
+                    <span>Pair Authenticator</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleLogout}
+                    className="w-full text-left px-3 py-2 rounded-xl text-xs text-red-400 hover:bg-red-500/10 transition-colors flex items-center gap-2 cursor-pointer mt-1"
+                  >
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                    </svg>
+                    <span>Sign Out</span>
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </header>
 
-        {/* Welcome Greeting */}
-        <div className="mt-7 sm:mt-9 mb-6 sm:mb-8">
-          <h2 className="text-3xl sm:text-4xl font-normal text-white tracking-tight">
-            Welcome, <span className="text-[#38bdf8]">Nadia</span>
-          </h2>
+        {/* Welcome Greeting & Active Security Banner */}
+        <div className="mt-7 sm:mt-9 mb-6 sm:mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h2 className="text-3xl sm:text-4xl font-normal text-white tracking-tight">
+              Welcome, <span className="text-[#38bdf8]">{displayName}</span>
+            </h2>
+            <p className="text-xs sm:text-sm text-slate-400 mt-1">
+              Centralized IAM identity: <span className="text-slate-300 font-mono">{user?.email}</span>
+            </p>
+          </div>
+
+          {/* MFA Protection Badge & Action Trigger */}
+          <div className="flex items-center gap-3">
+            {user?.mfaEnabled ? (
+              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-semibold">
+                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M2.166 4.999A11.954 11.954 0 0010 1.944 11.954 11.954 0 0017.834 5c.11.65.166 1.32.166 2.001 0 5.225-3.34 9.67-8 11.317C5.34 16.67 2 12.225 2 7c0-.682.057-1.35.166-2.001zm11.541 3.708a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                </svg>
+                <span>Two-Factor Authentication: Active</span>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2.5">
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs font-semibold">
+                  <svg className="w-3.5 h-3.5" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                  </svg>
+                  <span>MFA Unpaired</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleOpenPairingModal}
+                  className="px-3 py-1.5 rounded-xl bg-cyan-400 hover:bg-cyan-300 text-slate-950 font-bold text-xs transition-all shadow-md shadow-cyan-500/20 cursor-pointer"
+                >
+                  Pair Device
+                </button>
+              </div>
+            )}
+          </div>
         </div>
 
-        {/* 2x2 Grid of Dashboard App Cards - Adjusted corner radius to rounded-2xl so it's not too roundy */}
+        {/* 2x2 Grid of Dashboard App Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5 lg:gap-6 flex-1 w-full">
           {(filteredApps.length > 0 ? filteredApps : DASHBOARD_APPS).map((app) => (
             <div
@@ -261,7 +459,7 @@ export default function DashboardPage() {
                     <path
                       strokeLinecap="round"
                       strokeLinejoin="round"
-                      d="M7 17L17 7M17 7H9M17 7V15"
+                      d="M7 17L17 7H9M17 7V15"
                     />
                   </svg>
                 </div>
@@ -285,6 +483,139 @@ export default function DashboardPage() {
           ))}
         </div>
       </main>
+
+      {/* Authenticator Pairing Modal */}
+      {pairingModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4 bg-black/75 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="relative w-full max-w-md rounded-3xl bg-[#0c1424] border border-cyan-500/30 p-6 sm:p-8 shadow-2xl text-white">
+            {/* Close Button */}
+            <button
+              type="button"
+              onClick={() => setPairingModalOpen(false)}
+              className="absolute top-5 right-5 p-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-colors cursor-pointer"
+              aria-label="Close modal"
+            >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+
+            {/* Modal Header */}
+            <div className="text-center mb-6">
+              <div className="inline-flex p-3 rounded-2xl bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 mb-3">
+                <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                </svg>
+              </div>
+              <h3 className="text-xl font-bold tracking-tight text-white">Pair Mobile Authenticator</h3>
+              <p className="text-xs text-slate-400 mt-1.5">
+                Scan the QR code with your mobile authenticator app or enter the manual pairing key.
+              </p>
+            </div>
+
+            {/* Error or Success Feedback */}
+            {(pairingValidationErr || mfaError) && (
+              <div className="mb-4 p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-300 text-xs flex items-center gap-2">
+                <svg className="w-4 h-4 shrink-0 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                </svg>
+                <span>{pairingValidationErr || mfaError}</span>
+              </div>
+            )}
+
+            {pairingSuccess && (
+              <div className="mb-4 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs flex items-center gap-2">
+                <svg className="w-4 h-4 shrink-0 text-emerald-400" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                </svg>
+                <span>{pairingSuccess}</span>
+              </div>
+            )}
+
+            {/* Loading Setup State */}
+            {mfaLoading && !setupData ? (
+              <div className="py-12 flex flex-col items-center justify-center gap-3">
+                <svg className="animate-spin h-8 w-8 text-cyan-400" viewBox="0 0 24 24" fill="none">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                <p className="text-xs text-slate-400">Generating secure pairing secret...</p>
+              </div>
+            ) : setupData ? (
+              <div className="space-y-4">
+                {/* QR Code Display */}
+                {setupData.otpAuthUri && (
+                  <div className="flex flex-col items-center p-3 rounded-2xl bg-white/5 border border-white/10">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(setupData.otpAuthUri)}`}
+                      alt="Authenticator QR Code"
+                      className="w-40 h-40 rounded-xl bg-white p-2 object-contain"
+                    />
+                    <span className="text-[11px] text-slate-400 mt-2 font-mono">{setupData.accountEmail || user?.email}</span>
+                  </div>
+                )}
+
+                {/* Manual Secret Key */}
+                {setupData.secretKey && (
+                  <div>
+                    <label className="block text-[11px] font-medium text-slate-400 mb-1">
+                      Manual Secret Key
+                    </label>
+                    <div className="flex items-center gap-2 p-2.5 rounded-xl bg-[#131926] border border-slate-700/60">
+                      <code className="text-xs text-cyan-300 font-mono tracking-wider flex-1 truncate">
+                        {setupData.secretKey}
+                      </code>
+                      <button
+                        type="button"
+                        onClick={handleCopySecret}
+                        className="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-xs font-semibold text-white transition-colors cursor-pointer shrink-0"
+                      >
+                        {copiedKey ? "Copied" : "Copy"}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Verification Form */}
+                <form onSubmit={handleVerifyPairing} className="pt-2">
+                  <label className="block text-xs font-medium text-slate-300 mb-1.5 text-center">
+                    Enter 6-Digit Authenticator Code
+                  </label>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    maxLength={6}
+                    value={totpCode}
+                    onChange={(e) => setTotpCode(e.target.value)}
+                    placeholder="000000"
+                    className="w-full text-center text-xl tracking-[0.4em] font-mono font-bold bg-[#131926] border border-cyan-500/40 rounded-xl py-2.5 text-cyan-300 placeholder-slate-600 focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400 transition-all mb-4 shadow-inner"
+                  />
+
+                  <button
+                    type="submit"
+                    disabled={mfaLoading || !!pairingSuccess}
+                    className="w-full py-3 px-4 bg-[#3bf0ff] hover:bg-[#2fe0ef] disabled:opacity-60 disabled:cursor-not-allowed active:scale-[0.99] text-slate-950 font-bold text-sm rounded-xl transition-all shadow-lg shadow-cyan-500/20 cursor-pointer flex items-center justify-center gap-2"
+                  >
+                    {mfaLoading ? (
+                      <>
+                        <svg className="animate-spin h-4 w-4 text-slate-950" viewBox="0 0 24 24" fill="none">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        <span>Verifying code...</span>
+                      </>
+                    ) : (
+                      <span>Verify & Activate MFA</span>
+                    )}
+                  </button>
+                </form>
+              </div>
+            ) : null}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
