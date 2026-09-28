@@ -10,22 +10,23 @@ import { useIntegrations } from "@/hooks/useIntegrations";
 
 export default function DashboardPage() {
   const router = useRouter();
+  const [user, setUser] = useState<User | null>(null);
+
   const { setup, verifySetup, loading: mfaLoading, error: mfaError, setError: setMfaError } = useMfa();
   const {
     apps,
-    isHydrated,
+    loading: servicesLoading,
     boilerplateTemplates,
     connectBoilerplate,
     addCustomApp,
-    recordLogin,
     removeApp,
+    launchApp,
     testPing,
     testingPing,
     pingResult,
     clearPingResult,
-  } = useIntegrations();
+  } = useIntegrations(user?.userId);
 
-  const [user, setUser] = useState<User | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
@@ -50,8 +51,14 @@ export default function DashboardPage() {
   const [customValidationErr, setCustomValidationErr] = useState("");
   const [customSuccessMsg, setCustomSuccessMsg] = useState("");
 
-  // SSO Launch Feedback State
-  const [launchedAppId, setLaunchedAppId] = useState<string | null>(null);
+  // SSO Login Challenge Modal State ("Login Chu2 Step")
+  const [ssoModalOpen, setSsoModalOpen] = useState(false);
+  const [selectedSsoApp, setSelectedSsoApp] = useState<AppIntegration | null>(null);
+  const [ssoTotpCode, setSsoTotpCode] = useState("");
+  const [ssoLoading, setSsoLoading] = useState(false);
+  const [ssoError, setSsoError] = useState("");
+  const [ssoSuccess, setSsoSuccess] = useState("");
+  const [launchedAppId, setLaunchedAppId] = useState<string | number | null>(null);
 
   useEffect(() => {
     const session = getStoredSession();
@@ -120,17 +127,17 @@ export default function DashboardPage() {
     clearPingResult();
   };
 
-  const handleConnectBoilerplate = (templateId: string) => {
-    const success = connectBoilerplate(templateId);
+  const handleConnectBoilerplate = async (templateId: string) => {
+    const success = await connectBoilerplate(templateId);
     if (success) {
-      setCustomSuccessMsg("Integration connected successfully.");
+      setCustomSuccessMsg("Integration connected and persisted successfully.");
       setTimeout(() => {
         setCustomSuccessMsg("");
       }, 2000);
     }
   };
 
-  const handleAddCustomApp = (e: React.FormEvent) => {
+  const handleAddCustomApp = async (e: React.FormEvent) => {
     e.preventDefault();
     setCustomValidationErr("");
 
@@ -144,7 +151,7 @@ export default function DashboardPage() {
       return;
     }
 
-    const success = addCustomApp({
+    const success = await addCustomApp({
       name: customName,
       category: customCategory || "Custom Enterprise Service",
       type: customType,
@@ -166,12 +173,53 @@ export default function DashboardPage() {
     }
   };
 
-  const handleLaunchSso = (app: AppIntegration) => {
-    recordLogin(app.id);
+  // Launch SSO Handler - Triggers MFA Step if enforced
+  const handleInitiateSsoLaunch = async (app: AppIntegration) => {
+    // If MFA is enforced on this app AND user has MFA active on their profile:
+    if (app.metrics.mfaRequired && user?.mfaEnabled) {
+      setSelectedSsoApp(app);
+      setSsoTotpCode("");
+      setSsoError("");
+      setSsoSuccess("");
+      setSsoModalOpen(true);
+      return;
+    }
+
+    // Direct SSO launch (no MFA challenge required)
     setLaunchedAppId(app.id);
+    await launchApp(app);
     setTimeout(() => {
       setLaunchedAppId(null);
     }, 2500);
+  };
+
+  const handleConfirmSsoChallenge = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedSsoApp) return;
+
+    setSsoError("");
+    setSsoSuccess("");
+
+    const cleanCode = ssoTotpCode.replace(/\D/g, "");
+    if (cleanCode.length !== 6) {
+      setSsoError("Authentication code must be exactly 6 digits.");
+      return;
+    }
+
+    setSsoLoading(true);
+    const res = await launchApp(selectedSsoApp, cleanCode);
+    setSsoLoading(false);
+
+    if (res.success) {
+      setSsoSuccess("SSO authentication verified. Access granted.");
+      setLaunchedAppId(selectedSsoApp.id);
+      setTimeout(() => {
+        setSsoModalOpen(false);
+        setLaunchedAppId(null);
+      }, 1500);
+    } else {
+      setSsoError(res.message || "MFA challenge failed. Access denied.");
+    }
   };
 
   const filteredApps = apps.filter(
@@ -207,7 +255,6 @@ export default function DashboardPage() {
       >
         <div className="sticky top-0 flex flex-col justify-between h-screen pt-9 pb-6 px-5 sm:px-6 w-full">
           <div>
-            {/* Brand Shield & Title */}
             <div className="flex flex-col items-center select-none">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
@@ -220,7 +267,6 @@ export default function DashboardPage() {
               </span>
             </div>
 
-            {/* Navigation Items */}
             <div className="mt-10 w-full space-y-2">
               <button
                 type="button"
@@ -281,7 +327,6 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* Bottom Sign Out Trigger in Sidebar */}
           <div className="pt-4 border-t border-white/10">
             <button
               type="button"
@@ -299,9 +344,8 @@ export default function DashboardPage() {
 
       {/* Main Content Area */}
       <main className="flex-1 flex flex-col min-w-0 px-5 sm:px-7 lg:px-9 pt-6 pb-8">
-        {/* Top Header / Navigation Bar */}
+        {/* Top Header */}
         <header className="flex items-center justify-between gap-3 sm:gap-4 w-full">
-          {/* Left: Mobile Menu Toggle + Search Bar */}
           <div className="flex items-center gap-2.5 sm:gap-3 flex-1 max-w-[280px] sm:max-w-xs md:max-w-md">
             <button
               type="button"
@@ -314,7 +358,6 @@ export default function DashboardPage() {
               </svg>
             </button>
 
-            {/* Pill Search Bar */}
             <div className="relative flex items-center bg-black rounded-full px-4 py-2.5 w-full border border-white/5 focus-within:border-cyan-500/40 transition-colors">
               <svg
                 className="w-4 h-4 text-slate-400 shrink-0 mr-2.5"
@@ -353,7 +396,6 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* Right: Quick Add Action + Notifications + Profile */}
           <div className="flex items-center gap-2.5 sm:gap-4 md:gap-5 relative">
             <button
               type="button"
@@ -366,7 +408,6 @@ export default function DashboardPage() {
               <span>Add Service</span>
             </button>
 
-            {/* Notifications Bell */}
             <button
               type="button"
               className="relative p-1.5 sm:p-2 text-slate-200 hover:text-white transition-colors cursor-pointer"
@@ -378,7 +419,6 @@ export default function DashboardPage() {
               <span className="absolute top-1 sm:top-1.5 right-1 sm:right-1.5 w-2 h-2 rounded-full bg-[#0066ff] shadow-[0_0_8px_#0066ff]" />
             </button>
 
-            {/* Profile Pill with Dropdown Trigger */}
             <div className="relative">
               <button
                 type="button"
@@ -400,7 +440,6 @@ export default function DashboardPage() {
                 </svg>
               </button>
 
-              {/* Profile Dropdown Menu */}
               {profileDropdownOpen && (
                 <div className="absolute right-0 mt-2 w-64 rounded-2xl bg-[#0c1424] border border-white/15 shadow-2xl backdrop-blur-xl p-3 z-50 animate-in fade-in slide-in-from-top-2 duration-150">
                   <div className="px-3 py-2 border-b border-white/10 mb-2">
@@ -487,51 +526,81 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Dashboard Grid of Integrated Applications */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5 lg:gap-6 flex-1 w-full">
-          {filteredApps.map((app) => (
-            <div
-              key={app.id}
-              className="group bg-black rounded-2xl border border-cyan-500/40 p-5 sm:p-6 lg:p-7 shadow-[0_0_20px_rgba(6,182,212,0.06)] hover:border-cyan-400/70 hover:shadow-[0_0_26px_rgba(6,182,212,0.12)] transition-all flex flex-col justify-between select-none"
+        {/* Dynamic Service Grid or Empty State */}
+        {servicesLoading ? (
+          <div className="flex-1 flex flex-col items-center justify-center py-20 text-slate-400">
+            <svg className="animate-spin h-8 w-8 text-cyan-400 mb-3" viewBox="0 0 24 24" fill="none">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            <p className="text-xs">Synchronizing integrated enterprise services...</p>
+          </div>
+        ) : filteredApps.length === 0 ? (
+          /* Clean Empty State (Default Dummy Apps Removed) */
+          <div className="flex-1 flex flex-col items-center justify-center p-8 sm:p-12 rounded-3xl bg-black/60 border border-dashed border-white/10 text-center">
+            <div className="w-16 h-16 rounded-2xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400 mb-4">
+              <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+              </svg>
+            </div>
+            <h3 className="text-lg sm:text-xl font-bold text-white tracking-tight">No Integrated Services Enrolled</h3>
+            <p className="text-xs sm:text-sm text-slate-400 max-w-md mt-1.5">
+              Connect pre-configured identity providers or register your company applications to track sessions, telemetry, and MFA policy enforcement.
+            </p>
+            <button
+              type="button"
+              onClick={handleOpenAddModal}
+              className="mt-6 inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-cyan-400 hover:bg-cyan-300 text-slate-950 font-bold text-xs sm:text-sm transition-all shadow-lg shadow-cyan-500/20 cursor-pointer"
             >
-              {/* Card Header: Service Icon, Name, Category & Badges */}
-              <div>
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-xl bg-[#070b14] border border-white/10 flex items-center justify-center p-2 shrink-0 group-hover:border-cyan-500/30 transition-all">
-                      {app.logo ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={app.logo} alt={`${app.name} Logo`} className="w-8 h-8 object-contain" />
-                      ) : (
-                        <AppIcon iconType={app.iconType} />
-                      )}
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <h3 className="text-lg sm:text-xl font-bold text-white tracking-tight group-hover:text-[#38bdf8] transition-colors">
-                          {app.name}
-                        </h3>
-                        {app.isBoilerplate && (
-                          <span className="text-[10px] px-2 py-0.5 rounded-md bg-blue-500/10 border border-blue-500/30 text-blue-300 font-medium">
-                            Federated
-                          </span>
-                        )}
-                        {app.isCustom && (
-                          <span className="text-[10px] px-2 py-0.5 rounded-md bg-purple-500/10 border border-purple-500/30 text-purple-300 font-medium">
-                            Custom
-                          </span>
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+              </svg>
+              <span>Add Your First Service</span>
+            </button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5 lg:gap-6 flex-1 w-full">
+            {filteredApps.map((app) => (
+              <div
+                key={app.id}
+                className="group bg-black rounded-2xl border border-cyan-500/40 p-5 sm:p-6 lg:p-7 shadow-[0_0_20px_rgba(6,182,212,0.06)] hover:border-cyan-400/70 hover:shadow-[0_0_26px_rgba(6,182,212,0.12)] transition-all flex flex-col justify-between select-none"
+              >
+                <div>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 rounded-xl bg-[#070b14] border border-white/10 flex items-center justify-center p-2 shrink-0 group-hover:border-cyan-500/30 transition-all">
+                        {app.logo ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={app.logo} alt={`${app.name} Logo`} className="w-8 h-8 object-contain" />
+                        ) : (
+                          <AppIcon iconType={app.iconType} />
                         )}
                       </div>
-                      <p className="text-xs text-slate-400 mt-0.5">{app.category}</p>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h3 className="text-lg sm:text-xl font-bold text-white tracking-tight group-hover:text-[#38bdf8] transition-colors">
+                            {app.name}
+                          </h3>
+                          {app.isBoilerplate && (
+                            <span className="text-[10px] px-2 py-0.5 rounded-md bg-blue-500/10 border border-blue-500/30 text-blue-300 font-medium">
+                              Federated
+                            </span>
+                          )}
+                          {app.isCustom && (
+                            <span className="text-[10px] px-2 py-0.5 rounded-md bg-purple-500/10 border border-purple-500/30 text-purple-300 font-medium">
+                              Custom
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-slate-400 mt-0.5">{app.category}</p>
+                      </div>
                     </div>
-                  </div>
 
-                  <div className="flex items-center gap-1.5">
-                    <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-[#08152e] border border-cyan-500/25 text-cyan-300">
-                      <span className={`w-1.5 h-1.5 rounded-full ${app.statusColor}`} />
-                      <span>{app.status}</span>
-                    </div>
-                    {(app.isBoilerplate || app.isCustom) && (
+                    <div className="flex items-center gap-1.5">
+                      <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-[#08152e] border border-cyan-500/25 text-cyan-300">
+                        <span className={`w-1.5 h-1.5 rounded-full ${app.statusColor}`} />
+                        <span>{app.status}</span>
+                      </div>
                       <button
                         type="button"
                         onClick={() => removeApp(app.id)}
@@ -543,85 +612,164 @@ export default function DashboardPage() {
                           <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                         </svg>
                       </button>
-                    )}
-                  </div>
-                </div>
-
-                {/* Per-App Telemetry & Metrics Row */}
-                <div className="mt-5 pt-4 border-t border-white/5 grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-left">
-                  <div className="bg-[#070d1a] border border-white/5 rounded-xl p-2.5">
-                    <span className="block text-[10px] uppercase font-semibold tracking-wider text-slate-500">Last Login</span>
-                    <span className="block text-xs font-medium text-slate-200 mt-1 truncate" title={app.metrics.lastLogin}>
-                      {app.metrics.lastLogin}
-                    </span>
-                  </div>
-
-                  <div className="bg-[#070d1a] border border-white/5 rounded-xl p-2.5">
-                    <span className="block text-[10px] uppercase font-semibold tracking-wider text-slate-500">Last Active</span>
-                    <div className="flex items-center gap-1.5 mt-1">
-                      {app.metrics.lastActive.includes("now") && (
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                      )}
-                      <span className="text-xs font-medium text-slate-200 truncate">{app.metrics.lastActive}</span>
                     </div>
                   </div>
 
-                  <div className="bg-[#070d1a] border border-white/5 rounded-xl p-2.5">
-                    <span className="block text-[10px] uppercase font-semibold tracking-wider text-slate-500">Total Sign-ins</span>
-                    <span className="block text-xs font-semibold text-cyan-400 mt-1">
-                      {app.metrics.totalLogins}
-                    </span>
-                  </div>
+                  <div className="mt-5 pt-4 border-t border-white/5 grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-left">
+                    <div className="bg-[#070d1a] border border-white/5 rounded-xl p-2.5">
+                      <span className="block text-[10px] uppercase font-semibold tracking-wider text-slate-500">Last Login</span>
+                      <span className="block text-xs font-medium text-slate-200 mt-1 truncate" title={app.metrics.lastLogin}>
+                        {app.metrics.lastLogin}
+                      </span>
+                    </div>
 
-                  <div className="bg-[#070d1a] border border-white/5 rounded-xl p-2.5">
-                    <span className="block text-[10px] uppercase font-semibold tracking-wider text-slate-500">Access Policy</span>
-                    <span
-                      className={`block text-[11px] font-semibold mt-1 truncate ${
-                        app.metrics.mfaRequired ? "text-emerald-400" : "text-slate-300"
-                      }`}
-                    >
-                      {app.metrics.mfaRequired ? "MFA Enforced" : "Direct SSO"}
-                    </span>
+                    <div className="bg-[#070d1a] border border-white/5 rounded-xl p-2.5">
+                      <span className="block text-[10px] uppercase font-semibold tracking-wider text-slate-500">Last Active</span>
+                      <div className="flex items-center gap-1.5 mt-1">
+                        {app.metrics.lastActive.includes("now") && (
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                        )}
+                        <span className="text-xs font-medium text-slate-200 truncate">{app.metrics.lastActive}</span>
+                      </div>
+                    </div>
+
+                    <div className="bg-[#070d1a] border border-white/5 rounded-xl p-2.5">
+                      <span className="block text-[10px] uppercase font-semibold tracking-wider text-slate-500">Total Sign-ins</span>
+                      <span className="block text-xs font-semibold text-cyan-400 mt-1">
+                        {app.metrics.totalLogins}
+                      </span>
+                    </div>
+
+                    <div className="bg-[#070d1a] border border-white/5 rounded-xl p-2.5">
+                      <span className="block text-[10px] uppercase font-semibold tracking-wider text-slate-500">Access Policy</span>
+                      <span
+                        className={`block text-[11px] font-semibold mt-1 truncate ${
+                          app.metrics.mfaRequired ? "text-emerald-400" : "text-slate-300"
+                        }`}
+                      >
+                        {app.metrics.mfaRequired ? "MFA Enforced" : "Direct SSO"}
+                      </span>
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              {/* Card Footer: Protocol info + Launch SSO action */}
-              <div className="mt-5 pt-4 border-t border-white/5 flex items-center justify-between gap-3">
-                <span className="text-[11px] text-slate-400 font-mono">
-                  Protocol: {app.type.replace("_", " ").toUpperCase()}
-                </span>
+                <div className="mt-5 pt-4 border-t border-white/5 flex items-center justify-between gap-3">
+                  <span className="text-[11px] text-slate-400 font-mono">
+                    Protocol: {app.type.replace("_", " ").toUpperCase()}
+                  </span>
 
-                <button
-                  type="button"
-                  onClick={() => handleLaunchSso(app)}
-                  className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-white/5 hover:bg-cyan-500/10 border border-white/10 hover:border-cyan-400/40 text-xs font-semibold text-slate-200 hover:text-cyan-300 transition-all cursor-pointer"
-                >
-                  {launchedAppId === app.id ? (
-                    <>
-                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-                      <span className="text-emerald-300">Authenticated</span>
-                    </>
-                  ) : (
-                    <>
-                      <span>Launch SSO</span>
-                      <svg className="w-3.5 h-3.5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                      </svg>
-                    </>
-                  )}
-                </button>
+                  <button
+                    type="button"
+                    onClick={() => handleInitiateSsoLaunch(app)}
+                    className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-white/5 hover:bg-cyan-500/10 border border-white/10 hover:border-cyan-400/40 text-xs font-semibold text-slate-200 hover:text-cyan-300 transition-all cursor-pointer"
+                  >
+                    {launchedAppId === app.id ? (
+                      <>
+                        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                        <span className="text-emerald-300">Access Granted</span>
+                      </>
+                    ) : (
+                      <>
+                        <span>Launch SSO</span>
+                        <svg className="w-3.5 h-3.5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                        </svg>
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </main>
+
+      {/* SSO Authentication Challenge Modal ("Login Chu2 Step") */}
+      {ssoModalOpen && selectedSsoApp && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="relative w-full max-w-md rounded-3xl bg-[#0c1424] border border-cyan-500/30 p-6 sm:p-7 shadow-2xl text-white">
+            <button
+              type="button"
+              onClick={() => setSsoModalOpen(false)}
+              className="absolute top-5 right-5 p-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-colors cursor-pointer"
+              aria-label="Close modal"
+            >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+
+            <div className="text-center mb-5">
+              <div className="inline-flex p-3 rounded-2xl bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 mb-3">
+                <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                </svg>
+              </div>
+              <h3 className="text-xl font-bold tracking-tight text-white">SSO Authentication Challenge</h3>
+              <p className="text-xs text-slate-400 mt-1">
+                Access to <span className="text-cyan-300 font-semibold">{selectedSsoApp.name}</span> enforces multi-factor verification before session unlock.
+              </p>
+            </div>
+
+            {ssoError && (
+              <div className="mb-4 p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-300 text-xs flex items-center gap-2">
+                <svg className="w-4 h-4 shrink-0 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                </svg>
+                <span>{ssoError}</span>
+              </div>
+            )}
+
+            {ssoSuccess && (
+              <div className="mb-4 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs flex items-center gap-2">
+                <svg className="w-4 h-4 shrink-0 text-emerald-400" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                </svg>
+                <span>{ssoSuccess}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleConfirmSsoChallenge} className="pt-2">
+              <label className="block text-xs font-medium text-slate-300 mb-1.5 text-center">
+                Enter 6-Digit Authenticator Code
+              </label>
+              <input
+                type="text"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                maxLength={6}
+                value={ssoTotpCode}
+                onChange={(e) => setSsoTotpCode(e.target.value)}
+                placeholder="000000"
+                className="w-full text-center text-xl tracking-[0.4em] font-mono font-bold bg-[#131926] border border-cyan-500/40 rounded-xl py-2.5 text-cyan-300 placeholder-slate-600 focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400 transition-all mb-4 shadow-inner"
+              />
+
+              <button
+                type="submit"
+                disabled={ssoLoading || !!ssoSuccess}
+                className="w-full py-3 px-4 bg-cyan-400 hover:bg-cyan-300 disabled:opacity-60 disabled:cursor-not-allowed text-slate-950 font-bold text-xs sm:text-sm rounded-xl transition-all shadow-lg shadow-cyan-500/20 cursor-pointer flex items-center justify-center gap-2"
+              >
+                {ssoLoading ? (
+                  <>
+                    <svg className="animate-spin h-4 w-4 text-slate-950" viewBox="0 0 24 24" fill="none">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <span>Verifying Code...</span>
+                  </>
+                ) : (
+                  <span>Authorize & Launch SSO</span>
+                )}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Add Service Integration Modal */}
       {addModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center px-4 bg-black/75 backdrop-blur-md animate-in fade-in duration-200">
           <div className="relative w-full max-w-xl rounded-3xl bg-[#0c1424] border border-cyan-500/30 p-6 sm:p-7 shadow-2xl text-white">
-            {/* Close Button */}
             <button
               type="button"
               onClick={() => setAddModalOpen(false)}
@@ -633,7 +781,6 @@ export default function DashboardPage() {
               </svg>
             </button>
 
-            {/* Modal Header */}
             <div className="mb-5">
               <h3 className="text-xl font-bold tracking-tight text-white">Add Service Integration</h3>
               <p className="text-xs text-slate-400 mt-1">
@@ -641,7 +788,6 @@ export default function DashboardPage() {
               </p>
             </div>
 
-            {/* Navigation Tabs: Boilerplate vs Custom */}
             <div className="flex border-b border-white/10 mb-5">
               <button
                 type="button"
@@ -673,7 +819,6 @@ export default function DashboardPage() {
               </button>
             </div>
 
-            {/* Feedback Notifications */}
             {customValidationErr && (
               <div className="mb-4 p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-300 text-xs flex items-center gap-2">
                 <svg className="w-4 h-4 shrink-0 text-red-400" viewBox="0 0 20 20" fill="currentColor">
@@ -692,11 +837,10 @@ export default function DashboardPage() {
               </div>
             )}
 
-            {/* Tab 1: Boilerplate Providers (Facebook, Google, GitHub, Microsoft) */}
             {activeModalTab === "boilerplate" && (
               <div className="space-y-3 max-h-[380px] overflow-y-auto pr-1">
                 {boilerplateTemplates.map((template) => {
-                  const isConnected = apps.some((a) => a.id === template.id);
+                  const isConnected = apps.some((a) => a.name.toLowerCase() === template.name.toLowerCase());
                   return (
                     <div
                       key={template.id}
@@ -740,7 +884,6 @@ export default function DashboardPage() {
               </div>
             )}
 
-            {/* Tab 2: Custom Service Form */}
             {activeModalTab === "custom" && (
               <form onSubmit={handleAddCustomApp} className="space-y-3.5 max-h-[420px] overflow-y-auto pr-1">
                 <div>
