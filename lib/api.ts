@@ -13,7 +13,7 @@ import {
   LaunchServicePayload,
   LaunchServiceResponse,
 } from "@/types/integration";
-import { AdminUser, CreateUserPayload } from "@/types/admin";
+import { AdminUser, CreateUserPayload, BatchCreateUsersPayload } from "@/types/admin";
 
 export * from "@/types/auth";
 export * from "@/types/integration";
@@ -231,6 +231,55 @@ export async function revokeUserService(
 ): Promise<boolean> {
   try {
     const res = await fetch(`${API_BASE_URL}/api/admin/users/${userId}/services/${serviceId}`, {
+      method: "DELETE",
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+export async function updateUserProfile(
+  userId: number,
+  fullName: string
+): Promise<AuthResponse> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/auth/profile`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId, fullName }),
+    });
+    return res.json();
+  } catch (err: any) {
+    return {
+      success: false,
+      message: err?.message || "Failed to update account profile.",
+    };
+  }
+}
+
+export async function batchCreateAdminUsers(
+  payload: BatchCreateUsersPayload
+): Promise<AdminUser[]> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/admin/users/batch`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) return [];
+    const json = await res.json();
+    return json?.data || [];
+  } catch {
+    return [];
+  }
+}
+
+export async function adminDeleteUser(
+  userId: number
+): Promise<boolean> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/admin/users/${userId}`, {
       method: "DELETE",
     });
     return res.ok;

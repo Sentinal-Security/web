@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { User, MfaSetupResponse } from "@/types/auth";
 import { AppIntegration, IntegrationType } from "@/types/integration";
 import { AdminUser } from "@/types/admin";
@@ -9,6 +10,7 @@ import { getStoredSession, updateStoredUser, clearSession } from "@/lib/session"
 import { useMfa } from "@/hooks/useMfa";
 import { useIntegrations } from "@/hooks/useIntegrations";
 import { useAdmin } from "@/hooks/useAdmin";
+import { updateUserProfile } from "@/lib/api";
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -93,6 +95,13 @@ export default function DashboardPage() {
   const [ssoSuccess, setSsoSuccess] = useState("");
   const [launchedAppId, setLaunchedAppId] = useState<string | number | null>(null);
 
+  // Profile Modal State (Self-Service Name Edit with Locked Credentials)
+  const [profileModalOpen, setProfileModalOpen] = useState(false);
+  const [editFullName, setEditFullName] = useState("");
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileError, setProfileError] = useState("");
+  const [profileSuccess, setProfileSuccess] = useState("");
+
   useEffect(() => {
     const session = getStoredSession();
     if (!session || !session.user) {
@@ -100,7 +109,36 @@ export default function DashboardPage() {
       return;
     }
     setUser(session.user);
+    setEditFullName(session.user.fullName || "");
   }, [router]);
+
+  const handleSaveProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user) return;
+    if (!editFullName.trim()) {
+      setProfileError("Account name cannot be empty.");
+      return;
+    }
+
+    setProfileSaving(true);
+    setProfileError("");
+    setProfileSuccess("");
+
+    const res = await updateUserProfile(user.userId, editFullName.trim());
+    setProfileSaving(false);
+
+    if (res.success) {
+      updateStoredUser({ fullName: editFullName.trim() });
+      setUser((prev) => prev ? { ...prev, fullName: editFullName.trim() } : prev);
+      setProfileSuccess("Account name updated successfully.");
+      setTimeout(() => {
+        setProfileModalOpen(false);
+        setProfileSuccess("");
+      }, 1200);
+    } else {
+      setProfileError(res.message || "Failed to update account name.");
+    }
+  };
 
   const handleOpenPairingModal = async () => {
     if (!user) return;
@@ -445,14 +483,9 @@ Information Assurance System`;
               </button>
 
               {isAdmin && (
-                <button
-                  type="button"
-                  onClick={() => setAdminUsersPanelOpen((prev) => !prev)}
-                  className={`w-full flex items-center justify-between px-4 py-3 rounded-2xl text-sm font-medium transition-all cursor-pointer text-left border ${
-                    adminUsersPanelOpen
-                      ? "bg-purple-500/15 border-purple-400/40 text-purple-200"
-                      : "hover:bg-white/5 text-slate-300 hover:text-white border-transparent hover:border-white/10"
-                  }`}
+                <Link
+                  href="/users"
+                  className="w-full flex items-center justify-between px-4 py-3 rounded-2xl text-sm font-medium transition-all text-left border hover:bg-purple-500/15 text-slate-300 hover:text-white border-transparent hover:border-purple-400/40"
                 >
                   <div className="flex items-center gap-3">
                     <svg className="w-4 h-4 text-purple-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
@@ -463,7 +496,7 @@ Information Assurance System`;
                   <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/10 font-mono text-purple-300">
                     {adminUsers.length}
                   </span>
-                </button>
+                </Link>
               )}
 
               {isAdmin && (
@@ -624,6 +657,20 @@ Information Assurance System`;
                       {user?.mfaEnabled ? "Active" : "Disabled"}
                     </span>
                   </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setProfileDropdownOpen(false);
+                      setProfileModalOpen(true);
+                    }}
+                    className="w-full text-left px-3 py-2 rounded-xl text-xs text-slate-200 hover:text-white hover:bg-white/5 transition-colors flex items-center gap-2 cursor-pointer mb-1"
+                  >
+                    <svg className="w-4 h-4 text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                    </svg>
+                    <span>Edit Profile Name</span>
+                  </button>
 
                   <button
                     type="button"
@@ -1625,6 +1672,102 @@ Information Assurance System`;
                 </form>
               </div>
             ) : null}
+          </div>
+        </div>
+      )}
+
+      {/* Account Profile Modal (Name Edit Only with Locked Credentials) */}
+      {profileModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <div className="bg-slate-950 border border-white/15 rounded-3xl max-w-md w-full p-6 shadow-2xl relative">
+            <div className="flex items-center justify-between border-b border-white/10 pb-3 mb-4">
+              <div>
+                <h3 className="text-base font-bold text-white">Account Profile Settings</h3>
+                <p className="text-[11px] text-slate-400 mt-0.5">Manage identity details and view credential permissions.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setProfileModalOpen(false)}
+                className="text-slate-400 hover:text-white cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            {profileSuccess && (
+              <div className="mb-4 p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs">
+                {profileSuccess}
+              </div>
+            )}
+            {profileError && (
+              <div className="mb-4 p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs">
+                {profileError}
+              </div>
+            )}
+
+            <form onSubmit={handleSaveProfile} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">
+                  Account Display Name <span className="text-cyan-400 font-normal">(Editable)</span>
+                </label>
+                <input
+                  type="text"
+                  value={editFullName}
+                  onChange={(e) => setEditFullName(e.target.value)}
+                  placeholder="Your full name"
+                  className="w-full px-3 py-2 rounded-xl bg-black border border-white/20 text-xs text-white outline-none focus:border-cyan-400"
+                  required
+                />
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs font-semibold text-slate-400">Login Credential / Email</label>
+                  <span className="text-[10px] text-amber-400 font-medium flex items-center gap-1">
+                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                    </svg>
+                    Locked by IAM
+                  </span>
+                </div>
+                <input
+                  type="email"
+                  value={user?.email || ""}
+                  disabled
+                  className="w-full px-3 py-2 rounded-xl bg-slate-900/60 border border-white/5 text-xs text-slate-400 outline-none cursor-not-allowed select-none"
+                />
+                <p className="text-[10px] text-slate-500 mt-1">
+                  Login credentials and emails are governed by Sentinel IAM policy and cannot be modified by account owners. Contact an administrator to request a credential update.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1">Assigned Privilege Tier</label>
+                <input
+                  type="text"
+                  value={user?.role || "USER"}
+                  disabled
+                  className="w-full px-3 py-2 rounded-xl bg-slate-900/60 border border-white/5 text-xs text-slate-400 outline-none cursor-not-allowed select-none"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-white/10">
+                <button
+                  type="button"
+                  onClick={() => setProfileModalOpen(false)}
+                  className="px-3.5 py-1.5 rounded-xl bg-slate-900 text-slate-300 text-xs font-semibold hover:bg-slate-800 transition-all cursor-pointer"
+                >
+                  Close
+                </button>
+                <button
+                  type="submit"
+                  disabled={profileSaving}
+                  className="px-4 py-1.5 rounded-xl bg-cyan-400 hover:bg-cyan-300 text-slate-950 text-xs font-bold transition-all disabled:opacity-50 cursor-pointer"
+                >
+                  {profileSaving ? "Saving..." : "Save Name"}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

@@ -1,12 +1,14 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { AdminUser, CreateUserPayload } from "@/types/admin";
+import { AdminUser, CreateUserPayload, BatchCreateUsersPayload } from "@/types/admin";
 import {
   fetchAdminUsers,
   adminCreateUser,
   assignUserService,
   revokeUserService,
+  batchCreateAdminUsers,
+  adminDeleteUser,
 } from "@/lib/api";
 import { exportUsersToCsv } from "@/lib/csvExport";
 
@@ -109,6 +111,50 @@ export function useAdmin(isAdmin: boolean = false) {
     []
   );
 
+  const batchCreateUsers = useCallback(
+    async (payload: BatchCreateUsersPayload): Promise<AdminUser[]> => {
+      setActionError(null);
+      setActionSuccess(null);
+      try {
+        const created = await batchCreateAdminUsers(payload);
+        if (created && created.length > 0) {
+          setActionSuccess(`Successfully generated and provisioned ${created.length} users.`);
+          setUsers((prev) => [...created, ...prev]);
+          return created;
+        } else {
+          setActionError("Failed to batch create users or all user emails were duplicates.");
+          return [];
+        }
+      } catch (err: any) {
+        setActionError(err?.message || "Failed to batch create users.");
+        return [];
+      }
+    },
+    []
+  );
+
+  const deleteUser = useCallback(
+    async (userId: number): Promise<boolean> => {
+      setActionError(null);
+      setActionSuccess(null);
+      try {
+        const ok = await adminDeleteUser(userId);
+        if (ok) {
+          setActionSuccess("User deleted successfully.");
+          setUsers((prev) => prev.filter((u) => u.id !== userId));
+          return true;
+        } else {
+          setActionError("Failed to delete user.");
+          return false;
+        }
+      } catch (err: any) {
+        setActionError(err?.message || "Failed to delete user.");
+        return false;
+      }
+    },
+    []
+  );
+
   const exportCsv = useCallback(() => {
     exportUsersToCsv(users);
   }, [users]);
@@ -120,6 +166,8 @@ export function useAdmin(isAdmin: boolean = false) {
     actionSuccess,
     loadUsers,
     createUser,
+    batchCreateUsers,
+    deleteUser,
     assignService,
     revokeService,
     exportCsv,
