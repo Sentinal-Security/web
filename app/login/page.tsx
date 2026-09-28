@@ -85,6 +85,7 @@ export default function LoginPage() {
           userId: res.userId || mfaChallenge.userId,
           email: mfaChallenge.email || email.trim(),
           fullName: res.fullName || "",
+          role: (res.role as any) || "USER",
           mfaEnabled: true,
         });
       }

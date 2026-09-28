@@ -12,6 +12,7 @@ export default function RegisterPage() {
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [role, setRole] = useState<"USER" | "ADMIN">("USER");
   const [agreed, setAgreed] = useState(false);
   const [validationError, setValidationError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
@@ -46,6 +47,7 @@ export default function RegisterPage() {
       email: email.trim(),
       password,
       fullName: fullName.trim(),
+      role,
     });
 
     if (res.success) {
@@ -207,6 +209,46 @@ export default function RegisterPage() {
                   <span>{successMessage}</span>
                 </div>
               )}
+
+              {/* Role Selection (Standard User vs Administrator) */}
+              <div className="mb-5">
+                <label className="block text-xs font-medium text-slate-300 mb-2">
+                  Account Purpose & Security Role
+                </label>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setRole("USER")}
+                    className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                      role === "USER"
+                        ? "bg-cyan-500/10 border-cyan-400 text-white shadow-[0_0_12px_rgba(6,182,212,0.15)]"
+                        : "bg-[#131926] border-slate-700/60 text-slate-400 hover:text-slate-200"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs font-bold text-white">Standard User</span>
+                      <span className={`w-2 h-2 rounded-full ${role === "USER" ? "bg-cyan-400" : "bg-slate-600"}`} />
+                    </div>
+                    <p className="text-[10px] text-slate-400 leading-tight">Member access to assigned apps and MFA</p>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setRole("ADMIN")}
+                    className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                      role === "ADMIN"
+                        ? "bg-purple-500/10 border-purple-400 text-white shadow-[0_0_12px_rgba(168,85,247,0.15)]"
+                        : "bg-[#131926] border-slate-700/60 text-slate-400 hover:text-slate-200"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs font-bold text-white">Administrator</span>
+                      <span className={`w-2 h-2 rounded-full ${role === "ADMIN" ? "bg-purple-400" : "bg-slate-600"}`} />
+                    </div>
+                    <p className="text-[10px] text-slate-400 leading-tight">IAM Operator, provision users & services</p>
+                  </button>
+                </div>
+              </div>
 
               {/* Full Name Input Field */}
               <div className="mb-4">

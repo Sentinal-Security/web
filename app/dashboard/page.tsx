@@ -4,9 +4,11 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { User, MfaSetupResponse } from "@/types/auth";
 import { AppIntegration, IntegrationType } from "@/types/integration";
+import { AdminUser } from "@/types/admin";
 import { getStoredSession, updateStoredUser, clearSession } from "@/lib/session";
 import { useMfa } from "@/hooks/useMfa";
 import { useIntegrations } from "@/hooks/useIntegrations";
+import { useAdmin } from "@/hooks/useAdmin";
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -25,11 +27,42 @@ export default function DashboardPage() {
     testingPing,
     pingResult,
     clearPingResult,
+    loadServices,
   } = useIntegrations(user?.userId);
+
+  const isAdmin = user?.role === "ADMIN";
+
+  const {
+    users: adminUsers,
+    loading: adminLoading,
+    createUser: adminCreateUserAction,
+    assignService: adminAssignService,
+    revokeService: adminRevokeService,
+    exportCsv,
+  } = useAdmin(isAdmin);
 
   const [searchQuery, setSearchQuery] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
+
+  // Admin Right-Side Panel State
+  const [adminUsersPanelOpen, setAdminUsersPanelOpen] = useState(false);
+  const [userSearchQuery, setUserSearchQuery] = useState("");
+  const [fastCreateModalOpen, setFastCreateModalOpen] = useState(false);
+  const [newUserName, setNewUserName] = useState("");
+  const [newUserEmail, setNewUserEmail] = useState("");
+  const [newUserPassword, setNewUserPassword] = useState("");
+  const [newUserRole, setNewUserRole] = useState<"USER" | "ADMIN">("USER");
+  const [fastCreateErr, setFastCreateErr] = useState("");
+  const [fastCreateSuccess, setFastCreateSuccess] = useState("");
+
+  // Service Assignment Modal State
+  const [assignModalUser, setAssignModalUser] = useState<AdminUser | null>(null);
+
+  // Email Invitation Modal State
+  const [inviteModalUser, setInviteModalUser] = useState<AdminUser | null>(null);
+  const [inviteCopied, setInviteCopied] = useState(false);
+  const [inviteSent, setInviteSent] = useState(false);
 
   // MFA Pairing Modal State
   const [pairingModalOpen, setPairingModalOpen] = useState(false);
@@ -175,7 +208,6 @@ export default function DashboardPage() {
 
   // Launch SSO Handler - Triggers MFA Step if enforced
   const handleInitiateSsoLaunch = async (app: AppIntegration) => {
-    // If MFA is enforced on this app AND user has MFA active on their profile:
     if (app.metrics.mfaRequired && user?.mfaEnabled) {
       setSelectedSsoApp(app);
       setSsoTotpCode("");
@@ -185,7 +217,6 @@ export default function DashboardPage() {
       return;
     }
 
-    // Direct SSO launch (no MFA challenge required)
     setLaunchedAppId(app.id);
     await launchApp(app);
     setTimeout(() => {
@@ -222,11 +253,132 @@ export default function DashboardPage() {
     }
   };
 
+  // Fast User Creation for Admins
+  const handleGeneratePassword = () => {
+    const chars = "abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789!@#$%";
+    let pass = "";
+    for (let i = 0; i < 10; i++) {
+      pass += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    setNewUserPassword(pass);
+  };
+
+  const handleFastCreateUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setFastCreateErr("");
+    setFastCreateSuccess("");
+
+    if (!newUserName.trim() || !newUserEmail.trim() || !newUserPassword) {
+      setFastCreateErr("All fields are required.");
+      return;
+    }
+
+    if (newUserPassword.length < 6) {
+      setFastCreateErr("Password must be at least 6 characters.");
+      return;
+    }
+
+    const created = await adminCreateUserAction({
+      fullName: newUserName.trim(),
+      email: newUserEmail.trim(),
+      password: newUserPassword,
+      role: newUserRole,
+    });
+
+    if (created) {
+      setFastCreateSuccess(`User ${created.email} created.`);
+      setNewUserName("");
+      setNewUserEmail("");
+      setNewUserPassword("");
+      setTimeout(() => {
+        setFastCreateModalOpen(false);
+        setFastCreateSuccess("");
+      }, 1500);
+    }
+  };
+
+  // Service Assignment Toggle
+  const handleToggleServiceAssignment = async (serviceId: number, serviceName: string) => {
+    if (!assignModalUser) return;
+    const isAssigned = assignModalUser.assignedServiceIds.includes(serviceId);
+
+    if (isAssigned) {
+      await adminRevokeService(assignModalUser.id, serviceId);
+      setAssignModalUser((prev) =>
+        prev
+          ? {
+              ...prev,
+              assignedServicesCount: Math.max(0, prev.assignedServicesCount - 1),
+              assignedServiceIds: prev.assignedServiceIds.filter((id) => id !== serviceId),
+              assignedServiceNames: prev.assignedServiceNames.filter((name) => name !== serviceName),
+            }
+          : null
+      );
+    } else {
+      await adminAssignService(assignModalUser.id, serviceId, serviceName);
+      setAssignModalUser((prev) =>
+        prev
+          ? {
+              ...prev,
+              assignedServicesCount: prev.assignedServicesCount + 1,
+              assignedServiceIds: [...prev.assignedServiceIds, serviceId],
+              assignedServiceNames: [...prev.assignedServiceNames, serviceName],
+            }
+          : null
+      );
+    }
+  };
+
+  // Onboarding Email Template Generator
+  const generateEmailInviteText = (u: AdminUser) => {
+    return `Subject: Welcome to Sentinel IAM - Account Provisioning & Setup Instructions
+
+Hello ${u.fullName || "Team Member"},
+
+Your Sentinel IAM enterprise identity account has been provisioned.
+
+Access Portal: https://sentinel.iam/login
+Username: ${u.email}
+Initial Security Role: ${u.role}
+Assigned Services (${u.assignedServicesCount}): ${
+      u.assignedServiceNames?.length > 0 ? u.assignedServiceNames.join(", ") : "Standard IAM Access"
+    }
+
+Next Steps:
+1. Log in to the Access Portal using your email address and initial password.
+2. Complete your multi-factor authentication (MFA) device pairing under Dashboard > Security.
+3. Access your assigned enterprise applications directly via Single Sign-On (SSO).
+
+Sentinel Security Directorate
+Information Assurance System`;
+  };
+
+  const handleCopyEmailInvite = (u: AdminUser) => {
+    navigator.clipboard.writeText(generateEmailInviteText(u));
+    setInviteCopied(true);
+    setTimeout(() => setInviteCopied(false), 2000);
+  };
+
+  const handleDispatchEmail = () => {
+    setInviteSent(true);
+    setTimeout(() => {
+      setInviteSent(false);
+      setInviteModalUser(null);
+    }, 1500);
+  };
+
   const filteredApps = apps.filter(
     (app) =>
       app.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       app.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
       app.type.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const filteredAdminUsers = adminUsers.filter(
+    (u) =>
+      u.fullName.toLowerCase().includes(userSearchQuery.toLowerCase()) ||
+      u.email.toLowerCase().includes(userSearchQuery.toLowerCase()) ||
+      u.role.toLowerCase().includes(userSearchQuery.toLowerCase())
   );
 
   const displayName = user?.fullName || user?.email?.split("@")[0] || "User";
@@ -249,7 +401,7 @@ export default function DashboardPage() {
 
       {/* Left Sidebar */}
       <aside
-        className={`fixed md:relative inset-y-0 left-0 z-40 w-64 sm:w-72 md:w-[290px] lg:w-[306px] bg-black self-stretch min-h-screen shrink-0 shadow-[4px_0_24px_rgba(0,0,0,0.5)] border-r border-white/5 transition-transform duration-300 ease-in-out md:translate-x-0 ${
+        className={`fixed md:relative inset-y-0 left-0 z-40 w-64 sm:w-72 md:w-[280px] bg-black self-stretch min-h-screen shrink-0 shadow-[4px_0_24px_rgba(0,0,0,0.5)] border-r border-white/5 transition-transform duration-300 ease-in-out md:translate-x-0 ${
           sidebarOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
         }`}
       >
@@ -265,15 +417,20 @@ export default function DashboardPage() {
               <span className="mt-3 text-2xl font-bold tracking-tight text-[#2ee0ec] drop-shadow-[0_0_12px_rgba(46,224,236,0.45)]">
                 Sentinel
               </span>
+              {isAdmin && (
+                <span className="mt-1 text-[10px] px-2 py-0.5 rounded-full bg-purple-500/20 border border-purple-400/40 text-purple-300 font-bold uppercase tracking-wider">
+                  IAM Admin
+                </span>
+              )}
             </div>
 
-            <div className="mt-10 w-full space-y-2">
+            <div className="mt-8 w-full space-y-2">
               <button
                 type="button"
-                className="w-full flex items-center gap-3.5 px-5 py-3.5 rounded-2xl bg-gradient-to-r from-[#175beb] via-[#1249c5] to-[#0c338e] text-white font-semibold text-base shadow-[0_4px_24px_rgba(23,91,235,0.55)] transition-all cursor-pointer text-left"
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl bg-gradient-to-r from-[#175beb] via-[#1249c5] to-[#0c338e] text-white font-semibold text-sm shadow-[0_4px_24px_rgba(23,91,235,0.55)] transition-all cursor-pointer text-left"
               >
                 <svg
-                  className="w-5 h-5 text-white shrink-0"
+                  className="w-4 h-4 text-white shrink-0"
                   viewBox="0 0 24 24"
                   fill="none"
                   stroke="currentColor"
@@ -284,43 +441,51 @@ export default function DashboardPage() {
                   <rect x="2" y="3" width="20" height="15" rx="2" />
                   <path d="M6 14l3.5-4.5 3 3 4-5" />
                 </svg>
-                <span>Dashboard</span>
+                <span>{isAdmin ? "Admin Overview" : "My Dashboard"}</span>
               </button>
 
-              <button
-                type="button"
-                onClick={handleOpenAddModal}
-                className="w-full flex items-center gap-3.5 px-5 py-3.5 rounded-2xl hover:bg-white/5 text-slate-300 hover:text-white font-medium text-sm transition-all cursor-pointer text-left border border-transparent hover:border-white/10"
-              >
-                <svg
-                  className="w-5 h-5 text-cyan-400 shrink-0"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                  strokeWidth="2"
+              {isAdmin && (
+                <button
+                  type="button"
+                  onClick={() => setAdminUsersPanelOpen((prev) => !prev)}
+                  className={`w-full flex items-center justify-between px-4 py-3 rounded-2xl text-sm font-medium transition-all cursor-pointer text-left border ${
+                    adminUsersPanelOpen
+                      ? "bg-purple-500/15 border-purple-400/40 text-purple-200"
+                      : "hover:bg-white/5 text-slate-300 hover:text-white border-transparent hover:border-white/10"
+                  }`}
                 >
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-                </svg>
-                <span>Add Service</span>
-              </button>
+                  <div className="flex items-center gap-3">
+                    <svg className="w-4 h-4 text-purple-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                    </svg>
+                    <span>User Directory</span>
+                  </div>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/10 font-mono text-purple-300">
+                    {adminUsers.length}
+                  </span>
+                </button>
+              )}
+
+              {isAdmin && (
+                <button
+                  type="button"
+                  onClick={handleOpenAddModal}
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl hover:bg-white/5 text-slate-300 hover:text-white font-medium text-sm transition-all cursor-pointer text-left border border-transparent hover:border-white/10"
+                >
+                  <svg className="w-4 h-4 text-cyan-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                  </svg>
+                  <span>Add Service</span>
+                </button>
+              )}
 
               <button
                 type="button"
                 onClick={handleOpenPairingModal}
-                className="w-full flex items-center gap-3.5 px-5 py-3.5 rounded-2xl hover:bg-white/5 text-slate-300 hover:text-white font-medium text-sm transition-all cursor-pointer text-left border border-transparent hover:border-white/10"
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl hover:bg-white/5 text-slate-300 hover:text-white font-medium text-sm transition-all cursor-pointer text-left border border-transparent hover:border-white/10"
               >
-                <svg
-                  className="w-5 h-5 text-cyan-400 shrink-0"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                  strokeWidth="1.8"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
-                  />
+                <svg className="w-4 h-4 text-cyan-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                 </svg>
                 <span>Pair Authenticator</span>
               </button>
@@ -343,7 +508,7 @@ export default function DashboardPage() {
       </aside>
 
       {/* Main Content Area */}
-      <main className="flex-1 flex flex-col min-w-0 px-5 sm:px-7 lg:px-9 pt-6 pb-8">
+      <main className="flex-1 flex flex-col min-w-0 px-4 sm:px-6 lg:px-8 pt-6 pb-8">
         {/* Top Header */}
         <header className="flex items-center justify-between gap-3 sm:gap-4 w-full">
           <div className="flex items-center gap-2.5 sm:gap-3 flex-1 max-w-[280px] sm:max-w-xs md:max-w-md">
@@ -359,18 +524,8 @@ export default function DashboardPage() {
             </button>
 
             <div className="relative flex items-center bg-black rounded-full px-4 py-2.5 w-full border border-white/5 focus-within:border-cyan-500/40 transition-colors">
-              <svg
-                className="w-4 h-4 text-slate-400 shrink-0 mr-2.5"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth="2"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M21 21l-4.35-4.35m1.35-5.65a7 7 0 11-14 0 7 7 0 0114 0z"
-                />
+              <svg className="w-4 h-4 text-slate-400 shrink-0 mr-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35m1.35-5.65a7 7 0 11-14 0 7 7 0 0114 0z" />
               </svg>
               <input
                 type="text"
@@ -379,7 +534,7 @@ export default function DashboardPage() {
                 placeholder="Search services or protocols"
                 className="bg-transparent text-xs sm:text-sm text-slate-200 placeholder-slate-400 outline-none w-full"
               />
-              {searchQuery ? (
+              {searchQuery && (
                 <button
                   type="button"
                   onClick={() => setSearchQuery("")}
@@ -390,72 +545,82 @@ export default function DashboardPage() {
                     <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                   </svg>
                 </button>
-              ) : (
-                <span className="text-slate-500 text-xs ml-1 select-none pointer-events-none">/</span>
               )}
             </div>
           </div>
 
-          <div className="flex items-center gap-2.5 sm:gap-4 md:gap-5 relative">
-            <button
-              type="button"
-              onClick={handleOpenAddModal}
-              className="hidden sm:inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-cyan-400/10 hover:bg-cyan-400/20 border border-cyan-400/30 text-cyan-300 font-semibold text-xs transition-colors cursor-pointer"
-            >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-              </svg>
-              <span>Add Service</span>
-            </button>
+          <div className="flex items-center gap-2.5 sm:gap-3 relative">
+            {isAdmin && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setFastCreateModalOpen(true)}
+                  className="hidden sm:inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-purple-500/15 hover:bg-purple-500/25 border border-purple-400/40 text-purple-300 font-semibold text-xs transition-colors cursor-pointer"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+                  </svg>
+                  <span>Quick User</span>
+                </button>
 
-            <button
-              type="button"
-              className="relative p-1.5 sm:p-2 text-slate-200 hover:text-white transition-colors cursor-pointer"
-              aria-label="Notifications"
-            >
-              <svg className="w-5 h-5 fill-current" viewBox="0 0 24 24">
-                <path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z" />
-              </svg>
-              <span className="absolute top-1 sm:top-1.5 right-1 sm:right-1.5 w-2 h-2 rounded-full bg-[#0066ff] shadow-[0_0_8px_#0066ff]" />
-            </button>
+                <button
+                  type="button"
+                  onClick={exportCsv}
+                  title="Export Users to CSV Spreadsheet"
+                  className="hidden sm:inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 font-semibold text-xs transition-colors cursor-pointer"
+                >
+                  <svg className="w-3.5 h-3.5 text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  <span>Export CSV</span>
+                </button>
 
+                <button
+                  type="button"
+                  onClick={() => setAdminUsersPanelOpen((prev) => !prev)}
+                  className={`px-3 py-2 rounded-xl border text-xs font-semibold transition-colors cursor-pointer flex items-center gap-1.5 ${
+                    adminUsersPanelOpen
+                      ? "bg-purple-500/20 border-purple-400 text-purple-300"
+                      : "bg-black border-white/10 text-slate-300 hover:text-white"
+                  }`}
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                  </svg>
+                  <span>Users Panel</span>
+                </button>
+              </>
+            )}
+
+            {/* Profile Dropdown */}
             <div className="relative">
               <button
                 type="button"
                 onClick={() => setProfileDropdownOpen((prev) => !prev)}
-                className="flex items-center gap-2 sm:gap-2.5 bg-black py-1 sm:py-1.5 pl-1.5 pr-2.5 sm:pr-3.5 rounded-full border border-white/5 cursor-pointer hover:border-white/15 transition-all select-none"
+                className="flex items-center gap-2 bg-black py-1.5 pl-1.5 pr-3 rounded-full border border-white/10 cursor-pointer hover:border-white/20 transition-all select-none"
               >
-                <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center text-xs font-bold text-slate-950 uppercase shrink-0">
+                <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center text-xs font-bold text-slate-950 uppercase shrink-0">
                   {displayName.charAt(0)}
                 </div>
                 <span className="text-xs sm:text-sm font-medium text-white truncate max-w-[120px]">{displayName}</span>
-                <svg
-                  className={`w-3.5 h-3.5 text-slate-400 shrink-0 transition-transform ${profileDropdownOpen ? "rotate-180" : ""}`}
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                >
+                <svg className={`w-3.5 h-3.5 text-slate-400 shrink-0 transition-transform ${profileDropdownOpen ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
                 </svg>
               </button>
 
               {profileDropdownOpen && (
-                <div className="absolute right-0 mt-2 w-64 rounded-2xl bg-[#0c1424] border border-white/15 shadow-2xl backdrop-blur-xl p-3 z-50 animate-in fade-in slide-in-from-top-2 duration-150">
+                <div className="absolute right-0 mt-2 w-64 rounded-2xl bg-[#0c1424] border border-white/15 shadow-2xl backdrop-blur-xl p-3 z-50">
                   <div className="px-3 py-2 border-b border-white/10 mb-2">
                     <p className="text-xs font-bold text-white truncate">{user?.fullName || displayName}</p>
                     <p className="text-[11px] text-slate-400 truncate">{user?.email}</p>
+                    <p className="text-[10px] text-purple-400 mt-1 uppercase font-mono font-semibold">
+                      Role: {user?.role || "USER"}
+                    </p>
                   </div>
 
                   <div className="px-3 py-1.5 mb-2 flex items-center justify-between text-xs">
-                    <span className="text-slate-400">MFA Posture</span>
-                    <span
-                      className={`font-semibold px-2 py-0.5 rounded-full text-[10px] ${
-                        user?.mfaEnabled
-                          ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/30"
-                          : "bg-amber-500/10 text-amber-400 border border-amber-500/30"
-                      }`}
-                    >
+                    <span className="text-slate-400">MFA Status</span>
+                    <span className={`font-semibold px-2 py-0.5 rounded-full text-[10px] ${user?.mfaEnabled ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/30" : "bg-amber-500/10 text-amber-400 border border-amber-500/30"}`}>
                       {user?.mfaEnabled ? "Active" : "Disabled"}
                     </span>
                   </div>
@@ -487,202 +652,553 @@ export default function DashboardPage() {
           </div>
         </header>
 
-        {/* Welcome Greeting & Active Security Banner */}
-        <div className="mt-7 sm:mt-9 mb-6 sm:mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        {/* Welcome Greeting Banner */}
+        <div className="mt-6 mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h2 className="text-3xl sm:text-4xl font-normal text-white tracking-tight">
-              Welcome, <span className="text-[#38bdf8]">{displayName}</span>
-            </h2>
-            <p className="text-xs sm:text-sm text-slate-400 mt-1">
-              Central IAM Identity: <span className="text-slate-300 font-mono">{user?.email}</span>
+            <div className="flex items-center gap-2.5">
+              <h2 className="text-2xl sm:text-3xl font-normal text-white tracking-tight">
+                Welcome, <span className="text-[#38bdf8]">{displayName}</span>
+              </h2>
+              {isAdmin && (
+                <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-purple-500/20 border border-purple-400/40 text-purple-300 font-bold uppercase">
+                  Central IAM Admin
+                </span>
+              )}
+            </div>
+            <p className="text-xs text-slate-400 mt-1">
+              Identity: <span className="text-slate-300 font-mono">{user?.email}</span>
+              {isAdmin && " • Full Tenant Control: All Loaded Services & User Provisioning"}
             </p>
           </div>
 
           <div className="flex items-center gap-3">
             {user?.mfaEnabled ? (
-              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-semibold">
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-semibold">
                 <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                   <path fillRule="evenodd" d="M2.166 4.999A11.954 11.954 0 0010 1.944 11.954 11.954 0 0017.834 5c.11.65.166 1.32.166 2.001 0 5.225-3.34 9.67-8 11.317C5.34 16.67 2 12.225 2 7c0-.682.057-1.35.166-2.001zm11.541 3.708a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                 </svg>
                 <span>Two-Factor Authentication: Active</span>
               </div>
             ) : (
-              <div className="flex items-center gap-2.5">
-                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs font-semibold">
-                  <svg className="w-3.5 h-3.5" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                  </svg>
-                  <span>MFA Unpaired</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={handleOpenPairingModal}
-                  className="px-3 py-1.5 rounded-xl bg-cyan-400 hover:bg-cyan-300 text-slate-950 font-bold text-xs transition-all shadow-md shadow-cyan-500/20 cursor-pointer"
-                >
-                  Pair Device
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={handleOpenPairingModal}
+                className="px-3 py-1.5 rounded-xl bg-cyan-400 hover:bg-cyan-300 text-slate-950 font-bold text-xs transition-all shadow-md shadow-cyan-500/20 cursor-pointer"
+              >
+                Pair MFA Authenticator
+              </button>
             )}
           </div>
         </div>
 
-        {/* Dynamic Service Grid or Empty State */}
-        {servicesLoading ? (
-          <div className="flex-1 flex flex-col items-center justify-center py-20 text-slate-400">
-            <svg className="animate-spin h-8 w-8 text-cyan-400 mb-3" viewBox="0 0 24 24" fill="none">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-            </svg>
-            <p className="text-xs">Synchronizing integrated enterprise services...</p>
-          </div>
-        ) : filteredApps.length === 0 ? (
-          /* Clean Empty State (Default Dummy Apps Removed) */
-          <div className="flex-1 flex flex-col items-center justify-center p-8 sm:p-12 rounded-3xl bg-black/60 border border-dashed border-white/10 text-center">
-            <div className="w-16 h-16 rounded-2xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400 mb-4">
-              <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-              </svg>
+        {/* Dashboard Body: Split into Services Grid (Left/Center) + Admin Users Drawer (Right) */}
+        <div className="flex flex-col lg:flex-row gap-6 flex-1 items-start w-full">
+          {/* Main Services View */}
+          <div className="flex-1 w-full flex flex-col">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="text-base font-bold text-white tracking-tight">
+                  {isAdmin ? "Enterprise Service Catalog" : "Assigned Services"}
+                </h3>
+                <p className="text-xs text-slate-400">
+                  {isAdmin
+                    ? "Global applications and authentication endpoints loaded in the system."
+                    : "Your assigned single sign-on applications authorized by administration."}
+                </p>
+              </div>
+
+              {isAdmin && (
+                <button
+                  type="button"
+                  onClick={handleOpenAddModal}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-cyan-400 hover:bg-cyan-300 text-slate-950 font-bold text-xs transition-all shadow-md shadow-cyan-500/20 cursor-pointer"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                  </svg>
+                  <span>Add Service</span>
+                </button>
+              )}
             </div>
-            <h3 className="text-lg sm:text-xl font-bold text-white tracking-tight">No Integrated Services Enrolled</h3>
-            <p className="text-xs sm:text-sm text-slate-400 max-w-md mt-1.5">
-              Connect pre-configured identity providers or register your company applications to track sessions, telemetry, and MFA policy enforcement.
-            </p>
-            <button
-              type="button"
-              onClick={handleOpenAddModal}
-              className="mt-6 inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-cyan-400 hover:bg-cyan-300 text-slate-950 font-bold text-xs sm:text-sm transition-all shadow-lg shadow-cyan-500/20 cursor-pointer"
-            >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.2">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-              </svg>
-              <span>Add Your First Service</span>
-            </button>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5 lg:gap-6 flex-1 w-full">
-            {filteredApps.map((app) => (
-              <div
-                key={app.id}
-                className="group bg-black rounded-2xl border border-cyan-500/40 p-5 sm:p-6 lg:p-7 shadow-[0_0_20px_rgba(6,182,212,0.06)] hover:border-cyan-400/70 hover:shadow-[0_0_26px_rgba(6,182,212,0.12)] transition-all flex flex-col justify-between select-none"
-              >
-                <div>
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 rounded-xl bg-[#070b14] border border-white/10 flex items-center justify-center p-2 shrink-0 group-hover:border-cyan-500/30 transition-all">
-                        {app.logo ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img src={app.logo} alt={`${app.name} Logo`} className="w-8 h-8 object-contain" />
-                        ) : (
-                          <AppIcon iconType={app.iconType} />
-                        )}
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <h3 className="text-lg sm:text-xl font-bold text-white tracking-tight group-hover:text-[#38bdf8] transition-colors">
-                            {app.name}
-                          </h3>
-                          {app.isBoilerplate && (
-                            <span className="text-[10px] px-2 py-0.5 rounded-md bg-blue-500/10 border border-blue-500/30 text-blue-300 font-medium">
-                              Federated
-                            </span>
-                          )}
-                          {app.isCustom && (
-                            <span className="text-[10px] px-2 py-0.5 rounded-md bg-purple-500/10 border border-purple-500/30 text-purple-300 font-medium">
-                              Custom
-                            </span>
+
+            {servicesLoading ? (
+              <div className="flex flex-col items-center justify-center py-20 text-slate-400">
+                <svg className="animate-spin h-8 w-8 text-cyan-400 mb-3" viewBox="0 0 24 24" fill="none">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                <p className="text-xs">Loading services...</p>
+              </div>
+            ) : filteredApps.length === 0 ? (
+              <div className="p-8 sm:p-12 rounded-3xl bg-black/60 border border-dashed border-white/10 text-center flex flex-col items-center justify-center">
+                <div className="w-14 h-14 rounded-2xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400 mb-3">
+                  <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                  </svg>
+                </div>
+                <h4 className="text-base font-bold text-white">No Services Currently Available</h4>
+                <p className="text-xs text-slate-400 max-w-sm mt-1">
+                  {isAdmin
+                    ? "No services have been loaded into the system yet. Click 'Add Service' to register providers."
+                    : "No enterprise applications have been provisioned to your profile yet. Please contact your IAM Administrator."}
+                </p>
+                {isAdmin && (
+                  <button
+                    type="button"
+                    onClick={handleOpenAddModal}
+                    className="mt-5 inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-cyan-400 hover:bg-cyan-300 text-slate-950 font-bold text-xs transition-all shadow-md shadow-cyan-500/20 cursor-pointer"
+                  >
+                    <span>Add Service Integration</span>
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full">
+                {filteredApps.map((app) => (
+                  <div
+                    key={app.id}
+                    className="group bg-black rounded-2xl border border-cyan-500/40 p-5 shadow-[0_0_20px_rgba(6,182,212,0.06)] hover:border-cyan-400/70 hover:shadow-[0_0_26px_rgba(6,182,212,0.12)] transition-all flex flex-col justify-between select-none"
+                  >
+                    <div>
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                          <div className="w-11 h-11 rounded-xl bg-[#070b14] border border-white/10 flex items-center justify-center p-2 shrink-0 group-hover:border-cyan-500/30 transition-all">
+                            {app.logo ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img src={app.logo} alt={`${app.name} Logo`} className="w-7 h-7 object-contain" />
+                            ) : (
+                              <AppIcon iconType={app.iconType} />
+                            )}
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <h4 className="text-base font-bold text-white tracking-tight group-hover:text-[#38bdf8] transition-colors">
+                                {app.name}
+                              </h4>
+                              {app.isBoilerplate && (
+                                <span className="text-[9px] px-1.5 py-0.5 rounded bg-blue-500/10 border border-blue-500/30 text-blue-300 font-medium">
+                                  Federated
+                                </span>
+                              )}
+                              {app.isCustom && (
+                                <span className="text-[9px] px-1.5 py-0.5 rounded bg-purple-500/10 border border-purple-500/30 text-purple-300 font-medium">
+                                  Custom
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-[11px] text-slate-400 mt-0.5">{app.category}</p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-1.5">
+                          <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-medium bg-[#08152e] border border-cyan-500/25 text-cyan-300">
+                            <span className={`w-1.5 h-1.5 rounded-full ${app.statusColor}`} />
+                            <span>{app.status}</span>
+                          </div>
+                          {isAdmin && (
+                            <button
+                              type="button"
+                              onClick={() => removeApp(app.id)}
+                              className="p-1 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-colors cursor-pointer"
+                              title="Delete service"
+                            >
+                              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                            </button>
                           )}
                         </div>
-                        <p className="text-xs text-slate-400 mt-0.5">{app.category}</p>
+                      </div>
+
+                      {/* Telemetry Row */}
+                      <div className="mt-4 pt-3 border-t border-white/5 grid grid-cols-2 sm:grid-cols-4 gap-2 text-left">
+                        <div className="bg-[#070d1a] border border-white/5 rounded-xl p-2">
+                          <span className="block text-[9px] uppercase font-semibold text-slate-500">Last Login</span>
+                          <span className="block text-[11px] font-medium text-slate-200 mt-0.5 truncate" title={app.metrics.lastLogin}>
+                            {app.metrics.lastLogin}
+                          </span>
+                        </div>
+
+                        <div className="bg-[#070d1a] border border-white/5 rounded-xl p-2">
+                          <span className="block text-[9px] uppercase font-semibold text-slate-500">Last Active</span>
+                          <div className="flex items-center gap-1.5 mt-0.5">
+                            {app.metrics.lastActive.includes("now") && (
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                            )}
+                            <span className="text-[11px] font-medium text-slate-200 truncate">{app.metrics.lastActive}</span>
+                          </div>
+                        </div>
+
+                        <div className="bg-[#070d1a] border border-white/5 rounded-xl p-2">
+                          <span className="block text-[9px] uppercase font-semibold text-slate-500">Total Logins</span>
+                          <span className="block text-[11px] font-semibold text-cyan-400 mt-0.5">
+                            {app.metrics.totalLogins}
+                          </span>
+                        </div>
+
+                        <div className="bg-[#070d1a] border border-white/5 rounded-xl p-2">
+                          <span className="block text-[9px] uppercase font-semibold text-slate-500">Access Policy</span>
+                          <span className={`block text-[10px] font-semibold mt-0.5 truncate ${app.metrics.mfaRequired ? "text-emerald-400" : "text-slate-300"}`}>
+                            {app.metrics.mfaRequired ? "MFA Required" : "Direct SSO"}
+                          </span>
+                        </div>
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-1.5">
-                      <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-[#08152e] border border-cyan-500/25 text-cyan-300">
-                        <span className={`w-1.5 h-1.5 rounded-full ${app.statusColor}`} />
-                        <span>{app.status}</span>
-                      </div>
+                    <div className="mt-4 pt-3 border-t border-white/5 flex items-center justify-between gap-3">
+                      <span className="text-[10px] text-slate-500 font-mono">
+                        {app.type.replace("_", " ").toUpperCase()}
+                      </span>
+
                       <button
                         type="button"
-                        onClick={() => removeApp(app.id)}
-                        className="p-1 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-colors cursor-pointer"
-                        title="Disconnect service"
-                        aria-label="Disconnect service"
+                        onClick={() => handleInitiateSsoLaunch(app)}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/5 hover:bg-cyan-500/10 border border-white/10 hover:border-cyan-400/40 text-xs font-semibold text-slate-200 hover:text-cyan-300 transition-all cursor-pointer"
                       >
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
+                        {launchedAppId === app.id ? (
+                          <>
+                            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                            <span className="text-emerald-300 text-xs">Access Granted</span>
+                          </>
+                        ) : (
+                          <>
+                            <span>Launch SSO</span>
+                            <svg className="w-3.5 h-3.5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                            </svg>
+                          </>
+                        )}
                       </button>
                     </div>
                   </div>
+                ))}
+              </div>
+            )}
+          </div>
 
-                  <div className="mt-5 pt-4 border-t border-white/5 grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-left">
-                    <div className="bg-[#070d1a] border border-white/5 rounded-xl p-2.5">
-                      <span className="block text-[10px] uppercase font-semibold tracking-wider text-slate-500">Last Login</span>
-                      <span className="block text-xs font-medium text-slate-200 mt-1 truncate" title={app.metrics.lastLogin}>
-                        {app.metrics.lastLogin}
-                      </span>
-                    </div>
-
-                    <div className="bg-[#070d1a] border border-white/5 rounded-xl p-2.5">
-                      <span className="block text-[10px] uppercase font-semibold tracking-wider text-slate-500">Last Active</span>
-                      <div className="flex items-center gap-1.5 mt-1">
-                        {app.metrics.lastActive.includes("now") && (
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                        )}
-                        <span className="text-xs font-medium text-slate-200 truncate">{app.metrics.lastActive}</span>
-                      </div>
-                    </div>
-
-                    <div className="bg-[#070d1a] border border-white/5 rounded-xl p-2.5">
-                      <span className="block text-[10px] uppercase font-semibold tracking-wider text-slate-500">Total Sign-ins</span>
-                      <span className="block text-xs font-semibold text-cyan-400 mt-1">
-                        {app.metrics.totalLogins}
-                      </span>
-                    </div>
-
-                    <div className="bg-[#070d1a] border border-white/5 rounded-xl p-2.5">
-                      <span className="block text-[10px] uppercase font-semibold tracking-wider text-slate-500">Access Policy</span>
-                      <span
-                        className={`block text-[11px] font-semibold mt-1 truncate ${
-                          app.metrics.mfaRequired ? "text-emerald-400" : "text-slate-300"
-                        }`}
-                      >
-                        {app.metrics.mfaRequired ? "MFA Enforced" : "Direct SSO"}
-                      </span>
-                    </div>
-                  </div>
+          {/* Right Side: Admin Users Management Tab / Drawer */}
+          {isAdmin && (adminUsersPanelOpen || true) && (
+            <aside className="w-full lg:w-[380px] xl:w-[420px] bg-black rounded-3xl border border-white/10 p-5 shadow-2xl shrink-0 flex flex-col">
+              <div className="flex items-center justify-between pb-3 border-b border-white/10">
+                <div>
+                  <h4 className="text-sm font-bold text-white tracking-tight">User Management</h4>
+                  <p className="text-[11px] text-slate-400">Provision members & assign services</p>
                 </div>
 
-                <div className="mt-5 pt-4 border-t border-white/5 flex items-center justify-between gap-3">
-                  <span className="text-[11px] text-slate-400 font-mono">
-                    Protocol: {app.type.replace("_", " ").toUpperCase()}
-                  </span>
-
+                <div className="flex items-center gap-1.5">
                   <button
                     type="button"
-                    onClick={() => handleInitiateSsoLaunch(app)}
-                    className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-white/5 hover:bg-cyan-500/10 border border-white/10 hover:border-cyan-400/40 text-xs font-semibold text-slate-200 hover:text-cyan-300 transition-all cursor-pointer"
+                    onClick={() => setFastCreateModalOpen(true)}
+                    className="px-2.5 py-1 rounded-lg bg-purple-500/20 hover:bg-purple-500/30 border border-purple-400/40 text-purple-300 font-bold text-[11px] transition-colors cursor-pointer"
                   >
-                    {launchedAppId === app.id ? (
-                      <>
-                        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-                        <span className="text-emerald-300">Access Granted</span>
-                      </>
-                    ) : (
-                      <>
-                        <span>Launch SSO</span>
-                        <svg className="w-3.5 h-3.5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                        </svg>
-                      </>
-                    )}
+                    + User
+                  </button>
+                  <button
+                    type="button"
+                    onClick={exportCsv}
+                    title="Export CSV spreadsheet"
+                    className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white transition-colors cursor-pointer"
+                  >
+                    <svg className="w-4 h-4 text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
                   </button>
                 </div>
               </div>
-            ))}
-          </div>
-        )}
+
+              {/* User search bar */}
+              <div className="mt-3 relative">
+                <input
+                  type="text"
+                  value={userSearchQuery}
+                  onChange={(e) => setUserSearchQuery(e.target.value)}
+                  placeholder="Filter users..."
+                  className="w-full bg-[#131926] border border-white/10 focus:border-cyan-400 text-xs rounded-xl px-3 py-2 text-white placeholder-slate-500 outline-none transition-colors"
+                />
+              </div>
+
+              {/* Users List */}
+              <div className="mt-3 space-y-2.5 max-h-[500px] overflow-y-auto pr-1">
+                {adminLoading ? (
+                  <p className="text-xs text-slate-500 py-6 text-center">Loading user directory...</p>
+                ) : filteredAdminUsers.length === 0 ? (
+                  <p className="text-xs text-slate-500 py-6 text-center">No users found.</p>
+                ) : (
+                  filteredAdminUsers.map((u) => (
+                    <div
+                      key={u.id}
+                      className="p-3 rounded-2xl bg-[#080d19] border border-white/5 hover:border-white/15 transition-all text-left"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-bold text-xs text-white truncate max-w-[150px]">{u.fullName || "User"}</span>
+                            <span className={`text-[9px] px-1.5 py-0.2 rounded font-semibold uppercase ${u.role === "ADMIN" ? "bg-purple-500/20 text-purple-300" : "bg-cyan-500/20 text-cyan-300"}`}>
+                              {u.role}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-slate-400 font-mono truncate max-w-[190px]">{u.email}</p>
+                        </div>
+
+                        <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-semibold ${u.mfaEnabled ? "bg-emerald-500/10 text-emerald-400" : "bg-amber-500/10 text-amber-400"}`}>
+                          {u.mfaEnabled ? "MFA Active" : "Unpaired"}
+                        </span>
+                      </div>
+
+                      <div className="mt-2.5 pt-2 border-t border-white/5 flex items-center justify-between text-[11px]">
+                        <span className="text-slate-400 font-medium">
+                          Services: <strong className="text-cyan-300">{u.assignedServicesCount}</strong>
+                        </span>
+
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => setAssignModalUser(u)}
+                            className="px-2 py-0.5 rounded-lg bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-400/30 text-cyan-300 text-[10px] font-semibold transition-colors cursor-pointer"
+                          >
+                            Assign Services
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setInviteModalUser(u)}
+                            title="Generate onboarding email invite"
+                            className="px-2 py-0.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 text-[10px] font-semibold transition-colors cursor-pointer"
+                          >
+                            Invite
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </aside>
+          )}
+        </div>
       </main>
+
+      {/* Fast User Creation Modal */}
+      {fastCreateModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="relative w-full max-w-md rounded-3xl bg-[#0c1424] border border-purple-500/30 p-6 shadow-2xl text-white">
+            <button
+              type="button"
+              onClick={() => setFastCreateModalOpen(false)}
+              className="absolute top-5 right-5 p-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-colors cursor-pointer"
+            >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+
+            <h3 className="text-lg font-bold text-white mb-1">Fast Create User</h3>
+            <p className="text-xs text-slate-400 mb-4">Provision a new user account with assigned security role.</p>
+
+            {fastCreateErr && (
+              <div className="mb-3 p-2.5 rounded-xl bg-red-500/10 border border-red-500/30 text-red-300 text-xs">
+                {fastCreateErr}
+              </div>
+            )}
+            {fastCreateSuccess && (
+              <div className="mb-3 p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs">
+                {fastCreateSuccess}
+              </div>
+            )}
+
+            <form onSubmit={handleFastCreateUser} className="space-y-3">
+              <div>
+                <label className="block text-xs font-medium text-slate-300 mb-1">Full Name</label>
+                <input
+                  type="text"
+                  value={newUserName}
+                  onChange={(e) => setNewUserName(e.target.value)}
+                  placeholder="e.g. Charlie Mangyao"
+                  className="w-full bg-[#131926] border border-white/10 focus:border-cyan-400 text-xs rounded-xl px-3 py-2 text-white outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-300 mb-1">Email Address</label>
+                <input
+                  type="email"
+                  value={newUserEmail}
+                  onChange={(e) => setNewUserEmail(e.target.value)}
+                  placeholder="member@sentinel.iam"
+                  className="w-full bg-[#131926] border border-white/10 focus:border-cyan-400 text-xs rounded-xl px-3 py-2 text-white outline-none"
+                />
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-medium text-slate-300">Temporary Password</label>
+                  <button
+                    type="button"
+                    onClick={handleGeneratePassword}
+                    className="text-[11px] text-cyan-400 hover:text-cyan-300 cursor-pointer underline"
+                  >
+                    Generate Secure
+                  </button>
+                </div>
+                <input
+                  type="text"
+                  value={newUserPassword}
+                  onChange={(e) => setNewUserPassword(e.target.value)}
+                  placeholder="Minimum 6 characters"
+                  className="w-full bg-[#131926] border border-white/10 focus:border-cyan-400 text-xs rounded-xl px-3 py-2 text-white font-mono outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-300 mb-1">Role</label>
+                <select
+                  value={newUserRole}
+                  onChange={(e) => setNewUserRole(e.target.value as "USER" | "ADMIN")}
+                  className="w-full bg-[#131926] border border-white/10 focus:border-cyan-400 text-xs rounded-xl px-3 py-2 text-white outline-none"
+                >
+                  <option value="USER">Standard User</option>
+                  <option value="ADMIN">Administrator</option>
+                </select>
+              </div>
+
+              <div className="pt-2">
+                <button
+                  type="submit"
+                  className="w-full py-2.5 bg-purple-500 hover:bg-purple-400 text-white font-bold text-xs rounded-xl shadow-lg transition-all cursor-pointer"
+                >
+                  Create & Enroll User
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Service Provisioning Modal (Assign Services to User) */}
+      {assignModalUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="relative w-full max-w-lg rounded-3xl bg-[#0c1424] border border-cyan-500/30 p-6 shadow-2xl text-white">
+            <button
+              type="button"
+              onClick={() => {
+                setAssignModalUser(null);
+                loadServices();
+              }}
+              className="absolute top-5 right-5 p-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-colors cursor-pointer"
+            >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+
+            <h3 className="text-lg font-bold text-white">Provision Services</h3>
+            <p className="text-xs text-slate-400 mt-1">
+              Assign or revoke applications for <strong className="text-cyan-300">{assignModalUser.fullName}</strong> ({assignModalUser.email}).
+            </p>
+
+            <div className="mt-4 space-y-2 max-h-[350px] overflow-y-auto pr-1">
+              {apps.length === 0 ? (
+                <p className="text-xs text-slate-500 py-4 text-center">No services currently loaded.</p>
+              ) : (
+                apps.map((app) => {
+                  const numId = typeof app.id === "number" ? app.id : 0;
+                  const isAssigned = assignModalUser.assignedServiceIds.includes(numId);
+                  return (
+                    <div
+                      key={app.id}
+                      className="p-3 rounded-xl bg-[#080d19] border border-white/5 flex items-center justify-between gap-3"
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-8 h-8 rounded-lg bg-black border border-white/10 flex items-center justify-center p-1.5 shrink-0">
+                          <AppIcon iconType={app.iconType} />
+                        </div>
+                        <div>
+                          <p className="text-xs font-bold text-white">{app.name}</p>
+                          <p className="text-[10px] text-slate-400">{app.category}</p>
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => handleToggleServiceAssignment(numId, app.name)}
+                        className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                          isAssigned
+                            ? "bg-emerald-500/20 border border-emerald-400/40 text-emerald-300"
+                            : "bg-white/5 hover:bg-cyan-500/10 border border-white/10 text-slate-300 hover:text-cyan-300"
+                        }`}
+                      >
+                        {isAssigned ? "Assigned" : "Assign"}
+                      </button>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            <div className="mt-5 pt-3 border-t border-white/10 flex justify-end">
+              <button
+                type="button"
+                onClick={() => {
+                  setAssignModalUser(null);
+                  loadServices();
+                }}
+                className="px-4 py-2 rounded-xl bg-cyan-400 hover:bg-cyan-300 text-slate-950 font-bold text-xs transition-colors cursor-pointer"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Onboarding Email Invitation Modal */}
+      {inviteModalUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="relative w-full max-w-lg rounded-3xl bg-[#0c1424] border border-cyan-500/30 p-6 shadow-2xl text-white">
+            <button
+              type="button"
+              onClick={() => setInviteModalUser(null)}
+              className="absolute top-5 right-5 p-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-colors cursor-pointer"
+            >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+
+            <h3 className="text-lg font-bold text-white">Onboarding Email Dispatch</h3>
+            <p className="text-xs text-slate-400 mt-1">
+              Dispatch credentials and onboarding setup instructions to <span className="text-cyan-300">{inviteModalUser.email}</span>.
+            </p>
+
+            <div className="mt-4">
+              <label className="block text-[11px] font-medium text-slate-400 mb-1">Generated Invitation Template</label>
+              <textarea
+                readOnly
+                rows={10}
+                value={generateEmailInviteText(inviteModalUser)}
+                className="w-full bg-[#131926] border border-white/10 rounded-xl p-3 text-xs text-slate-200 font-mono outline-none resize-none"
+              />
+            </div>
+
+            <div className="mt-4 flex items-center justify-between gap-3">
+              <button
+                type="button"
+                onClick={() => handleCopyEmailInvite(inviteModalUser)}
+                className="px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-xs font-semibold text-white transition-colors cursor-pointer"
+              >
+                {inviteCopied ? "Copied to Clipboard" : "Copy Email Template"}
+              </button>
+
+              <button
+                type="button"
+                onClick={handleDispatchEmail}
+                className="px-4 py-2 rounded-xl bg-cyan-400 hover:bg-cyan-300 text-slate-950 font-bold text-xs transition-colors cursor-pointer"
+              >
+                {inviteSent ? "Invitation Dispatched" : "Send Email"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* SSO Authentication Challenge Modal ("Login Chu2 Step") */}
       {ssoModalOpen && selectedSsoApp && (
@@ -692,7 +1208,6 @@ export default function DashboardPage() {
               type="button"
               onClick={() => setSsoModalOpen(false)}
               className="absolute top-5 right-5 p-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-colors cursor-pointer"
-              aria-label="Close modal"
             >
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -774,7 +1289,6 @@ export default function DashboardPage() {
               type="button"
               onClick={() => setAddModalOpen(false)}
               className="absolute top-5 right-5 p-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-colors cursor-pointer"
-              aria-label="Close modal"
             >
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -946,11 +1460,7 @@ export default function DashboardPage() {
                     className="w-full bg-[#131926] border border-white/10 focus:border-cyan-400 text-xs sm:text-sm rounded-xl px-3.5 py-2.5 text-white placeholder-slate-500 outline-none transition-colors"
                   />
                   {pingResult && (
-                    <p
-                      className={`text-[11px] mt-1.5 ${
-                        pingResult.success ? "text-emerald-400" : "text-amber-400"
-                      }`}
-                    >
+                    <p className={`text-[11px] mt-1.5 ${pingResult.success ? "text-emerald-400" : "text-amber-400"}`}>
                       {pingResult.message}
                     </p>
                   )}
@@ -1002,7 +1512,6 @@ export default function DashboardPage() {
               type="button"
               onClick={() => setPairingModalOpen(false)}
               className="absolute top-5 right-5 p-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-colors cursor-pointer"
-              aria-label="Close modal"
             >
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
