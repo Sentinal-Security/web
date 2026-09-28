@@ -34,16 +34,17 @@ export function useIntegrations(userId?: number) {
     setLoading(true);
     try {
       const backendServices = await fetchUserServices(userId);
-      if (backendServices && backendServices.length > 0) {
+      if (Array.isArray(backendServices)) {
         const mapped = backendServices.map(backendToAppIntegration);
         setApps(mapped);
-        saveStoredIntegrations(mapped);
+        saveStoredIntegrations(mapped, userId);
       } else {
-        const stored = getStoredIntegrations();
+        const stored = getStoredIntegrations(userId);
         setApps(stored);
       }
     } catch {
-      setApps(getStoredIntegrations());
+      const stored = getStoredIntegrations(userId);
+      setApps(stored);
     } finally {
       setLoading(false);
       setIsHydrated(true);
@@ -76,7 +77,7 @@ export function useIntegrations(userId?: number) {
           const app = backendToAppIntegration(created);
           setApps((prev) => {
             const updated = [app, ...prev.filter((a) => a.id !== app.id)];
-            saveStoredIntegrations(updated);
+            saveStoredIntegrations(updated, userId);
             return updated;
           });
           return true;
@@ -107,7 +108,7 @@ export function useIntegrations(userId?: number) {
 
       setApps((prev) => {
         const updated = [newApp, ...prev];
-        saveStoredIntegrations(updated);
+        saveStoredIntegrations(updated, userId);
         return updated;
       });
       return true;
@@ -135,7 +136,7 @@ export function useIntegrations(userId?: number) {
           const app = backendToAppIntegration(created);
           setApps((prev) => {
             const updated = [app, ...prev];
-            saveStoredIntegrations(updated);
+            saveStoredIntegrations(updated, userId);
             return updated;
           });
           return true;
@@ -167,7 +168,7 @@ export function useIntegrations(userId?: number) {
 
       setApps((prev) => {
         const updated = [newApp, ...prev];
-        saveStoredIntegrations(updated);
+        saveStoredIntegrations(updated, userId);
         return updated;
       });
       return true;
@@ -182,7 +183,7 @@ export function useIntegrations(userId?: number) {
       }
       setApps((prev) => {
         const updated = prev.filter((a) => a.id !== appId);
-        saveStoredIntegrations(updated);
+        saveStoredIntegrations(updated, userId);
         return updated;
       });
     },
@@ -197,7 +198,7 @@ export function useIntegrations(userId?: number) {
           const updatedEntity = backendToAppIntegration(res.data.service);
           setApps((prev) => {
             const next = prev.map((a) => (a.id === app.id ? updatedEntity : a));
-            saveStoredIntegrations(next);
+            saveStoredIntegrations(next, userId);
             return next;
           });
         }
@@ -220,7 +221,7 @@ export function useIntegrations(userId?: number) {
           }
           return a;
         });
-        saveStoredIntegrations(next);
+        saveStoredIntegrations(next, userId);
         return next;
       });
 

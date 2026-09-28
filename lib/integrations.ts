@@ -86,24 +86,48 @@ export function backendToAppIntegration(service: BackendServiceResponse): AppInt
   };
 }
 
-export function getStoredIntegrations(): AppIntegration[] {
+const LEGACY_MOCK_IDS = new Set(["anzora", "calyx", "omniauth", "skyeagle"]);
+
+function isLegacyMock(app: any): boolean {
+  if (!app) return true;
+  const idStr = String(app.id || "").toLowerCase();
+  const nameStr = String(app.name || "").toLowerCase();
+  return LEGACY_MOCK_IDS.has(idStr) || LEGACY_MOCK_IDS.has(nameStr);
+}
+
+export function getStoredIntegrations(userId?: number): AppIntegration[] {
   if (typeof window === "undefined") {
     return [];
   }
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const key = userId ? `${STORAGE_KEY}_u${userId}` : STORAGE_KEY;
+    const raw = localStorage.getItem(key) || localStorage.getItem(STORAGE_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
+    if (!Array.isArray(parsed)) return [];
+    // Strictly filter out legacy mock services
+    const cleaned = parsed.filter((item) => !isLegacyMock(item));
+    if (cleaned.length !== parsed.length) {
+      localStorage.setItem(key, JSON.stringify(cleaned));
+      if (key !== STORAGE_KEY) {
+        localStorage.removeItem(STORAGE_KEY);
+      }
+    }
+    return cleaned;
   } catch {
     return [];
   }
 }
 
-export function saveStoredIntegrations(apps: AppIntegration[]): void {
+export function saveStoredIntegrations(apps: AppIntegration[], userId?: number): void {
   if (typeof window === "undefined") return;
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(apps));
+    const key = userId ? `${STORAGE_KEY}_u${userId}` : STORAGE_KEY;
+    const cleaned = apps.filter((item) => !isLegacyMock(item));
+    localStorage.setItem(key, JSON.stringify(cleaned));
+    if (key !== STORAGE_KEY) {
+      localStorage.removeItem(STORAGE_KEY);
+    }
   } catch (err) {
     console.error("Failed to save integrations to localStorage", err);
   }
