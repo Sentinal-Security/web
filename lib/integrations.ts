@@ -1,4 +1,4 @@
-import { AppIntegration, BoilerplateTemplate, CustomAppPayload } from "@/types/integration";
+import { AppIntegration, BoilerplateTemplate, BackendServiceResponse, IntegrationType } from "@/types/integration";
 
 export const BOILERPLATE_TEMPLATES: BoilerplateTemplate[] = [
   {
@@ -47,104 +47,56 @@ export const BOILERPLATE_TEMPLATES: BoilerplateTemplate[] = [
   },
 ];
 
-export const DEFAULT_APPS: AppIntegration[] = [
-  {
-    id: "anzora",
-    name: "Anzora",
-    category: "Zero-Trust Access Mesh",
-    logo: "/images/logo-anzora.svg",
-    iconType: "shield",
-    status: "Active",
-    statusColor: "bg-purple-400",
-    type: "sso_oauth",
-    loginUrl: "https://anzora.network/auth/sso",
-    metrics: {
-      lastLogin: "Today, 09:15 AM",
-      lastActive: "Active now",
-      totalLogins: 42,
-      activeSessions: 1,
-      latencyMs: 38,
-      mfaRequired: true,
-    },
-  },
-  {
-    id: "calyx",
-    name: "Calyx Cloud",
-    category: "SaaS Governance Suite",
-    logo: "/images/logo-calyx.svg",
-    iconType: "cloud",
-    status: "Protected",
-    statusColor: "bg-emerald-400",
-    type: "saml",
-    loginUrl: "https://calyx.cloud/identity/saml",
-    metrics: {
-      lastLogin: "Yesterday, 04:30 PM",
-      lastActive: "18m ago",
-      totalLogins: 29,
-      activeSessions: 1,
-      latencyMs: 44,
-      mfaRequired: true,
-    },
-  },
-  {
-    id: "omniauth",
-    name: "OmniAuth API",
-    category: "Cloud Auth API Service",
-    logo: "/images/logo-omniauth.svg",
-    iconType: "key",
-    status: "Operational",
-    statusColor: "bg-amber-400",
-    type: "rest_api",
-    endpoint: "https://backend-pi68.onrender.com/api/health",
-    metrics: {
-      lastLogin: "Today, 08:00 AM",
-      lastActive: "4m ago",
-      totalLogins: 115,
-      activeSessions: 2,
-      latencyMs: 32,
-      mfaRequired: false,
-    },
-  },
-  {
-    id: "skyeagle",
-    name: "SkyEagle",
-    category: "Continuous Threat Radar",
-    logo: "/images/logo-skyeagle.svg",
-    iconType: "terminal",
-    status: "Syncing",
-    statusColor: "bg-cyan-400",
-    type: "webhook",
-    endpoint: "https://skyeagle.threats.io/api/telemetry",
-    metrics: {
-      lastLogin: "2 days ago",
-      lastActive: "Just now",
-      totalLogins: 67,
-      activeSessions: 1,
-      latencyMs: 51,
-      mfaRequired: true,
-    },
-  },
-];
+// Defaults removed per user requirement - user starts with empty dashboard and adds services
+export const DEFAULT_APPS: AppIntegration[] = [];
 
 const STORAGE_KEY = "sentinel_dashboard_integrations";
 
+export function formatCurrentTime(): string {
+  const now = new Date();
+  return now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
+export function backendToAppIntegration(service: BackendServiceResponse): AppIntegration {
+  const isBoilerplate = ["facebook", "google", "github", "microsoft"].includes(service.iconType?.toLowerCase() || "");
+  const normalizedType = (service.authProtocol?.toLowerCase() || "sso_oauth") as IntegrationType;
+
+  return {
+    id: service.id,
+    backendId: service.id,
+    userId: service.userId,
+    name: service.name,
+    category: service.category || "Enterprise Service",
+    iconType: (service.iconType as any) || (isBoilerplate ? (service.iconType as any) : "custom"),
+    status: (service.status as any) || "Active",
+    statusColor: service.mfaRequired ? "bg-emerald-400" : "bg-cyan-400",
+    type: normalizedType,
+    isBoilerplate,
+    isCustom: !isBoilerplate,
+    loginUrl: service.loginUrl,
+    clientId: service.clientId,
+    metrics: {
+      lastLogin: service.lastLogin ? service.lastLogin : "Never logged in",
+      lastActive: service.lastActive ? service.lastActive : "Inactive",
+      totalLogins: service.totalLogins || 0,
+      activeSessions: service.totalLogins > 0 ? 1 : 0,
+      latencyMs: 35,
+      mfaRequired: service.mfaRequired,
+    },
+  };
+}
+
 export function getStoredIntegrations(): AppIntegration[] {
   if (typeof window === "undefined") {
-    return DEFAULT_APPS;
+    return [];
   }
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(DEFAULT_APPS));
-      return DEFAULT_APPS;
-    }
+    if (!raw) return [];
     const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed) && parsed.length > 0) {
-      return parsed;
-    }
-    return DEFAULT_APPS;
+    return Array.isArray(parsed) ? parsed : [];
   } catch {
-    return DEFAULT_APPS;
+    return [];
   }
 }
 
@@ -157,11 +109,6 @@ export function saveStoredIntegrations(apps: AppIntegration[]): void {
   }
 }
 
-export function formatCurrentTime(): string {
-  const now = new Date();
-  return now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-}
-
 export async function testConnectionPing(url: string): Promise<{ success: boolean; latencyMs: number; message: string }> {
   const start = performance.now();
   try {
@@ -169,7 +116,7 @@ export async function testConnectionPing(url: string): Promise<{ success: boolea
     if (!target.startsWith("http://") && !target.startsWith("https://")) {
       return { success: false, latencyMs: 0, message: "Invalid endpoint URL protocol (http/https required)." };
     }
-    const res = await fetch(target, { method: "HEAD", mode: "no-cors" });
+    await fetch(target, { method: "HEAD", mode: "no-cors" });
     const end = performance.now();
     return {
       success: true,

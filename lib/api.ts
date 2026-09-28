@@ -7,8 +7,15 @@ import {
   MfaVerifyLoginPayload,
   MfaVerifySetupPayload,
 } from "@/types/auth";
+import {
+  BackendServiceResponse,
+  CreateServicePayload,
+  LaunchServicePayload,
+  LaunchServiceResponse,
+} from "@/types/integration";
 
 export * from "@/types/auth";
+export * from "@/types/integration";
 
 export const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL || "https://backend-pi68.onrender.com";
@@ -98,4 +105,75 @@ export async function validateSsoSession(
     body: JSON.stringify({ userId }),
   });
   return res.json();
+}
+
+// User Services REST Client
+export async function fetchUserServices(
+  userId: number
+): Promise<BackendServiceResponse[]> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/services?userId=${userId}`, {
+      cache: "no-store",
+    });
+    if (!res.ok) return [];
+    const json = await res.json();
+    return json?.data || [];
+  } catch {
+    return [];
+  }
+}
+
+export async function createUserService(
+  payload: CreateServicePayload
+): Promise<BackendServiceResponse | null> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/services`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) return null;
+    const json = await res.json();
+    return json?.data || null;
+  } catch {
+    return null;
+  }
+}
+
+export async function deleteUserService(
+  id: number,
+  userId: number
+): Promise<boolean> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/services/${id}?userId=${userId}`, {
+      method: "DELETE",
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+export async function launchUserService(
+  id: number,
+  payload: LaunchServicePayload
+): Promise<LaunchServiceResponse> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/services/${id}/launch`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const json = await res.json();
+    return {
+      success: res.ok && json.success,
+      message: json.message || (res.ok ? "SSO launch authorized." : "Launch failed."),
+      data: json.data,
+    };
+  } catch (err: any) {
+    return {
+      success: false,
+      message: err?.message || "Network error launching service.",
+    };
+  }
 }

@@ -10,7 +10,9 @@ export interface AppMetrics {
 }
 
 export interface AppIntegration {
-  id: string;
+  id: string | number;
+  backendId?: number;
+  userId?: number;
   name: string;
   category: string;
   logo?: string;
@@ -46,4 +48,47 @@ export interface CustomAppPayload {
   clientId?: string;
   clientSecret?: string;
   mfaRequired: boolean;
+}
+
+export interface BackendServiceResponse {
+  id: number;
+  userId: number;
+  name: string;
+  category: string;
+  iconType: string;
+  authProtocol: string;
+  loginUrl: string;
+  clientId: string;
+  mfaRequired: boolean;
+  status: string;
+  lastLogin?: string;
+  lastActive?: string;
+  totalLogins: number;
+  createdAt: string;
+}
+
+export interface CreateServicePayload {
+  userId: number;
+  name: string;
+  category: string;
+  iconType?: string;
+  authProtocol: string;
+  loginUrl?: string;
+  clientId?: string;
+  mfaRequired: boolean;
+}
+
+export interface LaunchServicePayload {
+  userId: number;
+  code?: string;
+}
+
+export interface LaunchServiceResponse {
+  success: boolean;
+  message: string;
+  data?: {
+    ssoToken: string;
+    redirectUrl: string;
+    service: BackendServiceResponse;
+  };
 }
