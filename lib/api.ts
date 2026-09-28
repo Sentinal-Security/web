@@ -13,9 +13,11 @@ import {
   LaunchServicePayload,
   LaunchServiceResponse,
 } from "@/types/integration";
+import { AdminUser, CreateUserPayload } from "@/types/admin";
 
 export * from "@/types/auth";
 export * from "@/types/integration";
+export * from "@/types/admin";
 
 export const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL || "https://backend-pi68.onrender.com";
@@ -175,5 +177,64 @@ export async function launchUserService(
       success: false,
       message: err?.message || "Network error launching service.",
     };
+  }
+}
+
+// Admin REST Client
+export async function fetchAdminUsers(): Promise<AdminUser[]> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/admin/users`, {
+      cache: "no-store",
+    });
+    if (!res.ok) return [];
+    const json = await res.json();
+    return json?.data || [];
+  } catch {
+    return [];
+  }
+}
+
+export async function adminCreateUser(
+  payload: CreateUserPayload
+): Promise<AdminUser | null> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/admin/users`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) return null;
+    const json = await res.json();
+    return json?.data || null;
+  } catch {
+    return null;
+  }
+}
+
+export async function assignUserService(
+  userId: number,
+  serviceId: number
+): Promise<boolean> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/admin/users/${userId}/services/${serviceId}`, {
+      method: "POST",
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+export async function revokeUserService(
+  userId: number,
+  serviceId: number
+): Promise<boolean> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/admin/users/${userId}/services/${serviceId}`, {
+      method: "DELETE",
+    });
+    return res.ok;
+  } catch {
+    return false;
   }
 }
