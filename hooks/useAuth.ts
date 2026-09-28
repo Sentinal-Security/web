@@ -39,6 +39,7 @@ export function useAuth() {
           userId: res.userId,
           email: res.email || data.email,
           fullName: res.fullName || "",
+          role: (res.role as any) || "USER",
           mfaEnabled: false,
         });
       }
