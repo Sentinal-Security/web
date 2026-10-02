@@ -38,8 +38,8 @@ export default function Footer() {
       links: [
         { label: "About Us", href: "#" },
         { label: "Careers", href: "#" },
-        { label: "FAQs", href: "#" },
-        { label: "Teams", href: "#" },
+        { label: "Terms of Service", href: "/terms" },
+        { label: "Privacy Policy", href: "/terms" },
         { label: "Contact Us", href: "#" },
       ],
     },
@@ -76,9 +76,13 @@ export default function Footer() {
 
         {/* Bottom Bar: Copyright & Socials */}
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-          <p className="text-neutral-500 text-xs">
-            &copy; 2024 All Rights Reserved
-          </p>
+          <div className="flex items-center gap-4 text-neutral-500 text-xs">
+            <p>&copy; 2026 Sentinel Security. All Rights Reserved.</p>
+            <span>•</span>
+            <Link href="/terms" className="hover:text-[#54f4fc] transition-colors">
+              Terms &amp; Privacy
+            </Link>
+          </div>
 
           {/* Social Icons */}
           <div className="flex items-center space-x-3 text-white">

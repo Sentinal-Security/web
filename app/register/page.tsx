@@ -419,8 +419,9 @@ export default function RegisterPage() {
                 >
                   I agree to the{" "}
                   <Link
-                    href="#"
-                    className="text-blue-500 hover:text-blue-400 font-medium"
+                    href="/terms"
+                    target="_blank"
+                    className="text-[#38e1ff] hover:underline font-medium"
                   >
                     Terms and Privacy Policy
                   </Link>
