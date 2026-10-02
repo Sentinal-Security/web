@@ -79,25 +79,36 @@ export default function Header() {
           </div>
 
           <Link
+            href="#developers"
+            className="hover:text-[#54f4fc] transition-colors"
+          >
+            API Integration
+          </Link>
+          <Link
             href="/docs"
             className="hover:text-[#54f4fc] transition-colors"
           >
             Docs
           </Link>
           <Link
-            href="#support"
+            href="#faq"
             className="hover:text-[#54f4fc] transition-colors"
           >
-            Support
-          </Link>
-          <Link href="#blog" className="hover:text-[#54f4fc] transition-colors">
-            Blog
+            FAQ
           </Link>
           <Link
-            href="#partners"
+            href="#services"
             className="hover:text-[#54f4fc] transition-colors"
           >
-            Partners
+            Services
+          </Link>
+          <Link
+            href="/dw"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hover:text-[#54f4fc] transition-colors"
+          >
+            Mobile App
           </Link>
         </nav>
 
