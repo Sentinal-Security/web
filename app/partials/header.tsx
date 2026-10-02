@@ -1,10 +1,19 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
+import { getStoredSession } from "@/lib/session";
 
 export default function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+
+  useEffect(() => {
+    const session = getStoredSession();
+    if (session && session.user) {
+      setIsAuthenticated(true);
+    }
+  }, []);
 
   return (
     <header className="sticky top-0 z-50 w-full bg-black/90 backdrop-blur-md border-b border-white/10 transition-colors">
@@ -82,12 +91,29 @@ export default function Header() {
 
         {/* Right Action */}
         <div className="hidden md:flex items-center space-x-6">
-          <Link
-            href="/register"
-            className="text-xs font-bold tracking-widest text-[#54f4fc] uppercase hover:text-white transition-colors"
-          >
-            GET STARTED
-          </Link>
+          {isAuthenticated ? (
+            <Link
+              href="/dashboard"
+              className="text-xs font-bold tracking-widest text-[#54f4fc] uppercase hover:text-white transition-colors"
+            >
+              DASHBOARD
+            </Link>
+          ) : (
+            <>
+              <Link
+                href="/login"
+                className="text-xs font-bold tracking-widest text-gray-300 uppercase hover:text-[#54f4fc] transition-colors"
+              >
+                SIGN IN
+              </Link>
+              <Link
+                href="/register"
+                className="text-xs font-bold tracking-widest text-[#54f4fc] uppercase hover:text-white transition-colors"
+              >
+                GET STARTED
+              </Link>
+            </>
+          )}
         </div>
 
         {/* Mobile Hamburger Toggle */}
@@ -163,13 +189,32 @@ export default function Header() {
             Partners
           </Link>
           <div className="pt-4 border-t border-white/10">
-            <Link
-              href="/register"
-              onClick={() => setMobileMenuOpen(false)}
-              className="inline-block text-sm font-bold tracking-widest text-[#54f4fc] uppercase hover:text-white"
-            >
-              GET STARTED
-            </Link>
+            {isAuthenticated ? (
+              <Link
+                href="/dashboard"
+                onClick={() => setMobileMenuOpen(false)}
+                className="inline-block text-sm font-bold tracking-widest text-[#54f4fc] uppercase hover:text-white"
+              >
+                DASHBOARD
+              </Link>
+            ) : (
+              <div className="flex flex-col gap-3">
+                <Link
+                  href="/login"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="text-sm font-bold tracking-widest text-gray-300 uppercase hover:text-[#54f4fc]"
+                >
+                  SIGN IN
+                </Link>
+                <Link
+                  href="/register"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="inline-block text-sm font-bold tracking-widest text-[#54f4fc] uppercase hover:text-white"
+                >
+                  GET STARTED
+                </Link>
+              </div>
+            )}
           </div>
         </div>
       )}
