@@ -158,6 +158,53 @@ export async function disableMfa(
   return res.json();
 }
 
+export async function getMfaChallengeStatus(challengeId: number): Promise<{
+  success: boolean;
+  message?: string;
+  data?: {
+    id: number;
+    status: "PENDING" | "APPROVED" | "DENIED" | "EXPIRED";
+    userId: number;
+    email: string;
+    ssoToken?: string;
+  };
+}> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/mfa/challenge/${challengeId}/status`, {
+      cache: "no-store",
+    });
+    return await res.json();
+  } catch {
+    return { success: false, message: "Error fetching challenge status." };
+  }
+}
+
+export async function initiateMfaChallenge(
+  userId?: number,
+  email?: string,
+  clientOrigin?: string
+): Promise<{
+  success: boolean;
+  message?: string;
+  data?: {
+    challengeId: number;
+    matchCode: string;
+    status: string;
+    clientOrigin: string;
+  };
+}> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/mfa/challenge/initiate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId, email, clientOrigin }),
+    });
+    return await res.json();
+  } catch {
+    return { success: false, message: "Error initiating MFA challenge." };
+  }
+}
+
 export async function validateSsoSession(
   userId: number
 ): Promise<AuthResponse> {

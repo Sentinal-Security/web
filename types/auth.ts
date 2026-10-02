@@ -48,6 +48,8 @@ export interface AuthResponse {
   mfaEnabled?: boolean;
   mfaRequired?: boolean;
   ssoToken?: string;
+  challengeId?: number;
+  matchCode?: string;
 }
 
 export interface MfaSetupResponse {
