@@ -69,9 +69,21 @@ export default function Header() {
               >
                 MFA & Audit
               </Link>
+              <Link
+                href="/docs"
+                className="block px-3 py-2 text-xs text-gray-300 hover:text-[#54f4fc] hover:bg-cyan-950/40 rounded"
+              >
+                Developer API & Docs
+              </Link>
             </div>
           </div>
 
+          <Link
+            href="/docs"
+            className="hover:text-[#54f4fc] transition-colors"
+          >
+            Docs
+          </Link>
           <Link
             href="#support"
             className="hover:text-[#54f4fc] transition-colors"
@@ -166,6 +178,13 @@ export default function Header() {
             className="block text-gray-300 hover:text-[#54f4fc] py-1 text-base font-medium"
           >
             Features
+          </Link>
+          <Link
+            href="/docs"
+            onClick={() => setMobileMenuOpen(false)}
+            className="block text-gray-300 hover:text-[#54f4fc] py-1 text-base font-medium"
+          >
+            Developer API & Docs
           </Link>
           <Link
             href="#support"

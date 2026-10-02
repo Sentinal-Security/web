@@ -313,7 +313,116 @@ export default function LandingPage() {
         </section>
 
         {/* =========================================================
-            SECTION 6: QUOTE & TESTIMONIAL (From Landing Page 3)
+            SECTION 6: DEVELOPER INTEGRATION & API SHOWCASE
+        ========================================================= */}
+        <section id="developers" className="py-20 border-t border-white/5 max-w-[1600px] mx-auto px-6 sm:px-10 lg:px-16">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
+            {/* Left Column: Description & CTAs */}
+            <div className="lg:col-span-6 space-y-6">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#54f4fc]/10 border border-[#54f4fc]/30 text-[#54f4fc] text-xs font-semibold">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#54f4fc] animate-pulse" />
+                Developer-First Architecture
+              </div>
+
+              <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-white tracking-tight leading-[1.15]">
+                Integrate Any Web App<br />
+                <span className="text-[#54f4fc]">in 10 Lines of Code</span>
+              </h2>
+
+              <p className="text-gray-300 text-sm sm:text-base leading-relaxed">
+                Connect company portals, internal dashboards, and client SaaS applications to Sentinel Security.
+                Enforce centralized Single Sign-On (SSO), mobile possession-factor MFA, and real-time identity validation via lightweight REST endpoints.
+              </p>
+
+              <div className="space-y-3 pt-2">
+                <div className="flex items-start gap-3">
+                  <div className="w-5 h-5 rounded bg-[#54f4fc]/10 border border-[#54f4fc]/40 flex items-center justify-center shrink-0 mt-0.5 text-[#54f4fc]">
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                    </svg>
+                  </div>
+                  <p className="text-xs sm:text-sm text-gray-300">
+                    <strong className="text-white">Seamless SSO Launch Handoff:</strong> Dynamic session parameter injection (<code className="text-cyan-300">?ssoUserId=...</code>).
+                  </p>
+                </div>
+
+                <div className="flex items-start gap-3">
+                  <div className="w-5 h-5 rounded bg-[#54f4fc]/10 border border-[#54f4fc]/40 flex items-center justify-center shrink-0 mt-0.5 text-[#54f4fc]">
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                    </svg>
+                  </div>
+                  <p className="text-xs sm:text-sm text-gray-300">
+                    <strong className="text-white">Zero-Trust Session Verification:</strong> Authenticate clients via <code className="text-cyan-300">POST /api/auth/validate</code>.
+                  </p>
+                </div>
+
+                <div className="flex items-start gap-3">
+                  <div className="w-5 h-5 rounded bg-[#54f4fc]/10 border border-[#54f4fc]/40 flex items-center justify-center shrink-0 mt-0.5 text-[#54f4fc]">
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                    </svg>
+                  </div>
+                  <p className="text-xs sm:text-sm text-gray-300">
+                    <strong className="text-white">Step-Up MFA Challenge:</strong> Enforce 6-digit TOTP verification on sensitive service launches.
+                  </p>
+                </div>
+              </div>
+
+              <div className="pt-4 flex flex-wrap items-center gap-4">
+                <Link
+                  href="/docs"
+                  className="bg-[#54f4fc] hover:bg-[#32edf7] text-black font-bold text-xs sm:text-sm tracking-wider uppercase px-8 py-3.5 rounded transition-all duration-200 shadow-[0_0_25px_rgba(84,244,252,0.35)]"
+                >
+                  VIEW DEVELOPER DOCS
+                </Link>
+                <Link
+                  href="/docs#client-sdk-code"
+                  className="border border-[#54f4fc] text-[#54f4fc] hover:bg-[#54f4fc]/10 font-bold text-xs sm:text-sm tracking-wider uppercase px-8 py-3.5 rounded transition-all duration-200"
+                >
+                  API SPECIFICATION
+                </Link>
+              </div>
+            </div>
+
+            {/* Right Column: Code Snippet Card */}
+            <div className="lg:col-span-6 bg-[#05080e] border border-white/10 rounded-2xl overflow-hidden shadow-2xl">
+              <div className="bg-[#0b101b] px-4 py-3 border-b border-white/10 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded-full bg-red-500/80" />
+                  <div className="w-3 h-3 rounded-full bg-yellow-500/80" />
+                  <div className="w-3 h-3 rounded-full bg-green-500/80" />
+                  <span className="ml-2 font-mono text-xs text-gray-400">client-sso-validation.ts</span>
+                </div>
+                <span className="text-[10px] font-mono text-cyan-400 bg-cyan-950/60 px-2 py-0.5 rounded border border-cyan-800/40">
+                  HTTP 200 OK
+                </span>
+              </div>
+
+              <div className="p-5 font-mono text-xs leading-relaxed text-gray-300 overflow-x-auto space-y-4">
+                <pre className="text-cyan-200">{`// Ingest ssoUserId parameter and validate session
+const ssoUserId = new URLSearchParams(window.location.search).get("ssoUserId");
+
+const res = await fetch("https://backend-pi68.onrender.com/api/auth/validate", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ userId: Number(ssoUserId) }),
+});
+
+const identity = await res.json();
+// Output: { success: true, email: "user@corp.com", role: "USER" }`}</pre>
+                
+                <div className="pt-3 border-t border-white/10 text-[11px] text-gray-400 flex items-center justify-between">
+                  <span>Central Gateway Status: Connected</span>
+                  <span className="text-[#54f4fc]">38ms round-trip latency</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* =========================================================
+            SECTION 7: QUOTE & TESTIMONIAL (From Landing Page 3)
         ========================================================= */}
         <section className="py-24 max-w-[1400px] mx-auto px-6 sm:px-10 lg:px-16 text-center">
           <blockquote className="text-2xl sm:text-3xl md:text-4xl lg:text-[40px] font-normal text-[#54f4fc] leading-relaxed tracking-tight max-w-4xl mx-auto">
