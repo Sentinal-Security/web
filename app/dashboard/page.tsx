@@ -556,7 +556,10 @@ export default function DashboardPage() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5 lg:gap-6 w-full">
               {filteredApps.map((app) => {
-                const launchHref = app.loginUrl || `/apps/${app.id}`;
+                const isExternal = Boolean(app.loginUrl && (app.loginUrl.startsWith("http://") || app.loginUrl.startsWith("https://")));
+                const launchHref = isExternal && app.loginUrl && user?.userId
+                  ? `${app.loginUrl}${app.loginUrl.includes("?") ? "&" : "?"}ssoUserId=${user.userId}&ssoEmail=${encodeURIComponent(user.email || "")}`
+                  : (app.loginUrl || `/apps/${app.id}`);
                 return (
                   <div
                     key={app.id}
@@ -593,6 +596,8 @@ export default function DashboardPage() {
 
                         <Link
                           href={launchHref}
+                          target={isExternal ? "_blank" : undefined}
+                          rel={isExternal ? "noopener noreferrer" : undefined}
                           className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-slate-400 group-hover:text-cyan-300 group-hover:border-cyan-500/40 group-hover:bg-cyan-950/20 transition-all cursor-pointer"
                           title="Launch service"
                         >
@@ -615,7 +620,11 @@ export default function DashboardPage() {
 
                     {/* Card Bottom Area: App Name, Category, and Status Pill */}
                     <div className="mt-6 sm:mt-8">
-                      <Link href={launchHref}>
+                      <Link
+                        href={launchHref}
+                        target={isExternal ? "_blank" : undefined}
+                        rel={isExternal ? "noopener noreferrer" : undefined}
+                      >
                         <h3 className="text-xl sm:text-2xl font-bold text-white tracking-tight group-hover:text-[#38bdf8] transition-colors cursor-pointer">
                           {app.name}
                         </h3>
@@ -1091,6 +1100,24 @@ export default function DashboardPage() {
 // Vector Icon Renderer for Services (Zero Emojis)
 function AppIcon({ iconType }: { iconType?: string }) {
   switch (iconType) {
+    case "acme-hr":
+      return (
+        <svg className="w-6 h-6 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.941-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.058 2.772m0 0a3 3 0 00-4.681 2.72 8.986 8.986 0 003.74.477m.94-3.197a5.971 5.971 0 00-.94 3.197M15 6.75a3 3 0 11-6 0 3 3 0 016 0zm6 3a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0zm-13.5 0a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z" />
+        </svg>
+      );
+    case "fintech-payroll":
+      return (
+        <svg className="w-6 h-6 text-pink-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5z" />
+        </svg>
+      );
+    case "devops-incident":
+      return (
+        <svg className="w-6 h-6 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M9 17.25v1.007a3 3 0 01-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0115 18.257V17.25m6-12V15a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 15V5.25m18 0A2.25 2.25 0 0018.75 3H5.25A2.25 2.25 0 003 5.25m18 0V12a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 12V5.25" />
+        </svg>
+      );
     case "facebook":
       return (
         <svg className="w-6 h-6 text-[#1877f2] fill-current" viewBox="0 0 24 24">

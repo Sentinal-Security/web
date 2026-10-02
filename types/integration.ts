@@ -16,7 +16,7 @@ export interface AppIntegration {
   name: string;
   category: string;
   logo?: string;
-  iconType?: "facebook" | "google" | "github" | "microsoft" | "anzora" | "calyx" | "omniauth" | "skyeagle" | "shield" | "cloud" | "key" | "terminal" | "custom";
+  iconType?: "acme-hr" | "fintech-payroll" | "devops-incident" | "facebook" | "google" | "github" | "microsoft" | "anzora" | "calyx" | "omniauth" | "skyeagle" | "shield" | "cloud" | "key" | "terminal" | "custom";
   status: "Active" | "Operational" | "Protected" | "Syncing" | "Idle" | string;
   statusColor: string;
   type: IntegrationType;
@@ -33,7 +33,7 @@ export interface BoilerplateTemplate {
   name: string;
   category: string;
   logo?: string;
-  iconType?: "facebook" | "google" | "github" | "microsoft" | "anzora" | "calyx" | "omniauth" | "skyeagle" | "custom";
+  iconType?: "acme-hr" | "fintech-payroll" | "devops-incident" | "facebook" | "google" | "github" | "microsoft" | "anzora" | "calyx" | "omniauth" | "skyeagle" | "custom";
   type: IntegrationType;
   description: string;
   defaultScopes?: string[];
