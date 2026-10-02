@@ -2,6 +2,36 @@ import { AppIntegration, BoilerplateTemplate, BackendServiceResponse, Integratio
 
 export const BOILERPLATE_TEMPLATES: BoilerplateTemplate[] = [
   {
+    id: "acme-hr",
+    name: "Acme HR Portal",
+    category: "Enterprise HR & Directory",
+    iconType: "acme-hr",
+    type: "sso_oauth",
+    description: "Enterprise human resources management, employee records, and directory synchronization client (Demo App 1).",
+    mockClientId: "acme_hr_portal_3001",
+    loginUrl: "http://localhost:3001",
+  },
+  {
+    id: "fintech-payroll",
+    name: "FinTech Payroll Portal",
+    category: "Financial Disbursals & Compliance",
+    iconType: "fintech-payroll",
+    type: "sso_oauth",
+    description: "Automated payroll disbursement engine, compensation auditing, and fiscal ledger governance client (Demo App 2).",
+    mockClientId: "fintech_payroll_portal_3002",
+    loginUrl: "http://localhost:3002",
+  },
+  {
+    id: "devops-incident",
+    name: "DevOps Incident Portal",
+    category: "Production Incident Command",
+    iconType: "devops-incident",
+    type: "sso_oauth",
+    description: "Real-time service reliability monitoring, distributed tracing, and incident response orchestration client (Demo App 3).",
+    mockClientId: "devops_incident_portal_3003",
+    loginUrl: "http://localhost:3003",
+  },
+  {
     id: "anzora",
     name: "Anzora",
     category: "Zero-Trust Access Mesh",
@@ -101,7 +131,7 @@ export function getLogoForService(name: string, iconType?: string): string | und
 }
 
 export function backendToAppIntegration(service: BackendServiceResponse): AppIntegration {
-  const isBoilerplate = ["facebook", "google", "github", "microsoft", "anzora", "calyx", "omniauth", "skyeagle"].includes(service.iconType?.toLowerCase() || "");
+  const isBoilerplate = ["acme-hr", "fintech-payroll", "devops-incident", "facebook", "google", "github", "microsoft", "anzora", "calyx", "omniauth", "skyeagle"].includes(service.iconType?.toLowerCase() || "");
   const normalizedType = (service.authProtocol?.toLowerCase() || "sso_oauth") as IntegrationType;
   const logo = getLogoForService(service.name, service.iconType);
 
