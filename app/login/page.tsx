@@ -1,15 +1,29 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import { useMfa } from "@/hooks/useMfa";
 import { saveSession, getStoredSession, clearSession } from "@/lib/session";
 import { User } from "@/types/auth";
 
 export default function LoginPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-[#030712] text-white flex items-center justify-center">Loading Sentinel Security Gateway...</div>}>
+      <LoginPageContent />
+    </Suspense>
+  );
+}
+
+function LoginPageContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const redirectUri = searchParams.get("redirect_uri") || searchParams.get("redirectUrl") || searchParams.get("redirectUri");
+  const clientId = searchParams.get("client_id") || searchParams.get("clientId");
+  const appName = searchParams.get("app_name") || searchParams.get("appName") || (clientId ? clientId.toUpperCase() : "");
+  const state = searchParams.get("state");
+
   const { login, loading: authLoading, error: authError, setError: setAuthError } = useAuth();
   const { verifyLogin, loading: mfaLoading, error: mfaError, setError: setMfaError } = useMfa();
 
@@ -21,6 +35,17 @@ export default function LoginPage() {
       setExistingUser(session.user);
     }
   }, []);
+
+  const handleSuccessfulHandoff = (userId: number, userEmail: string, ssoToken?: string) => {
+    if (redirectUri) {
+      const sep = redirectUri.includes("?") ? "&" : "?";
+      const token = ssoToken || ("sso_" + Math.random().toString(36).substring(2) + Date.now().toString(36));
+      const targetUrl = `${redirectUri}${sep}ssoUserId=${userId}&ssoUserEmail=${encodeURIComponent(userEmail)}&ssoToken=${token}${state ? `&state=${encodeURIComponent(state)}` : ""}`;
+      window.location.href = targetUrl;
+    } else {
+      router.push("/dashboard");
+    }
+  };
 
   const handleLogoutAndSwitch = () => {
     clearSession();
@@ -62,8 +87,6 @@ export default function LoginPage() {
       return;
     }
 
-    // If server takes longer than 2.5s (Render cold start / network delay),
-    // display "Network issue, please wait a few seconds..."
     const delayTimer = setTimeout(() => {
       setNetworkWait(true);
     }, 2500);
@@ -82,7 +105,14 @@ export default function LoginPage() {
             email: res.email || email.trim(),
           });
         } else {
-          router.push("/dashboard");
+          saveSession({
+            userId: res.userId || 1,
+            email: res.email || email.trim(),
+            fullName: res.fullName || "",
+            role: (res.role as any) || "USER",
+            mfaEnabled: false,
+          });
+          handleSuccessfulHandoff(res.userId || 1, res.email || email.trim(), res.ssoToken);
         }
       }
     } finally {
@@ -120,16 +150,16 @@ export default function LoginPage() {
       );
 
       if (res.success) {
-        if (mfaChallenge?.userId) {
-          saveSession({
-            userId: res.userId || mfaChallenge.userId,
-            email: mfaChallenge.email || email.trim(),
-            fullName: res.fullName || "",
-            role: (res.role as any) || "USER",
-            mfaEnabled: true,
-          });
-        }
-        router.push("/dashboard");
+        const finalUserId = res.userId || mfaChallenge?.userId || 1;
+        const finalEmail = res.email || mfaChallenge?.email || email.trim();
+        saveSession({
+          userId: finalUserId,
+          email: finalEmail,
+          fullName: res.fullName || "",
+          role: (res.role as any) || "USER",
+          mfaEnabled: true,
+        });
+        handleSuccessfulHandoff(finalUserId, finalEmail, res.ssoToken);
       }
     } finally {
       clearTimeout(delayTimer);
@@ -252,15 +282,17 @@ export default function LoginPage() {
                   {/* Status Indicator */}
                   <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 text-xs font-semibold mb-5">
                     <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span>
-                    Active Session Detected
+                    {redirectUri ? "Single Sign-On Authorization" : "Active Session Detected"}
                   </div>
 
                   {/* Title & Context */}
                   <h2 className="text-2xl sm:text-[26px] font-bold text-white tracking-tight">
-                    Already Signed In
+                    {redirectUri ? `Authorize Access to ${appName || "Application"}` : "Already Signed In"}
                   </h2>
                   <p className="text-xs sm:text-sm text-slate-400 mt-2 mb-6 max-w-sm mx-auto">
-                    You are currently authenticated in Sentinel Security. Choose an option below to proceed.
+                    {redirectUri
+                      ? `You are signed in as ${existingUser.fullName || existingUser.email}. Click below to authorize single sign-on and return to ${appName || "the client application"}.`
+                      : "You are currently authenticated in Sentinel Security. Choose an option below to proceed."}
                   </p>
 
                   {/* Identity Box */}
@@ -292,23 +324,46 @@ export default function LoginPage() {
 
                   {/* Action Buttons */}
                   <div className="space-y-3">
-                    <button
-                      type="button"
-                      onClick={() => router.push("/dashboard")}
-                      className="w-full py-3.5 px-4 bg-[#38e1ff] hover:bg-[#2bc4e0] active:scale-[0.99] text-slate-950 font-bold text-xs sm:text-sm tracking-wider uppercase rounded-xl transition-all duration-200 shadow-[0_0_20px_rgba(56,225,255,0.3)] cursor-pointer flex items-center justify-center gap-2"
-                    >
-                      <span>Go to Dashboard</span>
-                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
-                      </svg>
-                    </button>
+                    {redirectUri ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => handleSuccessfulHandoff(existingUser.userId, existingUser.email)}
+                          className="w-full py-3.5 px-4 bg-[#38e1ff] hover:bg-[#2bc4e0] active:scale-[0.99] text-slate-950 font-bold text-xs sm:text-sm tracking-wider uppercase rounded-xl transition-all duration-200 shadow-[0_0_20px_rgba(56,225,255,0.3)] cursor-pointer flex items-center justify-center gap-2"
+                        >
+                          <span>Authorize & Enter {appName || "App"}</span>
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+                          </svg>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => router.push("/dashboard")}
+                          className="w-full py-3 px-4 bg-slate-800/80 hover:bg-slate-700/80 active:scale-[0.99] text-slate-300 hover:text-white font-medium text-xs sm:text-sm tracking-wide rounded-xl border border-slate-700 transition-all duration-200 cursor-pointer flex items-center justify-center gap-2"
+                        >
+                          <span>Go to Dashboard</span>
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => router.push("/dashboard")}
+                        className="w-full py-3.5 px-4 bg-[#38e1ff] hover:bg-[#2bc4e0] active:scale-[0.99] text-slate-950 font-bold text-xs sm:text-sm tracking-wider uppercase rounded-xl transition-all duration-200 shadow-[0_0_20px_rgba(56,225,255,0.3)] cursor-pointer flex items-center justify-center gap-2"
+                      >
+                        <span>Go to Dashboard</span>
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+                        </svg>
+                      </button>
+                    )}
 
                     <button
                       type="button"
                       onClick={handleLogoutAndSwitch}
-                      className="w-full py-3 px-4 bg-slate-800/80 hover:bg-slate-700/80 active:scale-[0.99] text-slate-300 hover:text-white font-medium text-xs sm:text-sm tracking-wide rounded-xl border border-slate-700 transition-all duration-200 cursor-pointer flex items-center justify-center gap-2"
+                      className="w-full py-2.5 px-4 bg-transparent hover:bg-slate-800/50 text-slate-400 hover:text-slate-300 font-medium text-xs rounded-xl transition-all duration-200 cursor-pointer flex items-center justify-center gap-2"
                     >
-                      <svg className="w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                      <svg className="w-3.5 h-3.5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                         <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15M12 9l-3 3m0 0l3 3m-3-3h12.75" />
                       </svg>
                       <span>Sign Out & Switch Account</span>
@@ -317,12 +372,23 @@ export default function LoginPage() {
                 </div>
               ) : (
                 <>
+                  {redirectUri && (
+                    <div className="mb-5 p-3 rounded-xl bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 text-xs flex items-center gap-2.5">
+                      <svg className="w-4 h-4 text-cyan-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
+                      </svg>
+                      <span>
+                        SSO Request: Sign in to grant access to <strong className="text-white">{appName || "Client Application"}</strong>.
+                      </span>
+                    </div>
+                  )}
+
                   {/* Title & Subtitle */}
                   <h2 className="text-2xl sm:text-[26px] font-bold text-white text-center tracking-tight">
                     Welcome to <span className="text-[#38e1ff]">Sentinel</span>
                   </h2>
                   <p className="text-xs sm:text-sm text-slate-400 font-normal text-center mt-1 mb-6">
-                    Sign in to continue to your account
+                    {redirectUri ? `Sign in to authenticate with ${appName || "your application"}` : "Sign in to continue to your account"}
                   </p>
 
               {/* 3 Horizontal Social Buttons */}

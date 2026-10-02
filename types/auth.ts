@@ -47,6 +47,7 @@ export interface AuthResponse {
   company?: string;
   mfaEnabled?: boolean;
   mfaRequired?: boolean;
+  ssoToken?: string;
 }
 
 export interface MfaSetupResponse {
