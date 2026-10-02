@@ -12,7 +12,7 @@ export default function RegisterPage() {
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState<"USER" | "ADMIN">("USER");
+  const role = "ADMIN";
   const [company, setCompany] = useState("");
   const [companyManual, setCompanyManual] = useState(false);
   const [agreed, setAgreed] = useState(false);
@@ -65,8 +65,8 @@ export default function RegisterPage() {
     }
 
     const resolvedCompany = company.trim() || (email.includes("@") ? detectCompany(email) : "");
-    if (role === "ADMIN" && !resolvedCompany) {
-      setValidationError("Company workspace is required for Administrator accounts.");
+    if (!resolvedCompany) {
+      setValidationError("Company workspace name is required for Administrator accounts.");
       return;
     }
 
@@ -243,43 +243,25 @@ export default function RegisterPage() {
                 </div>
               )}
 
-              {/* Role Selection (Standard User vs Administrator) */}
-              <div className="mb-5">
-                <label className="block text-xs font-medium text-slate-300 mb-2">
-                  Account Purpose & Security Role
-                </label>
-                <div className="grid grid-cols-2 gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setRole("USER")}
-                    className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
-                      role === "USER"
-                        ? "bg-cyan-500/10 border-cyan-400 text-white shadow-[0_0_12px_rgba(6,182,212,0.15)]"
-                        : "bg-[#131926] border-slate-700/60 text-slate-400 hover:text-slate-200"
-                    }`}
-                  >
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-xs font-bold text-white">Standard User</span>
-                      <span className={`w-2 h-2 rounded-full ${role === "USER" ? "bg-cyan-400" : "bg-slate-600"}`} />
-                    </div>
-                    <p className="text-[10px] text-slate-400 leading-tight">Member access to assigned apps and MFA</p>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setRole("ADMIN")}
-                    className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
-                      role === "ADMIN"
-                        ? "bg-purple-500/10 border-purple-400 text-white shadow-[0_0_12px_rgba(168,85,247,0.15)]"
-                        : "bg-[#131926] border-slate-700/60 text-slate-400 hover:text-slate-200"
-                    }`}
-                  >
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-xs font-bold text-white">Administrator</span>
-                      <span className={`w-2 h-2 rounded-full ${role === "ADMIN" ? "bg-purple-400" : "bg-slate-600"}`} />
-                    </div>
-                    <p className="text-[10px] text-slate-400 leading-tight">IAM Operator, provision users & services</p>
-                  </button>
+              {/* Account Role Notice: Administrator Only */}
+              <div className="mb-5 p-3.5 rounded-2xl bg-[#0e172a] border border-purple-500/30 flex items-start gap-3">
+                <div className="p-2 rounded-xl bg-purple-500/20 text-purple-300 shrink-0 mt-0.5">
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                  </svg>
+                </div>
+                <div className="flex-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-white uppercase tracking-wider">
+                      Tenant Administrator Registration
+                    </span>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/25 border border-purple-400/40 text-purple-200 font-mono font-semibold">
+                      IAM ADMIN
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-300 mt-1 leading-relaxed">
+                    Public registration is reserved exclusively for Company Administrators. Standard user accounts must be provisioned directly by an administrator via the Sentinel User Directory.
+                  </p>
                 </div>
               </div>
 
@@ -287,7 +269,7 @@ export default function RegisterPage() {
               <div className="mb-4">
                 <div className="flex items-center justify-between mb-2">
                   <label className="block text-xs font-medium text-slate-300">
-                    Company Workspace {role === "ADMIN" && <span className="text-purple-400 font-bold">*</span>}
+                    Company Workspace <span className="text-purple-400 font-bold">*</span>
                   </label>
                   {company && (
                     <span className="text-[10px] text-purple-300 bg-purple-500/10 px-2 py-0.5 rounded border border-purple-500/20 font-mono">
@@ -306,15 +288,14 @@ export default function RegisterPage() {
                       setCompany(e.target.value.toLowerCase());
                       setCompanyManual(true);
                     }}
-                    placeholder={role === "ADMIN" ? "e.g. companynamexx, acme.com" : "Optional company workspace"}
+                    placeholder="e.g. acme, companynamexx"
                     className="w-full bg-transparent border-none outline-none text-white text-sm placeholder-slate-500"
+                    required
                   />
                 </div>
-                {role === "ADMIN" && (
-                  <p className="text-[11px] text-slate-400 mt-1.5">
-                    Tenant isolation boundary: you will only manage users within this company workspace.
-                  </p>
-                )}
+                <p className="text-[11px] text-slate-400 mt-1.5">
+                  Tenant isolation boundary: you will only manage users within this company workspace.
+                </p>
               </div>
 
               {/* Full Name Input Field */}
@@ -488,13 +469,18 @@ export default function RegisterPage() {
                 ))}
               </div>
 
-              {/* Login link */}
-              <p className="text-center text-xs sm:text-sm text-slate-400 mt-6">
-                Already have an account?{" "}
-                <Link href="/login" className="text-blue-500 hover:text-blue-400 font-medium">
-                  Login
-                </Link>
-              </p>
+              {/* Login link & Standard user guidance */}
+              <div className="mt-6 text-center space-y-2">
+                <p className="text-xs sm:text-sm text-slate-400">
+                  Already have an account?{" "}
+                  <Link href="/login" className="text-blue-500 hover:text-blue-400 font-medium">
+                    Login
+                  </Link>
+                </p>
+                <p className="text-[11px] text-slate-500 max-w-sm mx-auto">
+                  Standard employees or members: Account creation is managed by your tenant administrator. Contact your company IT admin for credentials.
+                </p>
+              </div>
             </div>
           </div>
         </main>
