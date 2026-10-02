@@ -241,9 +241,14 @@ export async function launchUserService(
 }
 
 // Admin REST Client
-export async function fetchAdminUsers(): Promise<AdminUser[]> {
+export async function fetchAdminUsers(adminId?: number, company?: string): Promise<AdminUser[]> {
   try {
-    const res = await fetch(`${API_BASE_URL}/api/admin/users`, {
+    const params = new URLSearchParams();
+    if (adminId) params.append("adminId", adminId.toString());
+    if (company) params.append("company", company);
+    const queryString = params.toString() ? `?${params.toString()}` : "";
+
+    const res = await fetch(`${API_BASE_URL}/api/admin/users${queryString}`, {
       cache: "no-store",
     });
     if (!res.ok) return [];
@@ -255,10 +260,17 @@ export async function fetchAdminUsers(): Promise<AdminUser[]> {
 }
 
 export async function adminCreateUser(
-  payload: CreateUserPayload
+  payload: CreateUserPayload,
+  adminId?: number,
+  company?: string
 ): Promise<AdminUser | null> {
   try {
-    const res = await fetch(`${API_BASE_URL}/api/admin/users`, {
+    const params = new URLSearchParams();
+    if (adminId) params.append("adminId", adminId.toString());
+    if (company) params.append("company", company);
+    const queryString = params.toString() ? `?${params.toString()}` : "";
+
+    const res = await fetch(`${API_BASE_URL}/api/admin/users${queryString}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
@@ -273,10 +285,12 @@ export async function adminCreateUser(
 
 export async function assignUserService(
   userId: number,
-  serviceId: number
+  serviceId: number,
+  adminId?: number
 ): Promise<boolean> {
   try {
-    const res = await fetch(`${API_BASE_URL}/api/admin/users/${userId}/services/${serviceId}`, {
+    const queryString = adminId ? `?adminId=${adminId}` : "";
+    const res = await fetch(`${API_BASE_URL}/api/admin/users/${userId}/services/${serviceId}${queryString}`, {
       method: "POST",
     });
     return res.ok;
@@ -287,10 +301,12 @@ export async function assignUserService(
 
 export async function revokeUserService(
   userId: number,
-  serviceId: number
+  serviceId: number,
+  adminId?: number
 ): Promise<boolean> {
   try {
-    const res = await fetch(`${API_BASE_URL}/api/admin/users/${userId}/services/${serviceId}`, {
+    const queryString = adminId ? `?adminId=${adminId}` : "";
+    const res = await fetch(`${API_BASE_URL}/api/admin/users/${userId}/services/${serviceId}${queryString}`, {
       method: "DELETE",
     });
     return res.ok;
@@ -319,10 +335,17 @@ export async function updateUserProfile(
 }
 
 export async function batchCreateAdminUsers(
-  payload: BatchCreateUsersPayload
+  payload: BatchCreateUsersPayload,
+  adminId?: number,
+  company?: string
 ): Promise<AdminUser[]> {
   try {
-    const res = await fetch(`${API_BASE_URL}/api/admin/users/batch`, {
+    const params = new URLSearchParams();
+    if (adminId) params.append("adminId", adminId.toString());
+    if (company) params.append("company", company);
+    const queryString = params.toString() ? `?${params.toString()}` : "";
+
+    const res = await fetch(`${API_BASE_URL}/api/admin/users/batch${queryString}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
@@ -336,10 +359,12 @@ export async function batchCreateAdminUsers(
 }
 
 export async function adminDeleteUser(
-  userId: number
+  userId: number,
+  adminId?: number
 ): Promise<boolean> {
   try {
-    const res = await fetch(`${API_BASE_URL}/api/admin/users/${userId}`, {
+    const queryString = adminId ? `?adminId=${adminId}` : "";
+    const res = await fetch(`${API_BASE_URL}/api/admin/users/${userId}${queryString}`, {
       method: "DELETE",
     });
     return res.ok;

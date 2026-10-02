@@ -3,6 +3,7 @@ export interface User {
   email: string;
   fullName: string;
   role?: "ADMIN" | "USER";
+  company?: string;
   mfaEnabled: boolean;
 }
 
@@ -17,6 +18,7 @@ export interface RegisterPayload {
   password: string;
   fullName: string;
   role?: "ADMIN" | "USER";
+  company?: string;
 }
 
 export interface LoginPayload {
@@ -42,6 +44,7 @@ export interface AuthResponse {
   email?: string;
   fullName?: string;
   role?: string;
+  company?: string;
   mfaEnabled?: boolean;
   mfaRequired?: boolean;
 }

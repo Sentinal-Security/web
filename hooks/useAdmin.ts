@@ -12,7 +12,7 @@ import {
 } from "@/lib/api";
 import { exportUsersToCsv } from "@/lib/csvExport";
 
-export function useAdmin(isAdmin: boolean = false) {
+export function useAdmin(isAdmin: boolean = false, adminId?: number, company?: string) {
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [loading, setLoading] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -23,14 +23,14 @@ export function useAdmin(isAdmin: boolean = false) {
     setLoading(true);
     setActionError(null);
     try {
-      const data = await fetchAdminUsers();
+      const data = await fetchAdminUsers(adminId, company);
       setUsers(data);
     } catch (err: any) {
       setActionError(err?.message || "Failed to load user registry.");
     } finally {
       setLoading(false);
     }
-  }, [isAdmin]);
+  }, [isAdmin, adminId, company]);
 
   useEffect(() => {
     if (isAdmin) {
@@ -43,7 +43,7 @@ export function useAdmin(isAdmin: boolean = false) {
       setActionError(null);
       setActionSuccess(null);
       try {
-        const created = await adminCreateUser(payload);
+        const created = await adminCreateUser(payload, adminId, company);
         if (created) {
           setActionSuccess(`User ${created.email} created successfully.`);
           setUsers((prev) => [created, ...prev]);
@@ -57,12 +57,12 @@ export function useAdmin(isAdmin: boolean = false) {
         return null;
       }
     },
-    []
+    [adminId, company]
   );
 
   const assignService = useCallback(
     async (userId: number, serviceId: number, serviceName: string): Promise<boolean> => {
-      const ok = await assignUserService(userId, serviceId);
+      const ok = await assignUserService(userId, serviceId, adminId);
       if (ok) {
         setUsers((prev) =>
           prev.map((u) => {
@@ -81,12 +81,12 @@ export function useAdmin(isAdmin: boolean = false) {
       }
       return false;
     },
-    []
+    [adminId]
   );
 
   const revokeService = useCallback(
     async (userId: number, serviceId: number): Promise<boolean> => {
-      const ok = await revokeUserService(userId, serviceId);
+      const ok = await revokeUserService(userId, serviceId, adminId);
       if (ok) {
         setUsers((prev) =>
           prev.map((u) => {
@@ -108,7 +108,7 @@ export function useAdmin(isAdmin: boolean = false) {
       }
       return false;
     },
-    []
+    [adminId]
   );
 
   const batchCreateUsers = useCallback(
@@ -116,7 +116,7 @@ export function useAdmin(isAdmin: boolean = false) {
       setActionError(null);
       setActionSuccess(null);
       try {
-        const created = await batchCreateAdminUsers(payload);
+        const created = await batchCreateAdminUsers(payload, adminId, company);
         if (created && created.length > 0) {
           setActionSuccess(`Successfully generated and provisioned ${created.length} users.`);
           setUsers((prev) => [...created, ...prev]);
@@ -130,7 +130,7 @@ export function useAdmin(isAdmin: boolean = false) {
         return [];
       }
     },
-    []
+    [adminId, company]
   );
 
   const deleteUser = useCallback(
@@ -138,7 +138,7 @@ export function useAdmin(isAdmin: boolean = false) {
       setActionError(null);
       setActionSuccess(null);
       try {
-        const ok = await adminDeleteUser(userId);
+        const ok = await adminDeleteUser(userId, adminId);
         if (ok) {
           setActionSuccess("User deleted successfully.");
           setUsers((prev) => prev.filter((u) => u.id !== userId));
@@ -152,7 +152,7 @@ export function useAdmin(isAdmin: boolean = false) {
         return false;
       }
     },
-    []
+    [adminId]
   );
 
   const exportCsv = useCallback(() => {
