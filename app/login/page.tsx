@@ -1,16 +1,36 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import { useMfa } from "@/hooks/useMfa";
-import { saveSession } from "@/lib/session";
+import { saveSession, getStoredSession, clearSession } from "@/lib/session";
+import { User } from "@/types/auth";
 
 export default function LoginPage() {
   const router = useRouter();
   const { login, loading: authLoading, error: authError, setError: setAuthError } = useAuth();
   const { verifyLogin, loading: mfaLoading, error: mfaError, setError: setMfaError } = useMfa();
+
+  const [existingUser, setExistingUser] = useState<User | null>(null);
+
+  useEffect(() => {
+    const session = getStoredSession();
+    if (session && session.user) {
+      setExistingUser(session.user);
+    }
+  }, []);
+
+  const handleLogoutAndSwitch = () => {
+    clearSession();
+    setExistingUser(null);
+    setEmail("");
+    setPassword("");
+    setValidationError("");
+    setAuthError(null);
+    setMfaChallenge(null);
+  };
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -227,13 +247,83 @@ export default function LoginPage() {
                 </svg>
               </div>
 
-              {/* Title & Subtitle */}
-              <h2 className="text-2xl sm:text-[26px] font-bold text-white text-center tracking-tight">
-                Welcome to <span className="text-[#38e1ff]">Sentinel</span>
-              </h2>
-              <p className="text-xs sm:text-sm text-slate-400 font-normal text-center mt-1 mb-6">
-                Sign in to continue to your account
-              </p>
+              {existingUser ? (
+                <div className="text-center py-2">
+                  {/* Status Indicator */}
+                  <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 text-xs font-semibold mb-5">
+                    <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span>
+                    Active Session Detected
+                  </div>
+
+                  {/* Title & Context */}
+                  <h2 className="text-2xl sm:text-[26px] font-bold text-white tracking-tight">
+                    Already Signed In
+                  </h2>
+                  <p className="text-xs sm:text-sm text-slate-400 mt-2 mb-6 max-w-sm mx-auto">
+                    You are currently authenticated in Sentinel Security. Choose an option below to proceed.
+                  </p>
+
+                  {/* Identity Box */}
+                  <div className="bg-[#18293d]/70 border border-slate-700/60 rounded-2xl p-5 mb-8 text-left flex items-center gap-4 shadow-inner">
+                    <div className="w-12 h-12 rounded-xl bg-gradient-to-tr from-cyan-600 to-[#38e1ff] text-slate-950 font-bold text-lg flex items-center justify-center shrink-0 shadow-md">
+                      {existingUser.fullName
+                        ? existingUser.fullName.charAt(0).toUpperCase()
+                        : existingUser.email.charAt(0).toUpperCase()}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm sm:text-base font-bold text-white truncate">
+                          {existingUser.fullName || "Authenticated User"}
+                        </span>
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-cyan-500/10 text-[#38e1ff] border border-cyan-500/20">
+                          {existingUser.role || "USER"}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-400 truncate mt-0.5 font-mono">
+                        {existingUser.email}
+                      </p>
+                      {existingUser.company && (
+                        <p className="text-[11px] text-slate-500 truncate mt-0.5">
+                          Organization: <span className="text-slate-300 font-medium">{existingUser.company}</span>
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Action Buttons */}
+                  <div className="space-y-3">
+                    <button
+                      type="button"
+                      onClick={() => router.push("/dashboard")}
+                      className="w-full py-3.5 px-4 bg-[#38e1ff] hover:bg-[#2bc4e0] active:scale-[0.99] text-slate-950 font-bold text-xs sm:text-sm tracking-wider uppercase rounded-xl transition-all duration-200 shadow-[0_0_20px_rgba(56,225,255,0.3)] cursor-pointer flex items-center justify-center gap-2"
+                    >
+                      <span>Go to Dashboard</span>
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+                      </svg>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleLogoutAndSwitch}
+                      className="w-full py-3 px-4 bg-slate-800/80 hover:bg-slate-700/80 active:scale-[0.99] text-slate-300 hover:text-white font-medium text-xs sm:text-sm tracking-wide rounded-xl border border-slate-700 transition-all duration-200 cursor-pointer flex items-center justify-center gap-2"
+                    >
+                      <svg className="w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15M12 9l-3 3m0 0l3 3m-3-3h12.75" />
+                      </svg>
+                      <span>Sign Out & Switch Account</span>
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  {/* Title & Subtitle */}
+                  <h2 className="text-2xl sm:text-[26px] font-bold text-white text-center tracking-tight">
+                    Welcome to <span className="text-[#38e1ff]">Sentinel</span>
+                  </h2>
+                  <p className="text-xs sm:text-sm text-slate-400 font-normal text-center mt-1 mb-6">
+                    Sign in to continue to your account
+                  </p>
 
               {/* 3 Horizontal Social Buttons */}
               <div className="grid grid-cols-3 gap-2.5 mb-5">
@@ -501,6 +591,8 @@ export default function LoginPage() {
                   </p>
                 </form>
               )}
+            </>
+          )}
             </div>
           </div>
         </div>
