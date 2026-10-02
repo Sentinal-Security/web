@@ -35,23 +35,63 @@ export async function checkBackendHealth(): Promise<HealthResponse> {
 export async function registerUser(
   data: RegisterPayload
 ): Promise<AuthResponse> {
-  const res = await fetch(`${API_BASE_URL}/api/auth/register`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
-  });
-  return res.json();
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/auth/register`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+    if (!res.ok && (res.status === 502 || res.status === 503 || res.status === 504)) {
+      return {
+        success: false,
+        message: "Network issue, please wait a few seconds...",
+      };
+    }
+    const contentType = res.headers.get("content-type");
+    if (contentType && contentType.includes("application/json")) {
+      return await res.json();
+    }
+    return {
+      success: false,
+      message: "Network issue, please wait a few seconds...",
+    };
+  } catch {
+    return {
+      success: false,
+      message: "Network issue, please wait a few seconds...",
+    };
+  }
 }
 
 export async function loginUser(
   data: LoginPayload
 ): Promise<AuthResponse> {
-  const res = await fetch(`${API_BASE_URL}/api/auth/login`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
-  });
-  return res.json();
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+    if (!res.ok && (res.status === 502 || res.status === 503 || res.status === 504)) {
+      return {
+        success: false,
+        message: "Network issue, please wait a few seconds...",
+      };
+    }
+    const contentType = res.headers.get("content-type");
+    if (contentType && contentType.includes("application/json")) {
+      return await res.json();
+    }
+    return {
+      success: false,
+      message: "Network issue, please wait a few seconds...",
+    };
+  } catch {
+    return {
+      success: false,
+      message: "Network issue, please wait a few seconds...",
+    };
+  }
 }
 
 export async function setupMfa(
@@ -79,12 +119,32 @@ export async function verifyMfaSetup(
 export async function verifyMfaLogin(
   data: MfaVerifyLoginPayload
 ): Promise<AuthResponse> {
-  const res = await fetch(`${API_BASE_URL}/api/mfa/verify-login`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
-  });
-  return res.json();
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/mfa/verify-login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+    if (!res.ok && (res.status === 502 || res.status === 503 || res.status === 504)) {
+      return {
+        success: false,
+        message: "Network issue, please wait a few seconds...",
+      };
+    }
+    const contentType = res.headers.get("content-type");
+    if (contentType && contentType.includes("application/json")) {
+      return await res.json();
+    }
+    return {
+      success: false,
+      message: "Network issue, please wait a few seconds...",
+    };
+  } catch {
+    return {
+      success: false,
+      message: "Network issue, please wait a few seconds...",
+    };
+  }
 }
 
 export async function disableMfa(

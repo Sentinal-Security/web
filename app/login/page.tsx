@@ -24,11 +24,14 @@ export default function LoginPage() {
     email?: string;
   } | null>(null);
   const [totpCode, setTotpCode] = useState("");
+  const [networkWait, setNetworkWait] = useState(false);
+  const [mfaNetworkWait, setMfaNetworkWait] = useState(false);
 
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setValidationError("");
     setAuthError(null);
+    setNetworkWait(false);
 
     if (!email.trim()) {
       setValidationError("Please enter your email address.");
@@ -39,21 +42,32 @@ export default function LoginPage() {
       return;
     }
 
-    const res = await login({
-      email: email.trim(),
-      password,
-    });
+    // If server takes longer than 2.5s (Render cold start / network delay),
+    // display "Network issue, please wait a few seconds..."
+    const delayTimer = setTimeout(() => {
+      setNetworkWait(true);
+    }, 2500);
 
-    if (res.success) {
-      if (res.mfaEnabled || res.mfaRequired) {
-        setMfaChallenge({
-          required: true,
-          userId: res.userId,
-          email: res.email || email.trim(),
-        });
-      } else {
-        router.push("/dashboard");
+    try {
+      const res = await login({
+        email: email.trim(),
+        password,
+      });
+
+      if (res.success) {
+        if (res.mfaEnabled || res.mfaRequired) {
+          setMfaChallenge({
+            required: true,
+            userId: res.userId,
+            email: res.email || email.trim(),
+          });
+        } else {
+          router.push("/dashboard");
+        }
       }
+    } finally {
+      clearTimeout(delayTimer);
+      setNetworkWait(false);
     }
   };
 
@@ -61,6 +75,7 @@ export default function LoginPage() {
     e.preventDefault();
     setValidationError("");
     setMfaError(null);
+    setMfaNetworkWait(false);
 
     if (!totpCode.trim()) {
       setValidationError("Please enter the 6-digit authenticator code.");
@@ -73,23 +88,32 @@ export default function LoginPage() {
       return;
     }
 
-    const res = await verifyLogin(
-      mfaChallenge?.userId,
-      mfaChallenge?.email,
-      cleanCode
-    );
+    const delayTimer = setTimeout(() => {
+      setMfaNetworkWait(true);
+    }, 2500);
 
-    if (res.success) {
-      if (mfaChallenge?.userId) {
-        saveSession({
-          userId: res.userId || mfaChallenge.userId,
-          email: mfaChallenge.email || email.trim(),
-          fullName: res.fullName || "",
-          role: (res.role as any) || "USER",
-          mfaEnabled: true,
-        });
+    try {
+      const res = await verifyLogin(
+        mfaChallenge?.userId,
+        mfaChallenge?.email,
+        cleanCode
+      );
+
+      if (res.success) {
+        if (mfaChallenge?.userId) {
+          saveSession({
+            userId: res.userId || mfaChallenge.userId,
+            email: mfaChallenge.email || email.trim(),
+            fullName: res.fullName || "",
+            role: (res.role as any) || "USER",
+            mfaEnabled: true,
+          });
+        }
+        router.push("/dashboard");
       }
-      router.push("/dashboard");
+    } finally {
+      clearTimeout(delayTimer);
+      setMfaNetworkWait(false);
     }
   };
 
@@ -314,6 +338,17 @@ export default function LoginPage() {
                     )}
                   </button>
 
+                  {/* Network delay indicator */}
+                  {mfaNetworkWait && (
+                    <div className="mt-3 p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs flex items-center justify-center gap-2 text-center animate-pulse">
+                      <svg className="animate-spin h-3.5 w-3.5 text-amber-400 shrink-0" viewBox="0 0 24 24" fill="none">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      <span>Network issue, please wait a few seconds...</span>
+                    </div>
+                  )}
+
                   {/* Cancel / Back to Login */}
                   <button
                     type="button"
@@ -442,6 +477,17 @@ export default function LoginPage() {
                       <span>Sign in</span>
                     )}
                   </button>
+
+                  {/* Network delay indicator */}
+                  {networkWait && (
+                    <div className="mt-3.5 p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs flex items-center justify-center gap-2 text-center animate-pulse">
+                      <svg className="animate-spin h-3.5 w-3.5 text-amber-400 shrink-0" viewBox="0 0 24 24" fill="none">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      <span>Network issue, please wait a few seconds...</span>
+                    </div>
+                  )}
 
                   {/* Bottom link: Don't have an account? Create one */}
                   <p className="text-center text-xs sm:text-sm text-slate-400 mt-5">

@@ -45,7 +45,18 @@ export function useAuth() {
       }
       return res;
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Failed to log in.";
+      const isNetwork =
+        err instanceof TypeError ||
+        (err instanceof Error &&
+          (err.message.includes("fetch") ||
+            err.message.includes("network") ||
+            err.message.includes("Network") ||
+            err.message.includes("Failed")));
+      const msg = isNetwork
+        ? "Network issue, please wait a few seconds..."
+        : err instanceof Error
+        ? err.message
+        : "Failed to log in.";
       setError(msg);
       return { success: false, message: msg };
     } finally {
