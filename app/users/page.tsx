@@ -4,12 +4,20 @@ import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { User } from "@/types/auth";
-import { AdminUser, UserTemplateConfig, BatchCreateUserItem } from "@/types/admin";
-import { AppIntegration } from "@/types/integration";
+import { AdminUser } from "@/types/admin";
 import { getStoredSession, updateStoredUser, clearSession } from "@/lib/session";
 import { useAdmin } from "@/hooks/useAdmin";
 import { useIntegrations } from "@/hooks/useIntegrations";
 import { updateUserProfile } from "@/lib/api";
+
+function generateSecureTempPassword(prefix = "Sec!"): string {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!#$*";
+  let result = prefix;
+  for (let i = 0; i < 8; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return result;
+}
 
 export default function UserManagementPage() {
   const router = useRouter();
@@ -32,12 +40,6 @@ export default function UserManagementPage() {
     }
     setCurrentUser(session.user);
     setEditFullName(session.user.fullName || "");
-    if (session.user.company) {
-      setTemplateConfig((prev) => ({
-        ...prev,
-        emailDomain: session.user.company || prev.emailDomain,
-      }));
-    }
   }, [router]);
 
   const isAdmin = currentUser?.role === "ADMIN";
@@ -48,7 +50,6 @@ export default function UserManagementPage() {
     loading: usersLoading,
     actionError,
     actionSuccess,
-    loadUsers,
     createUser,
     batchCreateUsers,
     deleteUser,
@@ -66,36 +67,40 @@ export default function UserManagementPage() {
   const [roleFilter, setRoleFilter] = useState<"ALL" | "ADMIN" | "USER">("ALL");
   const [mfaFilter, setMfaFilter] = useState<"ALL" | "ENROLLED" | "UNPAIRED">("ALL");
 
-  // Fast Single User Modal State
-  const [singleUserModalOpen, setSingleUserModalOpen] = useState(false);
+  // Unified Provisioning Modal State (Single + Bulk)
+  const [provisionModalOpen, setProvisionModalOpen] = useState(false);
+  const [provisionTab, setProvisionTab] = useState<"single" | "bulk">("single");
+
+  // Single Member Provisioning Form State
   const [singleName, setSingleName] = useState("");
   const [singleEmail, setSingleEmail] = useState("");
-  const [singlePassword, setSinglePassword] = useState("");
-  const [singleRole, setSingleRole] = useState<"USER" | "ADMIN">("USER");
-  const [singleErr, setSingleErr] = useState("");
+  const [singlePasswordMode, setSinglePasswordMode] = useState<"auto" | "custom">("auto");
+  const [singleTempPassword, setSingleTempPassword] = useState("");
+  const [singleCustomPassword, setSingleCustomPassword] = useState("");
   const [singleLoading, setSingleLoading] = useState(false);
+  const [singleErr, setSingleErr] = useState("");
 
-  // Template User Generator Modal State
-  const [templateModalOpen, setTemplateModalOpen] = useState(false);
-  const [templateConfig, setTemplateConfig] = useState<UserTemplateConfig>({
-    templateName: "Engineering Members",
-    role: "USER",
-    namePrefix: "Engineering Member",
-    emailDomain: "sentinal.corp",
-    passwordStrategy: "random_secure",
-    customPasswordPrefix: "Welcome2026!",
-    assignedServiceIds: [],
-    count: 3,
-  });
-  const [generatedBatch, setGeneratedBatch] = useState<BatchCreateUserItem[]>([]);
-  const [batchLoading, setBatchLoading] = useState(false);
-  const [batchSuccessMsg, setBatchSuccessMsg] = useState("");
-  const [batchErrorMsg, setBatchErrorMsg] = useState("");
+  // Bulk Provisioning Form State
+  const [bulkMode, setBulkMode] = useState<"count" | "roster">("count");
+  const [bulkCount, setBulkCount] = useState<number>(5);
+  const [bulkPrefix, setBulkPrefix] = useState("Member");
+  const [bulkRosterText, setBulkRosterText] = useState("");
+  const [bulkPasswordMode, setBulkPasswordMode] = useState<"unique" | "uniform">("unique");
+  const [bulkUniformPassword, setBulkUniformPassword] = useState("Welcome2026!Temp");
+  const [bulkLoading, setBulkLoading] = useState(false);
+  const [bulkErr, setBulkErr] = useState("");
+
+  // Post-Provision Credentials Handoff Modal State
+  const [credentialsModalOpen, setCredentialsModalOpen] = useState(false);
+  const [createdCredentialsList, setCreatedCredentialsList] = useState<
+    Array<{ fullName: string; email: string; tempPass: string; role: string }>
+  >([]);
+  const [credentialsCopied, setCredentialsCopied] = useState(false);
 
   // Service Assignment Modal State
   const [assignModalUser, setAssignModalUser] = useState<AdminUser | null>(null);
 
-  // Invite Modal State
+  // Quick Invite Modal State
   const [inviteModalUser, setInviteModalUser] = useState<AdminUser | null>(null);
   const [inviteCopied, setInviteCopied] = useState(false);
 
@@ -122,34 +127,198 @@ export default function UserManagementPage() {
     });
   }, [users, searchQuery, roleFilter, mfaFilter]);
 
-  // Generate Batch Preview when Template Config changes
-  useEffect(() => {
-    const list: BatchCreateUserItem[] = [];
-    const count = Math.max(1, Math.min(templateConfig.count, 25));
-    const cleanDomain = templateConfig.emailDomain.trim().replace(/^@/, "") || "sentinal.corp";
-    const baseSlug = templateConfig.namePrefix.trim().toLowerCase().replace(/[^a-z0-9]/g, "_") || "user";
+  // Handle Opening Provisioning Modal
+  const handleOpenProvisionModal = () => {
+    setSingleErr("");
+    setBulkErr("");
+    setSingleTempPassword(generateSecureTempPassword());
+    setProvisionModalOpen(true);
+  };
 
-    for (let i = 1; i <= count; i++) {
-      let pwd = "";
-      if (templateConfig.passwordStrategy === "random_secure") {
-        const rand = Math.random().toString(36).substring(2, 8).toUpperCase();
-        pwd = `SecPass_${rand}!`;
-      } else if (templateConfig.passwordStrategy === "uniform_temp") {
-        pwd = templateConfig.customPasswordPrefix?.trim() || "Sentinel2026!";
-      } else {
-        pwd = `InitPass_${1000 + i}`;
+  const handleRegenerateSinglePassword = () => {
+    setSingleTempPassword(generateSecureTempPassword());
+  };
+
+  // Real-Time Computed Bulk Users Preview
+  const parsedBulkUsers = useMemo(() => {
+    const cleanDomain = currentUser?.company?.toLowerCase().trim().replace(/^@/, "") || "sentinal.corp";
+    const list: Array<{ fullName: string; email: string; password: string; role: "USER" }> = [];
+
+    if (bulkMode === "count") {
+      const count = Math.max(1, Math.min(Number(bulkCount) || 1, 50));
+      const cleanPrefix = bulkPrefix.trim() || "Member";
+      const baseSlug = cleanPrefix.toLowerCase().replace(/[^a-z0-9]/g, "_");
+
+      for (let i = 1; i <= count; i++) {
+        const pwd =
+          bulkPasswordMode === "unique"
+            ? generateSecureTempPassword(`Sec${i}!`)
+            : bulkUniformPassword.trim() || "Welcome2026!Temp";
+        list.push({
+          fullName: `${cleanPrefix} ${i}`,
+          email: `${baseSlug}_${i}@${cleanDomain}`,
+          password: pwd,
+          role: "USER",
+        });
       }
+    } else {
+      const lines = bulkRosterText
+        .split(/[\n,]+/)
+        .map((l) => l.trim())
+        .filter(Boolean);
 
-      list.push({
-        fullName: `${templateConfig.namePrefix.trim() || "Member"} ${i}`,
-        email: `${baseSlug}_${i}@${cleanDomain}`,
-        password: pwd,
-        role: templateConfig.role,
-        serviceIds: templateConfig.assignedServiceIds,
+      lines.slice(0, 50).forEach((entry, idx) => {
+        let name = "";
+        let email = "";
+        if (entry.includes("@")) {
+          email = entry.toLowerCase();
+          const namePart = entry.split("@")[0].replace(/[._-]/g, " ");
+          name = namePart.charAt(0).toUpperCase() + namePart.slice(1);
+        } else {
+          name = entry;
+          const slug = entry.toLowerCase().replace(/[^a-z0-9]/g, "_");
+          email = `${slug}@${cleanDomain}`;
+        }
+        const pwd =
+          bulkPasswordMode === "unique"
+            ? generateSecureTempPassword(`Sec${idx + 1}!`)
+            : bulkUniformPassword.trim() || "Welcome2026!Temp";
+        list.push({
+          fullName: name || `Member ${idx + 1}`,
+          email,
+          password: pwd,
+          role: "USER",
+        });
       });
     }
-    setGeneratedBatch(list);
-  }, [templateConfig]);
+    return list;
+  }, [bulkMode, bulkCount, bulkPrefix, bulkRosterText, bulkPasswordMode, bulkUniformPassword, currentUser?.company]);
+
+  // Handle Single Member Creation
+  const handleCreateSingleUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSingleErr("");
+
+    if (!singleName.trim() || !singleEmail.trim()) {
+      setSingleErr("Full name and email are required.");
+      return;
+    }
+
+    const finalPassword = singlePasswordMode === "auto" ? singleTempPassword : singleCustomPassword.trim();
+    if (!finalPassword || finalPassword.length < 6) {
+      setSingleErr("Password must be at least 6 characters.");
+      return;
+    }
+
+    setSingleLoading(true);
+    const created = await createUser({
+      fullName: singleName.trim(),
+      email: singleEmail.trim().toLowerCase(),
+      password: finalPassword,
+      role: "USER", // STRICTLY STANDARD USER ONLY!
+      company: currentUser?.company,
+    });
+    setSingleLoading(false);
+
+    if (created) {
+      setProvisionModalOpen(false);
+      setCreatedCredentialsList([
+        {
+          fullName: created.fullName,
+          email: created.email,
+          tempPass: finalPassword,
+          role: "USER",
+        },
+      ]);
+      setCredentialsCopied(false);
+      setCredentialsModalOpen(true);
+      setSingleName("");
+      setSingleEmail("");
+      setSingleCustomPassword("");
+    } else {
+      setSingleErr("Failed to create user. Ensure email is unique within the system.");
+    }
+  };
+
+  // Handle Bulk Member Creation
+  const handleExecuteBulkProvision = async () => {
+    if (parsedBulkUsers.length === 0) {
+      setBulkErr("Please configure at least 1 account to provision.");
+      return;
+    }
+
+    setBulkLoading(true);
+    setBulkErr("");
+
+    const created = await batchCreateUsers({
+      users: parsedBulkUsers.map((u) => ({
+        fullName: u.fullName,
+        email: u.email,
+        password: u.password,
+        role: "USER",
+        serviceIds: [],
+      })),
+    });
+    setBulkLoading(false);
+
+    if (created && created.length > 0) {
+      setProvisionModalOpen(false);
+      const creds = created.map((c, idx) => ({
+        fullName: c.fullName,
+        email: c.email,
+        tempPass: parsedBulkUsers[idx]?.password || "TempPass",
+        role: "USER",
+      }));
+      setCreatedCredentialsList(creds);
+      setCredentialsCopied(false);
+      setCredentialsModalOpen(true);
+      setBulkRosterText("");
+    } else {
+      setBulkErr("Failed to provision batch. Verify that email addresses are unique.");
+    }
+  };
+
+  // Handle Copy All Credentials
+  const handleCopyAllCredentials = () => {
+    const company = currentUser?.company || "Organization";
+    const header = [
+      `SENTINEL ENTERPRISE IAM - PROVISIONED CREDENTIALS`,
+      `Tenant Workspace: @${company}`,
+      `Generated: ${new Date().toLocaleString()}`,
+      `Total Accounts: ${createdCredentialsList.length}`,
+      "==================================================",
+      "",
+    ];
+    const rows = createdCredentialsList.map(
+      (c, idx) =>
+        `${idx + 1}. ${c.fullName}\n   Email: ${c.email}\n   Temporary Password: ${c.tempPass}\n   Role: Standard Member (USER)\n`
+    );
+    const footer = [
+      "==================================================",
+      "Instructions: Provide credentials to employees. Employees must authenticate and pair MFA on first sign-in.",
+    ];
+    const fullText = [...header, ...rows, ...footer].join("\n");
+    navigator.clipboard.writeText(fullText);
+    setCredentialsCopied(true);
+    setTimeout(() => setCredentialsCopied(false), 2000);
+  };
+
+  // Handle Export Credentials to CSV
+  const handleExportCredentialsCsv = () => {
+    const rows = [
+      ["Full Name", "Email Address", "Temporary Password", "Role", "Company Workspace"],
+      ...createdCredentialsList.map((c) => [c.fullName, c.email, c.tempPass, c.role, currentUser?.company || ""]),
+    ];
+    const csvContent =
+      "data:text/csv;charset=utf-8," + rows.map((e) => e.map((val) => `"${val}"`).join(",")).join("\n");
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `sentinel_credentials_${Date.now()}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   // Handle Profile Update (Name Only)
   const handleSaveProfile = async (e: React.FormEvent) => {
@@ -169,7 +338,7 @@ export default function UserManagementPage() {
 
     if (res.success) {
       updateStoredUser({ fullName: editFullName.trim() });
-      setCurrentUser((prev) => prev ? { ...prev, fullName: editFullName.trim() } : prev);
+      setCurrentUser((prev) => (prev ? { ...prev, fullName: editFullName.trim() } : prev));
       setProfileSuccess("Account name updated successfully.");
       setTimeout(() => {
         setProfileModalOpen(false);
@@ -178,84 +347,6 @@ export default function UserManagementPage() {
     } else {
       setProfileError(res.message || "Failed to update account name.");
     }
-  };
-
-  // Handle Single User Fast Creation
-  const handleCreateSingleUser = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!singleName.trim() || !singleEmail.trim() || !singlePassword.trim()) {
-      setSingleErr("All fields are required.");
-      return;
-    }
-    if (singlePassword.length < 6) {
-      setSingleErr("Password must be at least 6 characters.");
-      return;
-    }
-
-    setSingleLoading(true);
-    setSingleErr("");
-    const res = await createUser({
-      fullName: singleName.trim(),
-      email: singleEmail.trim(),
-      password: singlePassword,
-      role: singleRole,
-      company: currentUser?.company,
-    });
-    setSingleLoading(false);
-
-    if (res) {
-      setSingleName("");
-      setSingleEmail("");
-      setSinglePassword("");
-      setSingleUserModalOpen(false);
-    } else {
-      setSingleErr("Failed to create user. Ensure email is unique.");
-    }
-  };
-
-  // Handle Batch Provisioning
-  const handleExecuteBatchProvision = async () => {
-    if (generatedBatch.length === 0) return;
-    setBatchLoading(true);
-    setBatchErrorMsg("");
-    setBatchSuccessMsg("");
-
-    const created = await batchCreateUsers({ users: generatedBatch });
-    setBatchLoading(false);
-
-    if (created && created.length > 0) {
-      setBatchSuccessMsg(`Successfully provisioned ${created.length} users into the registry.`);
-      // Download credentials summary
-      downloadCredentialsText(generatedBatch);
-      setTimeout(() => {
-        setTemplateModalOpen(false);
-        setBatchSuccessMsg("");
-      }, 2000);
-    } else {
-      setBatchErrorMsg("Failed to provision batch. Check for duplicate emails.");
-    }
-  };
-
-  // Download Generated Credentials File
-  const downloadCredentialsText = (items: BatchCreateUserItem[]) => {
-    const lines = [
-      "SENTINEL ENTERPRISE IAM - BATCH ONBOARDING CREDENTIALS",
-      `Generated at: ${new Date().toLocaleString()}`,
-      `Total Users: ${items.length}`,
-      "----------------------------------------------------------------",
-      "Full Name | Email Address | Temporary Password | Role",
-      "----------------------------------------------------------------",
-      ...items.map((it) => `${it.fullName} | ${it.email} | ${it.password} | ${it.role}`),
-      "----------------------------------------------------------------",
-      "Notice: Users must sign in via http://localhost:3000/login and pair MFA.",
-    ];
-    const blob = new Blob([lines.join("\n")], { type: "text/plain;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `sentinel_onboarding_batch_${Date.now()}.txt`;
-    link.click();
-    URL.revokeObjectURL(url);
   };
 
   // Handle User Deletion
@@ -280,11 +371,18 @@ export default function UserManagementPage() {
           <Link href="/dashboard" className="flex items-center gap-2 group">
             <div className="w-8 h-8 rounded-lg bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400 group-hover:border-cyan-400 transition-all">
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
+                />
               </svg>
             </div>
             <span className="font-bold text-white tracking-tight text-base group-hover:text-cyan-400 transition-colors">
-              Sentinel <span className="text-cyan-400 font-normal text-xs uppercase ml-1 px-1.5 py-0.5 rounded bg-cyan-950/60 border border-cyan-500/30">IAM Governance</span>
+              Sentinel{" "}
+              <span className="text-cyan-400 font-normal text-xs uppercase ml-1 px-1.5 py-0.5 rounded bg-cyan-950/60 border border-cyan-500/30">
+                IAM Governance
+              </span>
             </span>
           </Link>
 
@@ -299,36 +397,20 @@ export default function UserManagementPage() {
             href="/dashboard"
             className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900/80 hover:bg-slate-800 border border-white/10 text-slate-300 hover:text-white text-xs font-medium transition-all"
           >
-            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-            </svg>
             <span>Back to Dashboard</span>
           </Link>
 
           {isAdmin && (
-            <>
-              <button
-                type="button"
-                onClick={() => setSingleUserModalOpen(true)}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/30 text-cyan-300 text-xs font-semibold transition-all cursor-pointer"
-              >
-                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-                </svg>
-                <span>Quick User</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setTemplateModalOpen(true)}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-cyan-400 hover:bg-cyan-300 text-slate-950 text-xs font-bold transition-all shadow-md shadow-cyan-500/20 cursor-pointer"
-              >
-                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-                </svg>
-                <span>Template Generator</span>
-              </button>
-            </>
+            <button
+              type="button"
+              onClick={handleOpenProvisionModal}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-cyan-400 hover:bg-cyan-300 text-slate-950 text-xs font-bold transition-all shadow-md shadow-cyan-500/20 cursor-pointer"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+              </svg>
+              <span>Provision Members</span>
+            </button>
           )}
 
           {/* Profile Dropdown */}
@@ -368,7 +450,11 @@ export default function UserManagementPage() {
                   className="w-full text-left flex items-center gap-2 px-3 py-2 rounded-xl text-xs text-slate-300 hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
                 >
                   <svg className="w-3.5 h-3.5 text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
+                    />
                   </svg>
                   <span>Edit Profile Name</span>
                 </button>
@@ -414,7 +500,11 @@ export default function UserManagementPage() {
           <div className="flex items-center gap-3">
             <div className="p-2.5 rounded-xl bg-purple-500/10 border border-purple-500/30 text-purple-400">
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"
+                />
               </svg>
             </div>
             <div>
@@ -557,7 +647,11 @@ export default function UserManagementPage() {
                       <div className="flex flex-col items-center justify-center gap-2">
                         <svg className="animate-spin h-6 w-6 text-cyan-400" viewBox="0 0 24 24" fill="none">
                           <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          <path
+                            className="opacity-75"
+                            fill="currentColor"
+                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                          ></path>
                         </svg>
                         <span>Loading user directory...</span>
                       </div>
@@ -565,8 +659,18 @@ export default function UserManagementPage() {
                   </tr>
                 ) : filteredUsers.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="py-12 text-center text-slate-400">
-                      No members matching the current filters.
+                    <td colSpan={6} className="py-14 text-center text-slate-400">
+                      <p className="text-sm font-semibold text-white">No members matching directory filters.</p>
+                      <p className="text-xs text-slate-500 mt-1">Use &quot;Provision Members&quot; to onboard staff.</p>
+                      {isAdmin && (
+                        <button
+                          type="button"
+                          onClick={handleOpenProvisionModal}
+                          className="mt-4 px-4 py-2 rounded-xl bg-cyan-400 hover:bg-cyan-300 text-slate-950 font-bold text-xs transition-all shadow-md shadow-cyan-500/20 cursor-pointer"
+                        >
+                          + Provision Members
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ) : (
@@ -601,7 +705,7 @@ export default function UserManagementPage() {
                                 : "bg-blue-500/10 border border-blue-500/30 text-blue-300"
                             }`}
                           >
-                            {u.role}
+                            {u.role === "ADMIN" ? "ADMIN" : "MEMBER"}
                           </span>
                         </td>
 
@@ -643,9 +747,7 @@ export default function UserManagementPage() {
                           </div>
                         </td>
 
-                        <td className="py-3 px-4 text-slate-400 text-[11px]">
-                          {u.createdAt || "N/A"}
-                        </td>
+                        <td className="py-3 px-4 text-slate-400 text-[11px]">{u.createdAt || "N/A"}</td>
 
                         <td className="py-3 px-4 text-right">
                           <div className="inline-flex items-center gap-2">
@@ -694,319 +796,448 @@ export default function UserManagementPage() {
         </div>
       </main>
 
-      {/* MODAL 1: TEMPLATE USER GENERATOR */}
-      {templateModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 overflow-y-auto">
-          <div className="bg-slate-950 border border-cyan-500/30 rounded-3xl max-w-3xl w-full p-6 sm:p-8 shadow-2xl relative my-8">
-            <div className="flex items-center justify-between border-b border-white/10 pb-4 mb-6">
-              <div>
-                <h3 className="text-lg font-bold text-white tracking-tight">Template-Based User Generator</h3>
-                <p className="text-xs text-slate-400 mt-0.5">
-                  Define user naming patterns, roles, and automated service provisioning for batch deployment.
-                </p>
-              </div>
+      {/* UNIFIED MODAL: PROVISION MEMBERS (SINGLE + BULK) */}
+      {provisionModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4 overflow-y-auto">
+          <div className="bg-slate-950 border border-cyan-500/30 rounded-3xl max-w-2xl w-full p-6 sm:p-8 shadow-2xl relative my-8">
+            <button
+              type="button"
+              onClick={() => setProvisionModalOpen(false)}
+              className="absolute top-5 right-5 p-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-colors cursor-pointer"
+            >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+
+            <div className="mb-6">
+              <h3 className="text-xl font-bold tracking-tight text-white">Provision Member Accounts</h3>
+              <p className="text-xs text-slate-400 mt-1">
+                Onboard standard employees to workspace <span className="text-cyan-400 font-mono">@{currentUser?.company || "Organization"}</span>.
+              </p>
+            </div>
+
+            {/* Modal Tabs */}
+            <div className="flex items-center gap-2 border-b border-white/10 pb-3 mb-5">
               <button
                 type="button"
-                onClick={() => setTemplateModalOpen(false)}
-                className="text-slate-400 hover:text-white text-base cursor-pointer"
+                onClick={() => setProvisionTab("single")}
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                  provisionTab === "single"
+                    ? "bg-cyan-400 text-slate-950 shadow-md shadow-cyan-500/20"
+                    : "text-slate-400 hover:text-white hover:bg-white/5"
+                }`}
               >
-                ✕
+                Single Member
+              </button>
+              <button
+                type="button"
+                onClick={() => setProvisionTab("bulk")}
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                  provisionTab === "bulk"
+                    ? "bg-cyan-400 text-slate-950 shadow-md shadow-cyan-500/20"
+                    : "text-slate-400 hover:text-white hover:bg-white/5"
+                }`}
+              >
+                Bulk Provisioning
               </button>
             </div>
 
-            {batchSuccessMsg && (
-              <div className="mb-4 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs">
-                {batchSuccessMsg}
-              </div>
-            )}
-            {batchErrorMsg && (
-              <div className="mb-4 p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs">
-                {batchErrorMsg}
-              </div>
+            {/* TAB 1: SINGLE MEMBER */}
+            {provisionTab === "single" && (
+              <form onSubmit={handleCreateSingleUser} className="space-y-4">
+                {singleErr && (
+                  <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs">
+                    {singleErr}
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">Full Name *</label>
+                  <input
+                    type="text"
+                    value={singleName}
+                    onChange={(e) => setSingleName(e.target.value)}
+                    placeholder="e.g. Sarah Connor"
+                    className="w-full px-3 py-2 rounded-xl bg-black border border-white/15 text-xs text-white outline-none focus:border-cyan-400"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">Company Email Address *</label>
+                  <input
+                    type="email"
+                    value={singleEmail}
+                    onChange={(e) => setSingleEmail(e.target.value)}
+                    placeholder={`e.g. sarah@${currentUser?.company?.replace(/^@/, "") || "company.corp"}`}
+                    className="w-full px-3 py-2 rounded-xl bg-black border border-white/15 text-xs text-white outline-none focus:border-cyan-400"
+                    required
+                  />
+                </div>
+
+                {/* Role Assignment - Strictly Locked to USER */}
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">Assigned Security Role</label>
+                  <div className="p-2.5 rounded-xl bg-slate-900 border border-white/10 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-white">Standard Member</span>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/15 border border-blue-500/30 text-blue-300 font-mono font-semibold">
+                        USER
+                      </span>
+                    </div>
+                    <span className="text-[10px] text-slate-500 italic">
+                      Admins must self-register via public onboarding
+                    </span>
+                  </div>
+                </div>
+
+                {/* Temporary Password Section */}
+                <div className="p-3.5 rounded-2xl bg-black/80 border border-white/10 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-semibold text-slate-300">Initial Temporary Password</label>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setSinglePasswordMode("auto")}
+                        className={`text-[10px] px-2 py-0.5 rounded-md font-semibold cursor-pointer ${
+                          singlePasswordMode === "auto" ? "bg-cyan-400 text-slate-950" : "text-slate-400 hover:text-white"
+                        }`}
+                      >
+                        Auto-Generate
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSinglePasswordMode("custom")}
+                        className={`text-[10px] px-2 py-0.5 rounded-md font-semibold cursor-pointer ${
+                          singlePasswordMode === "custom" ? "bg-cyan-400 text-slate-950" : "text-slate-400 hover:text-white"
+                        }`}
+                      >
+                        Custom Passphrase
+                      </button>
+                    </div>
+                  </div>
+
+                  {singlePasswordMode === "auto" ? (
+                    <div className="flex items-center gap-2 p-2.5 rounded-xl bg-[#131926] border border-cyan-500/30">
+                      <code className="text-xs font-mono font-bold text-cyan-300 flex-1 truncate tracking-wider">
+                        {singleTempPassword}
+                      </code>
+                      <button
+                        type="button"
+                        onClick={handleRegenerateSinglePassword}
+                        className="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-[11px] font-semibold text-white transition-all cursor-pointer shrink-0"
+                      >
+                        Regenerate
+                      </button>
+                    </div>
+                  ) : (
+                    <input
+                      type="text"
+                      value={singleCustomPassword}
+                      onChange={(e) => setSingleCustomPassword(e.target.value)}
+                      placeholder="Enter minimum 6-character initial password"
+                      className="w-full px-3 py-2 rounded-xl bg-black border border-white/15 text-xs text-white outline-none focus:border-cyan-400"
+                      required
+                    />
+                  )}
+                  <p className="text-[10px] text-slate-400">
+                    Employee will use this temporary credential for initial sign-in and will be required to pair their MFA device.
+                  </p>
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-3 border-t border-white/10">
+                  <button
+                    type="button"
+                    onClick={() => setProvisionModalOpen(false)}
+                    className="px-4 py-2 rounded-xl bg-slate-900 text-slate-300 text-xs font-semibold hover:bg-slate-800 transition-all cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={singleLoading}
+                    className="px-5 py-2 rounded-xl bg-cyan-400 hover:bg-cyan-300 text-slate-950 text-xs font-bold transition-all shadow-md shadow-cyan-500/20 disabled:opacity-50 cursor-pointer"
+                  >
+                    {singleLoading ? "Provisioning..." : "Provision Member"}
+                  </button>
+                </div>
+              </form>
             )}
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">Template Name</label>
-                <input
-                  type="text"
-                  value={templateConfig.templateName}
-                  onChange={(e) => setTemplateConfig({ ...templateConfig, templateName: e.target.value })}
-                  placeholder="e.g. Engineering Squad"
-                  className="w-full px-3 py-2 rounded-xl bg-black border border-white/15 text-xs text-white outline-none focus:border-cyan-400"
-                />
-              </div>
+            {/* TAB 2: BULK PROVISIONING */}
+            {provisionTab === "bulk" && (
+              <div className="space-y-4">
+                {bulkErr && (
+                  <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs">
+                    {bulkErr}
+                  </div>
+                )}
 
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">Target Role</label>
+                {/* Bulk Method Selection */}
                 <div className="grid grid-cols-2 gap-2">
                   <button
                     type="button"
-                    onClick={() => setTemplateConfig({ ...templateConfig, role: "USER" })}
-                    className={`py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
-                      templateConfig.role === "USER"
-                        ? "bg-blue-500/20 border-blue-400 text-blue-300"
-                        : "bg-black border-white/10 text-slate-400"
+                    onClick={() => setBulkMode("count")}
+                    className={`py-2 px-3 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
+                      bulkMode === "count"
+                        ? "bg-cyan-500/10 border-cyan-400 text-cyan-300"
+                        : "bg-black border-white/10 text-slate-400 hover:text-white"
                     }`}
                   >
-                    Standard User
+                    Numeric Count Generator
                   </button>
                   <button
                     type="button"
-                    onClick={() => setTemplateConfig({ ...templateConfig, role: "ADMIN" })}
-                    className={`py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
-                      templateConfig.role === "ADMIN"
-                        ? "bg-purple-500/20 border-purple-400 text-purple-300"
-                        : "bg-black border-white/10 text-slate-400"
+                    onClick={() => setBulkMode("roster")}
+                    className={`py-2 px-3 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
+                      bulkMode === "roster"
+                        ? "bg-cyan-500/10 border-cyan-400 text-cyan-300"
+                        : "bg-black border-white/10 text-slate-400 hover:text-white"
                     }`}
                   >
-                    Administrator
+                    Paste Email Roster List
+                  </button>
+                </div>
+
+                {bulkMode === "count" ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-300 mb-1">
+                        Number of Accounts (Min: 1, Max: 50)
+                      </label>
+                      <input
+                        type="number"
+                        min={1}
+                        max={50}
+                        value={bulkCount}
+                        onChange={(e) => setBulkCount(Math.max(1, Math.min(50, Number(e.target.value) || 1)))}
+                        className="w-full px-3 py-2 rounded-xl bg-black border border-white/15 text-xs text-white outline-none focus:border-cyan-400"
+                        required
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-300 mb-1">
+                        Member Role Prefix
+                      </label>
+                      <input
+                        type="text"
+                        value={bulkPrefix}
+                        onChange={(e) => setBulkPrefix(e.target.value)}
+                        placeholder="e.g. Member, Analyst, Engineer"
+                        className="w-full px-3 py-2 rounded-xl bg-black border border-white/15 text-xs text-white outline-none focus:border-cyan-400"
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-300 mb-1">
+                      Paste Emails / Names (Line by line or comma-separated)
+                    </label>
+                    <textarea
+                      rows={4}
+                      value={bulkRosterText}
+                      onChange={(e) => setBulkRosterText(e.target.value)}
+                      placeholder={`sarah@${currentUser?.company || "company.corp"}\njohn.doe@${currentUser?.company || "company.corp"}\nalice.wong`}
+                      className="w-full px-3 py-2 rounded-xl bg-black border border-white/15 text-xs text-white outline-none focus:border-cyan-400 font-mono"
+                    />
+                    <p className="text-[10px] text-slate-500 mt-1">
+                      Accepts direct email addresses or usernames. The workspace domain is automatically applied if omitted.
+                    </p>
+                  </div>
+                )}
+
+                {/* Password Strategy for Bulk */}
+                <div className="p-3.5 rounded-2xl bg-black/80 border border-white/10 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-semibold text-slate-300">Bulk Temporary Password Strategy</label>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setBulkPasswordMode("unique")}
+                        className={`text-[10px] px-2 py-0.5 rounded-md font-semibold cursor-pointer ${
+                          bulkPasswordMode === "unique" ? "bg-cyan-400 text-slate-950" : "text-slate-400 hover:text-white"
+                        }`}
+                      >
+                        Unique per Account
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setBulkPasswordMode("uniform")}
+                        className={`text-[10px] px-2 py-0.5 rounded-md font-semibold cursor-pointer ${
+                          bulkPasswordMode === "uniform" ? "bg-cyan-400 text-slate-950" : "text-slate-400 hover:text-white"
+                        }`}
+                      >
+                        Uniform Passphrase
+                      </button>
+                    </div>
+                  </div>
+
+                  {bulkPasswordMode === "uniform" && (
+                    <input
+                      type="text"
+                      value={bulkUniformPassword}
+                      onChange={(e) => setBulkUniformPassword(e.target.value)}
+                      placeholder="e.g. Welcome2026!Temp"
+                      className="w-full px-3 py-2 rounded-xl bg-black border border-white/15 text-xs text-white outline-none focus:border-cyan-400 font-mono"
+                    />
+                  )}
+                </div>
+
+                {/* Real-Time Preview Table */}
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-xs font-semibold text-slate-300">
+                      Pre-Flight Provisioning Preview ({parsedBulkUsers.length} accounts)
+                    </label>
+                    <span className="text-[10px] text-slate-400">All accounts assigned role: USER</span>
+                  </div>
+
+                  <div className="max-h-44 overflow-y-auto rounded-xl border border-white/10 bg-black/60">
+                    <table className="w-full text-left text-xs border-collapse">
+                      <thead>
+                        <tr className="border-b border-white/10 bg-slate-900/60 text-slate-400 text-[10px] uppercase font-semibold">
+                          <th className="py-2 px-3">#</th>
+                          <th className="py-2 px-3">Full Name</th>
+                          <th className="py-2 px-3">Login Email</th>
+                          <th className="py-2 px-3">Initial Temp Password</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-white/5 font-mono text-[11px]">
+                        {parsedBulkUsers.slice(0, 10).map((u, idx) => (
+                          <tr key={idx} className="hover:bg-white/[0.02]">
+                            <td className="py-1.5 px-3 text-slate-500">{idx + 1}</td>
+                            <td className="py-1.5 px-3 text-slate-200">{u.fullName}</td>
+                            <td className="py-1.5 px-3 text-cyan-300">{u.email}</td>
+                            <td className="py-1.5 px-3 text-amber-300 truncate max-w-[120px]">{u.password}</td>
+                          </tr>
+                        ))}
+                        {parsedBulkUsers.length > 10 && (
+                          <tr>
+                            <td colSpan={4} className="py-2 px-3 text-center text-slate-500 italic">
+                              +{parsedBulkUsers.length - 10} more accounts will be provisioned
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-3 border-t border-white/10">
+                  <button
+                    type="button"
+                    onClick={() => setProvisionModalOpen(false)}
+                    className="px-4 py-2 rounded-xl bg-slate-900 text-slate-300 text-xs font-semibold hover:bg-slate-800 transition-all cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    disabled={bulkLoading || parsedBulkUsers.length === 0}
+                    onClick={handleExecuteBulkProvision}
+                    className="px-5 py-2 rounded-xl bg-cyan-400 hover:bg-cyan-300 text-slate-950 text-xs font-bold transition-all shadow-md shadow-cyan-500/20 disabled:opacity-50 cursor-pointer"
+                  >
+                    {bulkLoading ? "Provisioning Registry..." : `Provision ${parsedBulkUsers.length} Members`}
                   </button>
                 </div>
               </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">Display Name Base Pattern</label>
-                <input
-                  type="text"
-                  value={templateConfig.namePrefix}
-                  onChange={(e) => setTemplateConfig({ ...templateConfig, namePrefix: e.target.value })}
-                  placeholder="e.g. Developer Intern"
-                  className="w-full px-3 py-2 rounded-xl bg-black border border-white/15 text-xs text-white outline-none focus:border-cyan-400"
-                />
-                <span className="text-[10px] text-slate-500 mt-1 block">Generates: {templateConfig.namePrefix} 1, 2, ...</span>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">Email Domain Pattern</label>
-                <input
-                  type="text"
-                  value={templateConfig.emailDomain}
-                  onChange={(e) => setTemplateConfig({ ...templateConfig, emailDomain: e.target.value })}
-                  placeholder="company.org"
-                  className="w-full px-3 py-2 rounded-xl bg-black border border-white/15 text-xs text-white outline-none focus:border-cyan-400"
-                />
-                <span className="text-[10px] text-slate-500 mt-1 block">Generates: slug_n@{templateConfig.emailDomain || "company.org"}</span>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">
-                  Batch Generation Quantity ({templateConfig.count})
-                </label>
-                <input
-                  type="range"
-                  min="1"
-                  max="15"
-                  value={templateConfig.count}
-                  onChange={(e) => setTemplateConfig({ ...templateConfig, count: parseInt(e.target.value, 10) || 1 })}
-                  className="w-full accent-cyan-400 cursor-pointer"
-                />
-                <div className="flex justify-between text-[10px] text-slate-500 mt-0.5">
-                  <span>1 User</span>
-                  <span>5 Users</span>
-                  <span>10 Users</span>
-                  <span>15 Users</span>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">Temporary Password Policy</label>
-                <select
-                  value={templateConfig.passwordStrategy}
-                  onChange={(e) => setTemplateConfig({ ...templateConfig, passwordStrategy: e.target.value as any })}
-                  className="w-full px-3 py-2 rounded-xl bg-black border border-white/15 text-xs text-white outline-none focus:border-cyan-400 cursor-pointer"
-                >
-                  <option value="random_secure">Auto-Generated Secure Key (SecPass_XXXX!)</option>
-                  <option value="uniform_temp">Uniform Temporary Password (Welcome2026!)</option>
-                  <option value="prefix_number">Sequential Key (InitPass_100X)</option>
-                </select>
-              </div>
-            </div>
-
-            {/* Catalog Services Pre-Assignment Checkboxes */}
-            {catalogServices.length > 0 && (
-              <div className="mb-6 p-4 rounded-2xl bg-black border border-white/10">
-                <label className="block text-xs font-semibold text-cyan-300 mb-2">
-                  Auto-Assign Catalog Services Upon Provisioning:
-                </label>
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
-                  {catalogServices.map((svc) => {
-                    const svcId = typeof svc.id === "number" ? svc.id : Number(svc.id);
-                    const isChecked = templateConfig.assignedServiceIds.includes(svcId);
-                    return (
-                      <label
-                        key={svc.id}
-                        className={`flex items-center gap-2 p-2 rounded-xl border text-xs cursor-pointer transition-all ${
-                          isChecked
-                            ? "bg-cyan-950/40 border-cyan-500/40 text-cyan-300"
-                            : "bg-slate-900/60 border-white/5 text-slate-400 hover:text-white"
-                        }`}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={isChecked}
-                          onChange={() => {
-                            const nextIds = isChecked
-                              ? templateConfig.assignedServiceIds.filter((id) => id !== svcId)
-                              : [...templateConfig.assignedServiceIds, svcId];
-                            setTemplateConfig({ ...templateConfig, assignedServiceIds: nextIds });
-                          }}
-                          className="accent-cyan-400"
-                        />
-                        <span className="truncate">{svc.name}</span>
-                      </label>
-                    );
-                  })}
-                </div>
-              </div>
             )}
-
-            {/* Generated Batch Preview Table */}
-            <div className="mb-6">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-semibold text-slate-300">
-                  Provisioning Preview ({generatedBatch.length} Users Ready)
-                </span>
-                <span className="text-[10px] text-cyan-400">Credentials will be bundled into a download file</span>
-              </div>
-              <div className="max-h-48 overflow-y-auto rounded-xl border border-white/10 bg-black">
-                <table className="w-full text-left text-[11px]">
-                  <thead>
-                    <tr className="bg-slate-900/80 text-slate-400 border-b border-white/10">
-                      <th className="py-2 px-3">Name</th>
-                      <th className="py-2 px-3">Email Address</th>
-                      <th className="py-2 px-3">Temp Password</th>
-                      <th className="py-2 px-3">Role</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-white/5">
-                    {generatedBatch.map((item, idx) => (
-                      <tr key={idx} className="text-slate-300 hover:bg-white/[0.02]">
-                        <td className="py-1.5 px-3 font-medium text-white">{item.fullName}</td>
-                        <td className="py-1.5 px-3">{item.email}</td>
-                        <td className="py-1.5 px-3 font-mono text-cyan-300">{item.password}</td>
-                        <td className="py-1.5 px-3 text-[10px] uppercase font-bold text-slate-400">{item.role}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            {/* Modal Actions */}
-            <div className="flex items-center justify-end gap-3 pt-4 border-t border-white/10">
-              <button
-                type="button"
-                onClick={() => setTemplateModalOpen(false)}
-                className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 text-xs font-semibold transition-all cursor-pointer"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                disabled={batchLoading || generatedBatch.length === 0}
-                onClick={handleExecuteBatchProvision}
-                className="px-5 py-2 rounded-xl bg-cyan-400 hover:bg-cyan-300 text-slate-950 text-xs font-bold transition-all shadow-md shadow-cyan-500/20 disabled:opacity-50 cursor-pointer"
-              >
-                {batchLoading ? "Provisioning Registry..." : `Provision All ${generatedBatch.length} Users`}
-              </button>
-            </div>
           </div>
         </div>
       )}
 
-      {/* MODAL 2: FAST SINGLE USER CREATION */}
-      {singleUserModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-          <div className="bg-slate-950 border border-white/15 rounded-3xl max-w-md w-full p-6 shadow-2xl relative">
-            <div className="flex items-center justify-between border-b border-white/10 pb-3 mb-4">
-              <h3 className="text-base font-bold text-white">Create New Member</h3>
-              <button
-                type="button"
-                onClick={() => setSingleUserModalOpen(false)}
-                className="text-slate-400 hover:text-white cursor-pointer"
-              >
-                ✕
-              </button>
+      {/* MODAL 2: CREDENTIALS HANDOFF MODAL (POST-PROVISION SUCCESS) */}
+      {credentialsModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4 overflow-y-auto">
+          <div className="bg-slate-950 border border-emerald-500/40 rounded-3xl max-w-2xl w-full p-6 sm:p-8 shadow-2xl relative my-8">
+            <button
+              type="button"
+              onClick={() => setCredentialsModalOpen(false)}
+              className="absolute top-5 right-5 p-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-colors cursor-pointer"
+            >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0">
+                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-xl font-bold tracking-tight text-white">Accounts Provisioned Successfully</h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Generated {createdCredentialsList.length} member credentials. Securely distribute these temporary passwords to staff.
+                </p>
+              </div>
             </div>
 
-            {singleErr && (
-              <div className="mb-4 p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs">
-                {singleErr}
-              </div>
-            )}
+            <div className="max-h-64 overflow-y-auto rounded-2xl border border-white/10 bg-black/80 mb-5">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="border-b border-white/10 bg-slate-900/60 text-slate-400 text-[10px] uppercase font-semibold">
+                    <th className="py-2.5 px-3.5">Name</th>
+                    <th className="py-2.5 px-3.5">Email Address</th>
+                    <th className="py-2.5 px-3.5">Initial Temp Password</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/5 text-[11px] font-mono">
+                  {createdCredentialsList.map((item, idx) => (
+                    <tr key={idx} className="hover:bg-white/[0.02]">
+                      <td className="py-2 px-3.5 text-white font-sans font-semibold">{item.fullName}</td>
+                      <td className="py-2 px-3.5 text-cyan-300">{item.email}</td>
+                      <td className="py-2 px-3.5 text-amber-300 font-bold select-all">{item.tempPass}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
 
-            <form onSubmit={handleCreateSingleUser} className="space-y-3.5">
-              <div className="p-3 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-300 text-xs flex items-center justify-between">
-                <span>Provisioning Workspace:</span>
-                <span className="font-bold font-mono">@{currentUser?.company || "Primary Organization"}</span>
-              </div>
+            <div className="p-3 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-300 text-xs mb-5">
+              Notice: Employees sign in via the portal using these credentials and are prompted to pair their mobile MFA authenticator.
+            </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">Account Name</label>
-                <input
-                  type="text"
-                  value={singleName}
-                  onChange={(e) => setSingleName(e.target.value)}
-                  placeholder="e.g. Alice Mercer"
-                  className="w-full px-3 py-2 rounded-xl bg-black border border-white/15 text-xs text-white outline-none focus:border-cyan-400"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">Login Email Address</label>
-                <input
-                  type="email"
-                  value={singleEmail}
-                  onChange={(e) => setSingleEmail(e.target.value)}
-                  placeholder="alice@company.org"
-                  className="w-full px-3 py-2 rounded-xl bg-black border border-white/15 text-xs text-white outline-none focus:border-cyan-400"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">Initial Password</label>
-                <input
-                  type="password"
-                  value={singlePassword}
-                  onChange={(e) => setSinglePassword(e.target.value)}
-                  placeholder="Minimum 6 characters"
-                  className="w-full px-3 py-2 rounded-xl bg-black border border-white/15 text-xs text-white outline-none focus:border-cyan-400"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">Role Assignment</label>
-                <select
-                  value={singleRole}
-                  onChange={(e) => setSingleRole(e.target.value as any)}
-                  className="w-full px-3 py-2 rounded-xl bg-black border border-white/15 text-xs text-white outline-none focus:border-cyan-400 cursor-pointer"
-                >
-                  <option value="USER">Standard User</option>
-                  <option value="ADMIN">Administrator</option>
-                </select>
-              </div>
-
-              <div className="flex items-center justify-end gap-2 pt-3 border-t border-white/10">
+            <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-white/10">
+              <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => setSingleUserModalOpen(false)}
-                  className="px-3.5 py-1.5 rounded-xl bg-slate-900 text-slate-300 text-xs font-semibold hover:bg-slate-800 transition-all cursor-pointer"
+                  onClick={handleCopyAllCredentials}
+                  className="px-4 py-2 rounded-xl bg-cyan-400 hover:bg-cyan-300 text-slate-950 text-xs font-bold transition-all shadow-md shadow-cyan-500/20 flex items-center gap-1.5 cursor-pointer"
                 >
-                  Cancel
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+                    />
+                  </svg>
+                  <span>{credentialsCopied ? "Copied Roster!" : "Copy All Credentials"}</span>
                 </button>
+
                 <button
-                  type="submit"
-                  disabled={singleLoading}
-                  className="px-4 py-1.5 rounded-xl bg-cyan-400 hover:bg-cyan-300 text-slate-950 text-xs font-bold transition-all disabled:opacity-50 cursor-pointer"
+                  type="button"
+                  onClick={handleExportCredentialsCsv}
+                  className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-white/10 text-slate-300 text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer"
                 >
-                  {singleLoading ? "Creating..." : "Create Account"}
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                  </svg>
+                  <span>Export CSV</span>
                 </button>
               </div>
-            </form>
+
+              <button
+                type="button"
+                onClick={() => setCredentialsModalOpen(false)}
+                className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-semibold transition-all cursor-pointer"
+              >
+                Done
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -1041,7 +1272,6 @@ export default function UserManagementPage() {
             )}
 
             <form onSubmit={handleSaveProfile} className="space-y-4">
-              {/* Editable Name Field */}
               <div>
                 <label className="block text-xs font-semibold text-slate-300 mb-1">
                   Account Display Name <span className="text-cyan-400 font-normal">(Editable)</span>
@@ -1056,7 +1286,6 @@ export default function UserManagementPage() {
                 />
               </div>
 
-              {/* Locked Email Credential */}
               <div>
                 <div className="flex items-center justify-between mb-1">
                   <label className="text-xs font-semibold text-slate-400">Login Credential / Email</label>
@@ -1067,20 +1296,17 @@ export default function UserManagementPage() {
                     Locked by IAM
                   </span>
                 </div>
-                <div className="relative">
-                  <input
-                    type="email"
-                    value={currentUser?.email || ""}
-                    disabled
-                    className="w-full px-3 py-2 rounded-xl bg-slate-900/60 border border-white/5 text-xs text-slate-400 outline-none cursor-not-allowed select-none"
-                  />
-                </div>
+                <input
+                  type="email"
+                  value={currentUser?.email || ""}
+                  disabled
+                  className="w-full px-3 py-2 rounded-xl bg-slate-900/60 border border-white/5 text-xs text-slate-400 outline-none cursor-not-allowed select-none"
+                />
                 <p className="text-[10px] text-slate-500 mt-1">
                   Login credentials and emails are governed by Sentinel IAM policy and cannot be modified by account owners. Contact an administrator to request a credential update.
                 </p>
               </div>
 
-              {/* Locked Role */}
               <div>
                 <label className="block text-xs font-semibold text-slate-400 mb-1">Assigned Privilege Tier</label>
                 <input
@@ -1148,68 +1374,48 @@ export default function UserManagementPage() {
                         <span className="text-xs font-bold text-white block">{svc.name}</span>
                         <span className="text-[11px] text-slate-400">{svc.category}</span>
                       </div>
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          if (isAssigned) {
-                            await revokeService(assignModalUser.id, svcId);
-                            setAssignModalUser((prev) =>
-                              prev
-                                ? {
-                                    ...prev,
-                                    assignedServiceIds: prev.assignedServiceIds.filter((id) => id !== svcId),
-                                    assignedServiceNames: prev.assignedServiceNames.filter((n) => n !== svc.name),
-                                    assignedServicesCount: Math.max(0, prev.assignedServicesCount - 1),
-                                  }
-                                : null
-                            );
-                          } else {
-                            await assignService(assignModalUser.id, svcId, svc.name);
-                            setAssignModalUser((prev) =>
-                              prev
-                                ? {
-                                    ...prev,
-                                    assignedServiceIds: [...(prev.assignedServiceIds || []), svcId],
-                                    assignedServiceNames: [...(prev.assignedServiceNames || []), svc.name],
-                                    assignedServicesCount: (prev.assignedServicesCount || 0) + 1,
-                                  }
-                                : null
-                            );
-                          }
-                        }}
-                        className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                          isAssigned
-                            ? "bg-rose-500/10 border border-rose-500/30 text-rose-300 hover:bg-rose-500/20"
-                            : "bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 hover:bg-cyan-500/20"
-                        }`}
-                      >
-                        {isAssigned ? "Revoke" : "Authorize"}
-                      </button>
+                      {isAssigned ? (
+                        <button
+                          type="button"
+                          onClick={() => revokeService(assignModalUser.id, svcId)}
+                          className="px-2.5 py-1 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-rose-300 text-xs font-semibold transition-all cursor-pointer"
+                        >
+                          Revoke
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => assignService(assignModalUser.id, svcId, svc.name)}
+                          className="px-2.5 py-1 rounded-lg bg-cyan-400 hover:bg-cyan-300 text-slate-950 text-xs font-bold transition-all shadow-md shadow-cyan-500/20 cursor-pointer"
+                        >
+                          Assign
+                        </button>
+                      )}
                     </div>
                   );
                 })
               )}
             </div>
 
-            <div className="flex justify-end pt-3 border-t border-white/10">
+            <div className="flex items-center justify-end pt-3 border-t border-white/10">
               <button
                 type="button"
                 onClick={() => setAssignModalUser(null)}
-                className="px-4 py-1.5 rounded-xl bg-slate-900 text-slate-300 text-xs font-semibold hover:bg-slate-800 transition-all cursor-pointer"
+                className="px-4 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-semibold cursor-pointer"
               >
-                Done
+                Close
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* MODAL 5: EMAIL INVITE SUMMARY */}
+      {/* MODAL 5: INVITE MODAL */}
       {inviteModalUser && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-          <div className="bg-slate-950 border border-white/15 rounded-3xl max-w-lg w-full p-6 shadow-2xl relative">
+          <div className="bg-slate-950 border border-white/15 rounded-3xl max-w-md w-full p-6 shadow-2xl relative">
             <div className="flex items-center justify-between border-b border-white/10 pb-3 mb-4">
-              <h3 className="text-base font-bold text-white">Member Onboarding Dispatch</h3>
+              <h3 className="text-base font-bold text-white">Member Onboarding Details</h3>
               <button
                 type="button"
                 onClick={() => setInviteModalUser(null)}
@@ -1219,61 +1425,64 @@ export default function UserManagementPage() {
               </button>
             </div>
 
-            <div className="p-4 rounded-2xl bg-black border border-white/10 font-mono text-xs text-slate-300 whitespace-pre-wrap leading-relaxed mb-4">
-{`To: ${inviteModalUser.email}
-Subject: Welcome to Sentinel IAM - Account Onboarding
+            <div className="space-y-3 mb-5">
+              <div>
+                <span className="text-[11px] text-slate-400 block mb-1">Member Email</span>
+                <div className="p-2.5 rounded-xl bg-black border border-white/10 text-xs font-mono text-cyan-300">
+                  {inviteModalUser.email}
+                </div>
+              </div>
 
-Hello ${inviteModalUser.fullName},
-
-Your enterprise Sentinel identity profile has been provisioned.
-
-Account Email: ${inviteModalUser.email}
-Role: ${inviteModalUser.role}
-Access Portal: http://localhost:3000/login
-
-Instructions:
-1. Log in with your email and initial temporary password.
-2. Complete pairing with your mobile authenticator app.
-3. Access your assigned SSO enterprise resources.`}
+              <div>
+                <span className="text-[11px] text-slate-400 block mb-1">Portal Login Address</span>
+                <div className="p-2.5 rounded-xl bg-black border border-white/10 text-xs font-mono text-slate-300">
+                  {typeof window !== "undefined" ? `${window.location.origin}/login` : "http://localhost:3000/login"}
+                </div>
+              </div>
             </div>
 
-            <div className="flex items-center justify-between pt-3 border-t border-white/10">
-              <span className="text-[11px] text-slate-400">Ready to dispatch via email client</span>
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-white/10">
               <button
                 type="button"
                 onClick={() => {
-                  const text = `To: ${inviteModalUser.email}\nSubject: Welcome to Sentinel IAM\n\nHello ${inviteModalUser.fullName},\n\nYour account has been provisioned at http://localhost:3000/login.`;
-                  navigator.clipboard.writeText(text);
+                  const url = typeof window !== "undefined" ? `${window.location.origin}/login` : "http://localhost:3000/login";
+                  navigator.clipboard.writeText(
+                    `Hello ${inviteModalUser.fullName},\n\nYou have been provisioned a member account on Sentinel IAM.\nPlease sign in at: ${url}\nEmail: ${inviteModalUser.email}\nRole: Standard Member`
+                  );
                   setInviteCopied(true);
                   setTimeout(() => setInviteCopied(false), 2000);
                 }}
-                className="px-4 py-1.5 rounded-xl bg-cyan-400 hover:bg-cyan-300 text-slate-950 text-xs font-bold transition-all cursor-pointer"
+                className="px-4 py-1.5 rounded-xl bg-cyan-400 hover:bg-cyan-300 text-slate-950 text-xs font-bold transition-all shadow-md shadow-cyan-500/20 cursor-pointer"
               >
-                {inviteCopied ? "Copied to Clipboard" : "Copy Invite Text"}
+                {inviteCopied ? "Copied Details!" : "Copy Onboarding Note"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setInviteModalUser(null)}
+                className="px-3.5 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-semibold cursor-pointer"
+              >
+                Close
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* MODAL 6: DELETE CONFIRMATION */}
+      {/* MODAL 6: DELETE USER CONFIRMATION */}
       {deleteConfirmUser && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-          <div className="bg-slate-950 border border-rose-500/30 rounded-3xl max-w-sm w-full p-6 shadow-2xl relative text-center">
-            <div className="w-12 h-12 rounded-2xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-center text-rose-400 mx-auto mb-3">
-              <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-              </svg>
-            </div>
-            <h3 className="text-base font-bold text-white">Delete User Account?</h3>
-            <p className="text-xs text-slate-400 mt-1 mb-5">
-              Are you sure you want to permanently delete <span className="text-white font-semibold">{deleteConfirmUser.email}</span> and revoke all assigned services? This action cannot be undone.
+          <div className="bg-slate-950 border border-rose-500/30 rounded-3xl max-w-sm w-full p-6 shadow-2xl relative">
+            <h3 className="text-base font-bold text-white mb-2">Delete Member Account</h3>
+            <p className="text-xs text-slate-400 mb-4 leading-relaxed">
+              Are you sure you want to permanently delete{" "}
+              <span className="font-semibold text-white">{deleteConfirmUser.email}</span>? This will revoke all session access and service entitlements.
             </p>
-            <div className="flex items-center justify-center gap-3">
+
+            <div className="flex items-center justify-end gap-2">
               <button
                 type="button"
                 onClick={() => setDeleteConfirmUser(null)}
-                className="px-4 py-1.5 rounded-xl bg-slate-900 text-slate-300 text-xs font-semibold hover:bg-slate-800 transition-all cursor-pointer"
+                className="px-3.5 py-1.5 rounded-xl bg-slate-900 text-slate-300 text-xs font-semibold hover:bg-slate-800 transition-all cursor-pointer"
               >
                 Cancel
               </button>
@@ -1281,9 +1490,9 @@ Instructions:
                 type="button"
                 disabled={deletingUserId !== null}
                 onClick={handleConfirmDelete}
-                className="px-4 py-1.5 rounded-xl bg-rose-500 hover:bg-rose-400 text-white text-xs font-bold transition-all shadow-md shadow-rose-500/20 disabled:opacity-50 cursor-pointer"
+                className="px-4 py-1.5 rounded-xl bg-rose-500 hover:bg-rose-600 text-white text-xs font-bold transition-all disabled:opacity-50 cursor-pointer"
               >
-                {deletingUserId !== null ? "Deleting..." : "Delete User"}
+                {deletingUserId !== null ? "Deleting..." : "Delete Member"}
               </button>
             </div>
           </div>
