@@ -10,7 +10,7 @@ export default function Footer() {
         { label: "Security Servers", href: "#" },
         { label: "Security FireWalls", href: "#" },
         { label: "Cloud Services", href: "#" },
-        { label: "Integrations", href: "#" },
+        { label: "Integrations & API", href: "/docs" },
       ],
     },
     {
@@ -29,7 +29,7 @@ export default function Footer() {
         { label: "Blog", href: "#" },
         { label: "Themes", href: "#" },
         { label: "Hosting", href: "#" },
-        { label: "Developers", href: "#" },
+        { label: "Developer Docs", href: "/docs" },
         { label: "Support", href: "#" },
       ],
     },
