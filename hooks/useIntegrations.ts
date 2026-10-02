@@ -89,6 +89,7 @@ export function useIntegrations(userId?: number) {
         id: `local-${template.id}`,
         name: template.name,
         category: template.category,
+        logo: template.logo,
         iconType: template.iconType,
         status: "Active",
         statusColor: "bg-emerald-400",

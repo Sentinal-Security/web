@@ -16,8 +16,8 @@ export interface AppIntegration {
   name: string;
   category: string;
   logo?: string;
-  iconType?: "facebook" | "google" | "github" | "microsoft" | "shield" | "cloud" | "key" | "terminal" | "custom";
-  status: "Active" | "Operational" | "Protected" | "Syncing" | "Idle";
+  iconType?: "facebook" | "google" | "github" | "microsoft" | "anzora" | "calyx" | "omniauth" | "skyeagle" | "shield" | "cloud" | "key" | "terminal" | "custom";
+  status: "Active" | "Operational" | "Protected" | "Syncing" | "Idle" | string;
   statusColor: string;
   type: IntegrationType;
   isBoilerplate?: boolean;
@@ -32,11 +32,12 @@ export interface BoilerplateTemplate {
   id: string;
   name: string;
   category: string;
-  iconType: "facebook" | "google" | "github" | "microsoft";
+  logo?: string;
+  iconType?: "facebook" | "google" | "github" | "microsoft" | "anzora" | "calyx" | "omniauth" | "skyeagle" | "custom";
   type: IntegrationType;
   description: string;
-  defaultScopes: string[];
-  mockClientId: string;
+  defaultScopes?: string[];
+  mockClientId?: string;
   loginUrl: string;
 }
 

@@ -2,15 +2,48 @@ import { AppIntegration, BoilerplateTemplate, BackendServiceResponse, Integratio
 
 export const BOILERPLATE_TEMPLATES: BoilerplateTemplate[] = [
   {
-    id: "facebook",
-    name: "Facebook Login",
-    category: "Identity Federation & Social SSO",
-    iconType: "facebook",
+    id: "anzora",
+    name: "Anzora",
+    category: "Zero-Trust Access Mesh",
+    logo: "/images/logo-anzora.svg",
+    iconType: "anzora",
     type: "sso_oauth",
-    description: "OAuth 2.0 Graph API identity federation for user verification.",
-    defaultScopes: ["public_profile", "email"],
-    mockClientId: "fb_app_10928374619",
-    loginUrl: "https://www.facebook.com/v19.0/dialog/oauth",
+    description: "Zero-Trust mesh network identity provider and distributed device authentication.",
+    mockClientId: "anzora_mesh_sec_9918",
+    loginUrl: "/apps/anzora",
+  },
+  {
+    id: "calyx",
+    name: "Calyx Cloud",
+    category: "SaaS Governance Suite",
+    logo: "/images/logo-calyx.svg",
+    iconType: "calyx",
+    type: "sso_oauth",
+    description: "Cloud security posture governance, continuous SaaS audit and compliance engine.",
+    mockClientId: "calyx_cloud_gov_8271",
+    loginUrl: "/apps/calyx",
+  },
+  {
+    id: "omniauth",
+    name: "OmniAuth API",
+    category: "Cloud Auth API Service",
+    logo: "/images/logo-omniauth.svg",
+    iconType: "omniauth",
+    type: "rest_api",
+    description: "Enterprise multi-protocol token authorization API with centralized MFA policy.",
+    mockClientId: "omniauth_token_api_3812",
+    loginUrl: "/apps/omniauth",
+  },
+  {
+    id: "skyeagle",
+    name: "SkyEagle",
+    category: "Continuous Threat Radar",
+    logo: "/images/logo-skyeagle.svg",
+    iconType: "skyeagle",
+    type: "sso_oauth",
+    description: "Real-time threat intelligence and continuous behavioral anomaly detection radar.",
+    mockClientId: "skyeagle_radar_det_4102",
+    loginUrl: "/apps/skyeagle",
   },
   {
     id: "google",
@@ -47,7 +80,7 @@ export const BOILERPLATE_TEMPLATES: BoilerplateTemplate[] = [
   },
 ];
 
-// Defaults removed per user requirement - user starts with empty dashboard and adds services
+// Defaults removed - newly registered users start with a clean empty dashboard
 export const DEFAULT_APPS: AppIntegration[] = [];
 
 const STORAGE_KEY = "sentinel_dashboard_integrations";
@@ -57,9 +90,20 @@ export function formatCurrentTime(): string {
   return now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
+export function getLogoForService(name: string, iconType?: string): string | undefined {
+  const lowerName = name.toLowerCase();
+  const lowerIcon = (iconType || "").toLowerCase();
+  if (lowerName.includes("anzora") || lowerIcon === "anzora") return "/images/logo-anzora.svg";
+  if (lowerName.includes("calyx") || lowerIcon === "calyx") return "/images/logo-calyx.svg";
+  if (lowerName.includes("omniauth") || lowerIcon === "omniauth") return "/images/logo-omniauth.svg";
+  if (lowerName.includes("skyeagle") || lowerIcon === "skyeagle") return "/images/logo-skyeagle.svg";
+  return undefined;
+}
+
 export function backendToAppIntegration(service: BackendServiceResponse): AppIntegration {
-  const isBoilerplate = ["facebook", "google", "github", "microsoft"].includes(service.iconType?.toLowerCase() || "");
+  const isBoilerplate = ["facebook", "google", "github", "microsoft", "anzora", "calyx", "omniauth", "skyeagle"].includes(service.iconType?.toLowerCase() || "");
   const normalizedType = (service.authProtocol?.toLowerCase() || "sso_oauth") as IntegrationType;
+  const logo = getLogoForService(service.name, service.iconType);
 
   return {
     id: service.id,
@@ -67,6 +111,7 @@ export function backendToAppIntegration(service: BackendServiceResponse): AppInt
     userId: service.userId,
     name: service.name,
     category: service.category || "Enterprise Service",
+    logo,
     iconType: (service.iconType as any) || (isBoilerplate ? (service.iconType as any) : "custom"),
     status: (service.status as any) || "Active",
     statusColor: service.mfaRequired ? "bg-emerald-400" : "bg-cyan-400",
@@ -86,34 +131,17 @@ export function backendToAppIntegration(service: BackendServiceResponse): AppInt
   };
 }
 
-const LEGACY_MOCK_IDS = new Set(["anzora", "calyx", "omniauth", "skyeagle"]);
-
-function isLegacyMock(app: any): boolean {
-  if (!app) return true;
-  const idStr = String(app.id || "").toLowerCase();
-  const nameStr = String(app.name || "").toLowerCase();
-  return LEGACY_MOCK_IDS.has(idStr) || LEGACY_MOCK_IDS.has(nameStr);
-}
-
 export function getStoredIntegrations(userId?: number): AppIntegration[] {
   if (typeof window === "undefined") {
     return [];
   }
   try {
     const key = userId ? `${STORAGE_KEY}_u${userId}` : STORAGE_KEY;
-    const raw = localStorage.getItem(key) || localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(key);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
-    // Strictly filter out legacy mock services
-    const cleaned = parsed.filter((item) => !isLegacyMock(item));
-    if (cleaned.length !== parsed.length) {
-      localStorage.setItem(key, JSON.stringify(cleaned));
-      if (key !== STORAGE_KEY) {
-        localStorage.removeItem(STORAGE_KEY);
-      }
-    }
-    return cleaned;
+    return parsed;
   } catch {
     return [];
   }
@@ -123,11 +151,7 @@ export function saveStoredIntegrations(apps: AppIntegration[], userId?: number):
   if (typeof window === "undefined") return;
   try {
     const key = userId ? `${STORAGE_KEY}_u${userId}` : STORAGE_KEY;
-    const cleaned = apps.filter((item) => !isLegacyMock(item));
-    localStorage.setItem(key, JSON.stringify(cleaned));
-    if (key !== STORAGE_KEY) {
-      localStorage.removeItem(STORAGE_KEY);
-    }
+    localStorage.setItem(key, JSON.stringify(apps));
   } catch (err) {
     console.error("Failed to save integrations to localStorage", err);
   }
@@ -138,21 +162,21 @@ export async function testConnectionPing(url: string): Promise<{ success: boolea
   try {
     const target = url.trim();
     if (!target.startsWith("http://") && !target.startsWith("https://")) {
-      return { success: false, latencyMs: 0, message: "Invalid endpoint URL protocol (http/https required)." };
+      return { success: false, latencyMs: 0, message: "Invalid URL protocol. Must start with http:// or https://" };
     }
-    await fetch(target, { method: "HEAD", mode: "no-cors" });
+    const res = await fetch(target, { method: "HEAD", mode: "no-cors" });
     const end = performance.now();
     return {
       success: true,
       latencyMs: Math.round(end - start),
-      message: `Connection verified. Latency: ${Math.round(end - start)}ms.`,
+      message: `Endpoint reachable. Protocol status: ${res.type}.`,
     };
   } catch (err: any) {
     const end = performance.now();
     return {
       success: false,
       latencyMs: Math.round(end - start),
-      message: err?.message || "Failed to reach endpoint.",
+      message: err.message || "Failed to reach endpoint.",
     };
   }
 }
