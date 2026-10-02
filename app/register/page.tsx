@@ -13,9 +13,34 @@ export default function RegisterPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState<"USER" | "ADMIN">("USER");
+  const [company, setCompany] = useState("");
+  const [companyManual, setCompanyManual] = useState(false);
   const [agreed, setAgreed] = useState(false);
   const [validationError, setValidationError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
+
+  const detectCompany = (val: string): string => {
+    if (!val.includes("@")) return "";
+    const localPart = val.substring(0, val.indexOf("@")).toLowerCase();
+    const domainPart = val.substring(val.indexOf("@") + 1).toLowerCase();
+    if (localPart.includes("-")) {
+      const candidate = localPart.substring(localPart.lastIndexOf("-") + 1).trim();
+      if (candidate) return candidate;
+    }
+    if (localPart.includes("+")) {
+      const candidate = localPart.substring(localPart.lastIndexOf("+") + 1).trim();
+      if (candidate) return candidate;
+    }
+    return domainPart;
+  };
+
+  const handleEmailChange = (val: string) => {
+    setEmail(val);
+    if (!companyManual) {
+      const detected = detectCompany(val);
+      if (detected) setCompany(detected);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -38,6 +63,13 @@ export default function RegisterPage() {
       setValidationError("Password must be at least 6 characters.");
       return;
     }
+
+    const resolvedCompany = company.trim() || (email.includes("@") ? detectCompany(email) : "");
+    if (role === "ADMIN" && !resolvedCompany) {
+      setValidationError("Company workspace is required for Administrator accounts.");
+      return;
+    }
+
     if (!agreed) {
       setValidationError("Please agree to the Terms and Privacy Policy.");
       return;
@@ -48,6 +80,7 @@ export default function RegisterPage() {
       password,
       fullName: fullName.trim(),
       role,
+      company: resolvedCompany || undefined,
     });
 
     if (res.success) {
@@ -250,6 +283,40 @@ export default function RegisterPage() {
                 </div>
               </div>
 
+              {/* Company Workspace Field */}
+              <div className="mb-4">
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-xs font-medium text-slate-300">
+                    Company Workspace {role === "ADMIN" && <span className="text-purple-400 font-bold">*</span>}
+                  </label>
+                  {company && (
+                    <span className="text-[10px] text-purple-300 bg-purple-500/10 px-2 py-0.5 rounded border border-purple-500/20 font-mono">
+                      @{company}
+                    </span>
+                  )}
+                </div>
+                <div className="relative flex items-center bg-[#131926] border border-slate-700/60 rounded-xl px-4 py-3.5 focus-within:border-cyan-400 focus-within:ring-1 focus-within:ring-cyan-400 transition-all">
+                  <svg className="w-5 h-5 text-slate-400 mr-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.6" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                  </svg>
+                  <input
+                    type="text"
+                    value={company}
+                    onChange={(e) => {
+                      setCompany(e.target.value.toLowerCase());
+                      setCompanyManual(true);
+                    }}
+                    placeholder={role === "ADMIN" ? "e.g. companynamexx, acme.com" : "Optional company workspace"}
+                    className="w-full bg-transparent border-none outline-none text-white text-sm placeholder-slate-500"
+                  />
+                </div>
+                {role === "ADMIN" && (
+                  <p className="text-[11px] text-slate-400 mt-1.5">
+                    Tenant isolation boundary: you will only manage users within this company workspace.
+                  </p>
+                )}
+              </div>
+
               {/* Full Name Input Field */}
               <div className="mb-4">
                 <label className="block text-xs font-medium text-slate-300 mb-2">
@@ -301,8 +368,8 @@ export default function RegisterPage() {
                   <input
                     type="email"
                     value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="Enter your email address"
+                    onChange={(e) => handleEmailChange(e.target.value)}
+                    placeholder="Enter your email (e.g. ractopen-companynamexx@proton.me)"
                     className="w-full bg-transparent border-none outline-none text-white text-sm placeholder-slate-500"
                   />
                 </div>

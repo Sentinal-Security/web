@@ -3,6 +3,7 @@ export interface AdminUser {
   email: string;
   fullName: string;
   role: "ADMIN" | "USER" | string;
+  company?: string;
   mfaEnabled: boolean;
   createdAt: string;
   assignedServicesCount: number;
@@ -15,6 +16,7 @@ export interface CreateUserPayload {
   password: string;
   fullName: string;
   role: "ADMIN" | "USER";
+  company?: string;
 }
 
 export interface EmailInviteTemplate {
@@ -47,4 +49,3 @@ export interface UserTemplateConfig {
   assignedServiceIds: number[];
   count: number;
 }
-

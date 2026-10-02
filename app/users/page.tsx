@@ -32,11 +32,17 @@ export default function UserManagementPage() {
     }
     setCurrentUser(session.user);
     setEditFullName(session.user.fullName || "");
+    if (session.user.company) {
+      setTemplateConfig((prev) => ({
+        ...prev,
+        emailDomain: session.user.company || prev.emailDomain,
+      }));
+    }
   }, [router]);
 
   const isAdmin = currentUser?.role === "ADMIN";
 
-  // Admin Hook
+  // Admin Hook (Tenant-isolated by admin ID and company workspace)
   const {
     users,
     loading: usersLoading,
@@ -50,7 +56,7 @@ export default function UserManagementPage() {
     revokeService,
     exportCsv,
     clearFeedback,
-  } = useAdmin(isAdmin);
+  } = useAdmin(isAdmin, currentUser?.userId, currentUser?.company);
 
   // Integrations Hook (to get catalog services for assignment)
   const { apps: catalogServices } = useIntegrations(currentUser?.userId);
@@ -193,6 +199,7 @@ export default function UserManagementPage() {
       email: singleEmail.trim(),
       password: singlePassword,
       role: singleRole,
+      company: currentUser?.company,
     });
     setSingleLoading(false);
 
@@ -401,6 +408,30 @@ export default function UserManagementPage() {
             </button>
           </div>
         )}
+
+        {/* Company Workspace Tenant Isolation Banner */}
+        <div className="flex flex-wrap items-center justify-between gap-4 p-4 rounded-2xl bg-black border border-purple-500/30">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-xl bg-purple-500/10 border border-purple-500/30 text-purple-400">
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+              </svg>
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-bold text-white tracking-wide">
+                  Company Workspace: <span className="text-purple-400 font-mono">@{currentUser?.company || "Primary Organization"}</span>
+                </h3>
+                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                  Tenant Isolated
+                </span>
+              </div>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Multi-tenant security active. You only manage users and provision services within this company.
+              </p>
+            </div>
+          </div>
+        </div>
 
         {/* Directory Metrics Overview */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -906,6 +937,11 @@ export default function UserManagementPage() {
             )}
 
             <form onSubmit={handleCreateSingleUser} className="space-y-3.5">
+              <div className="p-3 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-300 text-xs flex items-center justify-between">
+                <span>Provisioning Workspace:</span>
+                <span className="font-bold font-mono">@{currentUser?.company || "Primary Organization"}</span>
+              </div>
+
               <div>
                 <label className="block text-xs font-semibold text-slate-300 mb-1">Account Name</label>
                 <input
