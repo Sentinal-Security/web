@@ -69,6 +69,9 @@ function LoginPageContent() {
     required: boolean;
     userId?: number;
     email?: string;
+    fullName?: string;
+    role?: string;
+    company?: string;
     challengeId?: number;
     matchCode?: string;
   } | null>(null);
@@ -91,11 +94,15 @@ function LoginPageContent() {
             clearInterval(interval);
             const finalUserId = res.data.userId || mfaChallenge.userId || 1;
             const finalEmail = res.data.email || mfaChallenge.email || email.trim();
+            const resolvedFullName = res.data.fullName || mfaChallenge?.fullName || "";
+            const resolvedRole = (res.data.role || mfaChallenge?.role || "USER") as any;
+            const resolvedCompany = res.data.company || mfaChallenge?.company || "";
             saveSession({
               userId: finalUserId,
               email: finalEmail,
-              fullName: "",
-              role: "USER",
+              fullName: resolvedFullName,
+              role: resolvedRole,
+              company: resolvedCompany,
               mfaEnabled: true,
             });
             handleSuccessfulHandoff(finalUserId, finalEmail, res.data.ssoToken);
@@ -151,6 +158,9 @@ function LoginPageContent() {
             required: true,
             userId: res.userId,
             email: res.email || email.trim(),
+            fullName: res.fullName,
+            role: res.role,
+            company: res.company,
             challengeId: res.challengeId,
             matchCode: res.matchCode,
           });
@@ -161,6 +171,7 @@ function LoginPageContent() {
             email: res.email || email.trim(),
             fullName: res.fullName || "",
             role: (res.role as any) || "USER",
+            company: res.company || "",
             mfaEnabled: false,
           });
           handleSuccessfulHandoff(res.userId || 1, res.email || email.trim(), res.ssoToken);
@@ -203,11 +214,15 @@ function LoginPageContent() {
       if (res.success) {
         const finalUserId = res.userId || mfaChallenge?.userId || 1;
         const finalEmail = res.email || mfaChallenge?.email || email.trim();
+        const resolvedFullName = res.fullName || mfaChallenge?.fullName || "";
+        const resolvedRole = (res.role || mfaChallenge?.role || "USER") as any;
+        const resolvedCompany = res.company || mfaChallenge?.company || "";
         saveSession({
           userId: finalUserId,
           email: finalEmail,
-          fullName: res.fullName || "",
-          role: (res.role as any) || "USER",
+          fullName: resolvedFullName,
+          role: resolvedRole,
+          company: resolvedCompany,
           mfaEnabled: true,
         });
         handleSuccessfulHandoff(finalUserId, finalEmail, res.ssoToken);

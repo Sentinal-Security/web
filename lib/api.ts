@@ -166,6 +166,9 @@ export async function getMfaChallengeStatus(challengeId: number): Promise<{
     status: "PENDING" | "APPROVED" | "DENIED" | "EXPIRED";
     userId: number;
     email: string;
+    fullName?: string;
+    role?: string;
+    company?: string;
     ssoToken?: string;
   };
 }> {
