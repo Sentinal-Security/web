@@ -31,14 +31,16 @@ export default function Header() {
         {/* Desktop Navigation Links */}
         <nav className="hidden md:flex items-center space-x-8 text-sm font-medium text-gray-300">
           <Link
-            href="#pricing"
+            href="/pricing"
             className="hover:text-cyan-400 transition-colors"
           >
             Pricing
           </Link>
 
           <div className="relative group flex items-center cursor-pointer hover:text-cyan-400 transition-colors">
-            <span>Features</span>
+            <Link href="/features" className="hover:text-cyan-400 transition-colors">
+              Features
+            </Link>
             <svg
               className="w-3.5 h-3.5 ml-1 transition-transform group-hover:rotate-180 text-gray-400 group-hover:text-cyan-400"
               fill="currentColor"
@@ -52,22 +54,22 @@ export default function Header() {
             </svg>
             <div className="absolute top-full left-0 mt-2 w-48 bg-slate-950 border border-white/10 rounded-lg p-2 shadow-2xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200">
               <Link
-                href="#services"
+                href="/services"
                 className="block px-3 py-2 text-xs text-slate-300 hover:text-cyan-400 hover:bg-cyan-500/10 rounded"
               >
-                IAM Services
+                Connected Services
               </Link>
               <Link
-                href="#services"
+                href="/features#zero-trust"
                 className="block px-3 py-2 text-xs text-slate-300 hover:text-cyan-400 hover:bg-cyan-500/10 rounded"
               >
-                Device Management
+                Dual-Engine MFA
               </Link>
               <Link
-                href="#services"
+                href="/features#sso-federation"
                 className="block px-3 py-2 text-xs text-slate-300 hover:text-cyan-400 hover:bg-cyan-500/10 rounded"
               >
-                MFA & Audit
+                SSO Federation
               </Link>
               <Link
                 href="/docs"
@@ -79,7 +81,7 @@ export default function Header() {
           </div>
 
           <Link
-            href="#developers"
+            href="/docs"
             className="hover:text-cyan-400 transition-colors"
           >
             API Integration
@@ -91,13 +93,13 @@ export default function Header() {
             Docs
           </Link>
           <Link
-            href="#faq"
+            href="/faq"
             className="hover:text-cyan-400 transition-colors"
           >
             FAQ
           </Link>
           <Link
-            href="#services"
+            href="/services"
             className="hover:text-cyan-400 transition-colors"
           >
             Services
@@ -177,14 +179,14 @@ export default function Header() {
       {mobileMenuOpen && (
         <div className="md:hidden bg-slate-950 border-b border-white/10 px-4 pt-2 pb-6 space-y-3">
           <Link
-            href="#pricing"
+            href="/pricing"
             onClick={() => setMobileMenuOpen(false)}
             className="block text-gray-300 hover:text-cyan-400 py-1 text-base font-medium"
           >
             Pricing
           </Link>
           <Link
-            href="#services"
+            href="/features"
             onClick={() => setMobileMenuOpen(false)}
             className="block text-gray-300 hover:text-cyan-400 py-1 text-base font-medium"
           >
@@ -198,25 +200,27 @@ export default function Header() {
             Developer API & Docs
           </Link>
           <Link
-            href="#support"
+            href="/faq"
             onClick={() => setMobileMenuOpen(false)}
             className="block text-gray-300 hover:text-cyan-400 py-1 text-base font-medium"
           >
-            Support
+            FAQ
           </Link>
           <Link
-            href="#blog"
+            href="/services"
             onClick={() => setMobileMenuOpen(false)}
             className="block text-gray-300 hover:text-cyan-400 py-1 text-base font-medium"
           >
-            Blog
+            Services
           </Link>
           <Link
-            href="#partners"
+            href="/dw"
+            target="_blank"
+            rel="noopener noreferrer"
             onClick={() => setMobileMenuOpen(false)}
             className="block text-gray-300 hover:text-cyan-400 py-1 text-base font-medium"
           >
-            Partners
+            Mobile App
           </Link>
           <div className="pt-4 border-t border-white/10">
             {isAuthenticated ? (

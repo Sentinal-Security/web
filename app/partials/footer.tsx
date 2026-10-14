@@ -6,41 +6,40 @@ export default function Footer() {
     {
       title: "Solutions",
       links: [
-        { label: "Application Services", href: "#" },
-        { label: "Security Servers", href: "#" },
-        { label: "Security FireWalls", href: "#" },
-        { label: "Cloud Services", href: "#" },
+        { label: "Application Services", href: "/services" },
+        { label: "Dual-Engine MFA", href: "/features#zero-trust" },
+        { label: "SSO Federation", href: "/features#sso-federation" },
+        { label: "Multi-Tenant Directory", href: "/features#multi-tenant" },
         { label: "Integrations & API", href: "/docs" },
       ],
     },
     {
-      title: "Partners",
+      title: "Infrastructure",
       links: [
-        { label: "Amazon", href: "#" },
-        { label: "Figma", href: "#" },
-        { label: "Twitter", href: "#" },
-        { label: "CloudRail-IIOT", href: "#" },
+        { label: "Supabase PostgreSQL", href: "https://supabase.com" },
+        { label: "Render Cloud Gateway", href: "https://render.com" },
+        { label: "Expo Mobile Framework", href: "https://expo.dev" },
+        { label: "Spring Boot Security", href: "https://spring.io/projects/spring-boot" },
       ],
     },
     {
       title: "Resources",
       links: [
-        { label: "Academy", href: "#" },
-        { label: "Blog", href: "#" },
-        { label: "Themes", href: "#" },
-        { label: "Hosting", href: "#" },
-        { label: "Developer Docs", href: "/docs" },
-        { label: "Support", href: "#" },
+        { label: "Pricing & Plans", href: "/pricing" },
+        { label: "Feature Matrix", href: "/features" },
+        { label: "FAQ & Support", href: "/faq" },
+        { label: "Developer API Docs", href: "/docs" },
+        { label: "Mobile Authenticator APK", href: "/dw" },
       ],
     },
     {
-      title: "Company",
+      title: "Company & Legal",
       links: [
-        { label: "About Us", href: "#" },
-        { label: "Careers", href: "#" },
+        { label: "System Architecture", href: "/features" },
+        { label: "Live System Health", href: "https://backend-pi68.onrender.com/api/health" },
         { label: "Terms of Service", href: "/terms" },
         { label: "Privacy Policy", href: "/terms" },
-        { label: "Contact Us", href: "#" },
+        { label: "Contact & Inquiries", href: "/faq" },
       ],
     },
   ];
@@ -58,12 +57,23 @@ export default function Footer() {
               <ul className="space-y-2.5">
                 {section.links.map((link, lIdx) => (
                   <li key={lIdx}>
-                    <Link
-                      href={link.href}
-                      className="hover:text-cyan-400 transition-colors inline-block"
-                    >
-                      {link.label}
-                    </Link>
+                    {link.href.startsWith("http") ? (
+                      <a
+                        href={link.href}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="hover:text-cyan-400 transition-colors inline-block"
+                      >
+                        {link.label}
+                      </a>
+                    ) : (
+                      <Link
+                        href={link.href}
+                        className="hover:text-cyan-400 transition-colors inline-block"
+                      >
+                        {link.label}
+                      </Link>
+                    )}
                   </li>
                 ))}
               </ul>

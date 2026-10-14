@@ -49,13 +49,13 @@ export default function LandingPage() {
               {/* CTA Action Buttons */}
               <div className="mt-9 pl-6 sm:pl-8 flex flex-wrap items-center gap-4">
                 <Link
-                  href="#services"
+                  href="/services"
                   className="bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs sm:text-sm tracking-wider uppercase px-7 py-3.5 rounded-xl transition-all shadow-sm"
                 >
                   LEARN MORE
                 </Link>
                 <Link
-                  href="#contact"
+                  href="/faq#contact"
                   className="border border-white/15 hover:border-cyan-400/50 text-slate-200 hover:text-white hover:bg-white/5 font-semibold text-xs sm:text-sm tracking-wider uppercase px-7 py-3.5 rounded-xl transition-all"
                 >
                   TALK WITH US
@@ -397,7 +397,7 @@ export default function LandingPage() {
                     BOOK AN APPOINTMENT
                   </Link>
                   <Link
-                    href="#contact"
+                    href="/faq#contact"
                     className="border border-white/15 hover:border-cyan-400/50 text-slate-200 hover:text-white hover:bg-white/5 font-semibold text-xs sm:text-sm tracking-wider uppercase px-7 py-3.5 rounded-xl transition-all"
                   >
                     TALK WITH US
