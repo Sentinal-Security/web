@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { User, MfaSetupResponse } from "@/types/auth";
@@ -8,7 +8,7 @@ import { AppIntegration, IntegrationType } from "@/types/integration";
 import { getStoredSession, updateStoredUser, clearSession } from "@/lib/session";
 import { useMfa } from "@/hooks/useMfa";
 import { useIntegrations } from "@/hooks/useIntegrations";
-import { updateUserProfile } from "@/lib/api";
+import { updateUserProfile, checkBackendHealth } from "@/lib/api";
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -16,6 +16,56 @@ export default function DashboardPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
+
+  // Gateway Connectivity & Standby Detection
+  const [gatewayStatus, setGatewayStatus] = useState<"checking" | "online" | "cold_starting" | "offline">("checking");
+  const [gatewayLatency, setGatewayLatency] = useState<number | null>(null);
+  const [coldStartSeconds, setColdStartSeconds] = useState(0);
+  const [showConnectedNotice, setShowConnectedNotice] = useState(false);
+
+  const probeGateway = useCallback(async () => {
+    try {
+      const startTime = Date.now();
+      const res = await checkBackendHealth();
+      const latency = res.databasePingMs ?? (Date.now() - startTime);
+      setGatewayLatency(latency);
+      setGatewayStatus((prev) => {
+        if (prev === "cold_starting") {
+          setShowConnectedNotice(true);
+          setTimeout(() => setShowConnectedNotice(false), 5000);
+        }
+        return "online";
+      });
+    } catch {
+      setGatewayStatus("offline");
+    }
+  }, []);
+
+  useEffect(() => {
+    probeGateway();
+  }, [probeGateway]);
+
+  useEffect(() => {
+    if (gatewayStatus === "online" || gatewayStatus === "offline") return;
+
+    const timer = setInterval(() => {
+      setColdStartSeconds((prev) => {
+        const next = prev + 1;
+        if (next >= 3 && gatewayStatus === "checking") {
+          setGatewayStatus("cold_starting");
+        }
+        return next;
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [gatewayStatus]);
+
+  const retryGatewayConnection = () => {
+    setGatewayStatus("checking");
+    setColdStartSeconds(0);
+    probeGateway();
+  };
 
   const { setup, verifySetup, loading: mfaLoading, error: mfaError, setError: setMfaError } = useMfa();
   const {
@@ -375,6 +425,74 @@ export default function DashboardPage() {
 
       {/* Main Content Area */}
       <main className="flex-1 flex flex-col min-w-0 px-4 sm:px-6 lg:px-8 pt-6 pb-8">
+        {/* Backend Cold Start / Gateway Status Banner */}
+        {gatewayStatus === "cold_starting" && (
+          <div className="mb-4 px-3.5 py-2.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-200 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+            <div className="flex items-center gap-2.5">
+              <span className="relative flex h-2 w-2 shrink-0">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+              </span>
+              <div>
+                <span className="font-semibold text-amber-300">Backend API Gateway Cold Start</span>
+                <span className="text-slate-400 mx-2 hidden sm:inline">•</span>
+                <span className="text-slate-300 text-[11px]">
+                  Free Render instance is resuming from inactivity standby ({coldStartSeconds}s elapsed). Services and MFA challenges may take up to 60s to respond.
+                </span>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 text-[11px] text-amber-400 font-mono shrink-0">
+              <svg className="animate-spin h-3.5 w-3.5 text-amber-400" viewBox="0 0 24 24" fill="none">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+              <span>Waking container...</span>
+            </div>
+          </div>
+        )}
+
+        {gatewayStatus === "offline" && (
+          <div className="mb-4 px-3.5 py-2.5 rounded-lg bg-red-500/10 border border-red-500/30 text-red-200 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <span className="h-2 w-2 rounded-full bg-red-500 shrink-0" />
+              <div>
+                <span className="font-semibold text-red-300">Backend API Gateway Unreachable</span>
+                <span className="text-slate-400 mx-2 hidden sm:inline">•</span>
+                <span className="text-slate-300 text-[11px]">
+                  Unable to connect to the central authentication service. Retrying in background...
+                </span>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={retryGatewayConnection}
+              className="px-2.5 py-1 rounded bg-red-500/20 hover:bg-red-500/30 text-red-300 text-[11px] font-medium transition-colors cursor-pointer shrink-0"
+            >
+              Retry Connection
+            </button>
+          </div>
+        )}
+
+        {showConnectedNotice && (
+          <div className="mb-4 px-3.5 py-2 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-200 text-xs flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <span className="h-2 w-2 rounded-full bg-emerald-400 shrink-0" />
+              <span className="font-semibold text-emerald-300">Backend Gateway Connected</span>
+              <span className="text-slate-400 hidden sm:inline">•</span>
+              <span className="text-slate-300 text-[11px]">
+                Central API and Supabase PostgreSQL operational {gatewayLatency ? `(${gatewayLatency}ms)` : ""}.
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowConnectedNotice(false)}
+              className="text-slate-400 hover:text-white text-xs cursor-pointer"
+            >
+              ✕
+            </button>
+          </div>
+        )}
+
         {/* Top Header */}
         <header className="flex items-center justify-between gap-3 sm:gap-4 w-full">
           <div className="flex items-center gap-2 sm:gap-3 flex-1 max-w-[280px] sm:max-w-xs md:max-w-md">
@@ -404,6 +522,37 @@ export default function DashboardPage() {
           </div>
 
           <div className="flex items-center gap-2 sm:gap-3">
+            {/* Gateway Status Badge */}
+            <div className="hidden lg:inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-900/60 border border-white/10 text-[11px] text-slate-300 font-mono">
+              <span
+                className={`w-1.5 h-1.5 rounded-full ${
+                  gatewayStatus === "online"
+                    ? "bg-emerald-400"
+                    : gatewayStatus === "cold_starting"
+                    ? "bg-amber-400 animate-pulse"
+                    : "bg-red-400"
+                }`}
+              />
+              <span className="text-slate-400">Gateway:</span>
+              <span
+                className={
+                  gatewayStatus === "online"
+                    ? "text-emerald-400"
+                    : gatewayStatus === "cold_starting"
+                    ? "text-amber-300"
+                    : "text-red-400"
+                }
+              >
+                {gatewayStatus === "online"
+                  ? gatewayLatency
+                    ? `${gatewayLatency}ms`
+                    : "Online"
+                  : gatewayStatus === "cold_starting"
+                  ? "Standby Wake"
+                  : "Offline"}
+              </span>
+            </div>
+
             <button
               type="button"
               onClick={() => setAddModalOpen(true)}
@@ -562,12 +711,27 @@ export default function DashboardPage() {
 
         {/* Dynamic Content: Loading vs Empty State vs Configured Services Grid */}
         {servicesLoading ? (
-          <div className="flex-1 flex flex-col items-center justify-center py-20 text-slate-400">
-            <svg className="animate-spin h-6 w-6 text-cyan-400 mb-2.5" viewBox="0 0 24 24" fill="none">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-            </svg>
-            <p className="text-xs">Loading configured applications...</p>
+          <div className="flex-1 flex flex-col items-center justify-center py-20 text-slate-400 text-center">
+            {gatewayStatus === "cold_starting" ? (
+              <>
+                <svg className="animate-spin h-7 w-7 text-amber-400 mb-3" viewBox="0 0 24 24" fill="none">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                <p className="text-xs font-semibold text-white">Backend Gateway Cold Start in Progress</p>
+                <p className="text-[11px] text-slate-400 mt-1 max-w-sm leading-relaxed">
+                  The Render cloud container is resuming from standby ({coldStartSeconds}s elapsed). Loaded services will appear automatically.
+                </p>
+              </>
+            ) : (
+              <>
+                <svg className="animate-spin h-6 w-6 text-cyan-400 mb-2.5" viewBox="0 0 24 24" fill="none">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                <p className="text-xs">Loading configured applications...</p>
+              </>
+            )}
           </div>
         ) : filteredApps.length === 0 ? (
           /* Clean Empty State (Newly Created Accounts Start Clean) */
