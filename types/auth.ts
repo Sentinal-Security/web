@@ -2,7 +2,7 @@ export interface User {
   userId: number;
   email: string;
   fullName: string;
-  role?: "ADMIN" | "USER";
+  role?: "ADMIN" | "HR" | "FINANCE" | "DEVOPS" | "USER" | string;
   company?: string;
   mfaEnabled: boolean;
 }
@@ -17,7 +17,7 @@ export interface RegisterPayload {
   email: string;
   password: string;
   fullName: string;
-  role?: "ADMIN" | "USER";
+  role?: "ADMIN" | "HR" | "FINANCE" | "DEVOPS" | "USER" | string;
   company?: string;
 }
 

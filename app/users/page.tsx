@@ -64,7 +64,7 @@ export default function UserManagementPage() {
 
   // Filter & Search State
   const [searchQuery, setSearchQuery] = useState("");
-  const [roleFilter, setRoleFilter] = useState<"ALL" | "ADMIN" | "USER">("ALL");
+  const [roleFilter, setRoleFilter] = useState<string>("ALL");
   const [mfaFilter, setMfaFilter] = useState<"ALL" | "ENROLLED" | "UNPAIRED">("ALL");
 
   // Unified Provisioning Modal State (Single + Bulk)
@@ -74,6 +74,7 @@ export default function UserManagementPage() {
   // Single Member Provisioning Form State
   const [singleName, setSingleName] = useState("");
   const [singleEmail, setSingleEmail] = useState("");
+  const [singleRole, setSingleRole] = useState<string>("USER");
   const [singlePasswordMode, setSinglePasswordMode] = useState<"auto" | "custom">("auto");
   const [singleTempPassword, setSingleTempPassword] = useState("");
   const [singleCustomPassword, setSingleCustomPassword] = useState("");
@@ -215,7 +216,7 @@ export default function UserManagementPage() {
       fullName: singleName.trim(),
       email: singleEmail.trim().toLowerCase(),
       password: finalPassword,
-      role: "USER", // STRICTLY STANDARD USER ONLY!
+      role: singleRole,
       company: currentUser?.company,
     });
     setSingleLoading(false);
@@ -227,7 +228,7 @@ export default function UserManagementPage() {
           fullName: created.fullName,
           email: created.email,
           tempPass: finalPassword,
-          role: "USER",
+          role: created.role || singleRole,
         },
       ]);
       setCredentialsCopied(false);
@@ -235,6 +236,7 @@ export default function UserManagementPage() {
       setSingleName("");
       setSingleEmail("");
       setSingleCustomPassword("");
+      setSingleRole("USER");
     } else {
       setSingleErr("Failed to create user. Ensure email is unique within the system.");
     }
@@ -595,12 +597,15 @@ export default function UserManagementPage() {
           <div className="flex items-center gap-2">
             <select
               value={roleFilter}
-              onChange={(e) => setRoleFilter(e.target.value as any)}
+              onChange={(e) => setRoleFilter(e.target.value)}
               className="bg-slate-900 border border-white/10 text-xs text-slate-300 rounded-xl px-3 py-1.5 outline-none cursor-pointer"
             >
               <option value="ALL">All Roles</option>
               <option value="ADMIN">Admins Only</option>
-              <option value="USER">Users Only</option>
+              <option value="HR">HR / Mods</option>
+              <option value="FINANCE">Finance Only</option>
+              <option value="DEVOPS">DevOps Only</option>
+              <option value="USER">Standard Users</option>
             </select>
 
             <select
@@ -702,10 +707,16 @@ export default function UserManagementPage() {
                             className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold ${
                               u.role === "ADMIN"
                                 ? "bg-purple-500/10 border border-purple-500/30 text-purple-300"
+                                : u.role === "HR"
+                                ? "bg-amber-500/10 border border-amber-500/30 text-amber-300"
+                                : u.role === "FINANCE"
+                                ? "bg-pink-500/10 border border-pink-500/30 text-pink-300"
+                                : u.role === "DEVOPS"
+                                ? "bg-cyan-500/10 border border-cyan-500/30 text-cyan-300"
                                 : "bg-blue-500/10 border border-blue-500/30 text-blue-300"
                             }`}
                           >
-                            {u.role === "ADMIN" ? "ADMIN" : "MEMBER"}
+                            {u.role || "USER"}
                           </span>
                         </td>
 
@@ -876,20 +887,23 @@ export default function UserManagementPage() {
                   />
                 </div>
 
-                {/* Role Assignment - Strictly Locked to USER */}
+                {/* Role Assignment - Select Role / Rank */}
                 <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1">Assigned Security Role</label>
-                  <div className="p-2.5 rounded-xl bg-slate-900 border border-white/10 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold text-white">Standard Member</span>
-                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/15 border border-blue-500/30 text-blue-300 font-mono font-semibold">
-                        USER
-                      </span>
-                    </div>
-                    <span className="text-[10px] text-slate-500 italic">
-                      Admins must self-register via public onboarding
-                    </span>
-                  </div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">Assigned Security Role / Rank *</label>
+                  <select
+                    value={singleRole}
+                    onChange={(e) => setSingleRole(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl bg-black border border-white/15 text-xs text-white outline-none focus:border-cyan-400 cursor-pointer"
+                  >
+                    <option value="USER">USER — Standard Employee (Default)</option>
+                    <option value="HR">HR — Human Resources & Staff Moderator</option>
+                    <option value="FINANCE">FINANCE — Payroll & Disbursal Officer</option>
+                    <option value="DEVOPS">DEVOPS — Incident Commander & Site Reliability</option>
+                    <option value="ADMIN">ADMIN — Enterprise Superuser</option>
+                  </select>
+                  <p className="text-[10px] text-slate-500 mt-1">
+                    Grants tailored privileges across connected SSO client applications.
+                  </p>
                 </div>
 
                 {/* Temporary Password Section */}

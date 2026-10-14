@@ -15,7 +15,7 @@ export interface CreateUserPayload {
   email: string;
   password: string;
   fullName: string;
-  role: "ADMIN" | "USER";
+  role: "ADMIN" | "USER" | "HR" | "FINANCE" | "DEVOPS" | string;
   company?: string;
 }
 
@@ -31,7 +31,7 @@ export interface BatchCreateUserItem {
   fullName: string;
   email: string;
   password: string;
-  role: "ADMIN" | "USER";
+  role: "ADMIN" | "USER" | "HR" | "FINANCE" | "DEVOPS" | string;
   serviceIds: number[];
 }
 
