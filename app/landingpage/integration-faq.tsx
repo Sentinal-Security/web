@@ -68,18 +68,18 @@ export default function IntegrationFaq() {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-start">
         {/* Left Column: Heading & Contact Note */}
         <div className="lg:col-span-4 space-y-5">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#54f4fc]/10 border border-[#54f4fc]/30 text-[#54f4fc] text-xs font-semibold">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 text-xs font-semibold">
             Frequently Asked Questions
           </div>
           <h2 className="text-3xl sm:text-4xl font-bold text-white tracking-tight leading-tight">
-            Company API & Integration <span className="text-[#54f4fc]">FAQ</span>
+            Company API & Integration <span className="text-cyan-400">FAQ</span>
           </h2>
           <p className="text-sm text-slate-300 leading-relaxed">
             Everything your engineering and security team needs to know about integrating Sentinel into your enterprise infrastructure.
           </p>
 
-          <div className="p-5 rounded-2xl bg-[#070e1c] border border-cyan-500/20 space-y-3">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-[#54f4fc]">
+          <div className="p-5 rounded-2xl bg-[#080d1a] border border-white/10 space-y-3">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-cyan-400">
               Have a Custom Integration Need?
             </h3>
             <p className="text-xs text-slate-400 leading-relaxed">
@@ -88,7 +88,7 @@ export default function IntegrationFaq() {
             <div className="pt-1">
               <Link
                 href="/docs"
-                className="inline-flex items-center gap-1.5 text-xs font-bold text-[#54f4fc] hover:underline"
+                className="inline-flex items-center gap-1.5 text-xs font-bold text-cyan-400 hover:text-cyan-300 hover:underline"
               >
                 <span>Read technical documentation</span>
                 <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
@@ -108,8 +108,8 @@ export default function IntegrationFaq() {
                 key={item.question}
                 className={`rounded-2xl border transition-all duration-200 overflow-hidden ${
                   isOpen
-                    ? "bg-[#081224] border-cyan-500/40 shadow-[0_0_20px_rgba(84,244,252,0.08)]"
-                    : "bg-[#050914] border-white/10 hover:border-white/20"
+                    ? "bg-[#0c1424] border-cyan-500/40"
+                    : "bg-[#080d1a] border-white/10 hover:border-white/20"
                 }`}
               >
                 <button
@@ -118,7 +118,7 @@ export default function IntegrationFaq() {
                   className="w-full p-5 sm:p-6 text-left flex items-start justify-between gap-4 cursor-pointer"
                 >
                   <div>
-                    <span className="text-[10px] font-mono font-semibold uppercase tracking-wider text-[#54f4fc] mb-1 block">
+                    <span className="text-[10px] font-mono font-semibold uppercase tracking-wider text-cyan-400 mb-1 block">
                       {item.category}
                     </span>
                     <h3 className="text-sm sm:text-base font-bold text-white tracking-tight">
@@ -129,7 +129,7 @@ export default function IntegrationFaq() {
                   <div
                     className={`w-7 h-7 rounded-xl flex items-center justify-center shrink-0 border transition-transform ${
                       isOpen
-                        ? "bg-cyan-500/20 text-[#54f4fc] border-cyan-500/40 rotate-180"
+                        ? "bg-cyan-500/15 text-cyan-400 border-cyan-500/30 rotate-180"
                         : "bg-white/5 text-slate-400 border-white/10"
                     }`}
                   >
@@ -146,7 +146,7 @@ export default function IntegrationFaq() {
                       <div>
                         <Link
                           href={item.linkHref}
-                          className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#54f4fc] hover:underline"
+                          className="inline-flex items-center gap-1.5 text-xs font-semibold text-cyan-400 hover:underline"
                         >
                           <span>{item.linkText}</span>
                           <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">

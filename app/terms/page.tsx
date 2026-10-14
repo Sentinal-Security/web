@@ -9,14 +9,14 @@ export default function TermsPage() {
   const [activeTab, setActiveTab] = useState<"terms" | "privacy">("terms");
 
   return (
-    <div className="min-h-screen bg-black text-white selection:bg-[#54f4fc] selection:text-black font-sans antialiased overflow-x-hidden flex flex-col justify-between">
+    <div className="min-h-screen bg-black text-white selection:bg-cyan-500/30 selection:text-white font-sans antialiased overflow-x-hidden flex flex-col justify-between">
       <Header />
 
       <main className="w-full max-w-[1400px] mx-auto px-6 sm:px-10 lg:px-16 py-12 flex-1">
         {/* Breadcrumb & Navigation Action */}
         <div className="flex items-center justify-between gap-4 mb-8 pb-4 border-b border-white/10">
           <div className="flex items-center gap-2 text-xs text-slate-400">
-            <Link href="/landingpage" className="hover:text-[#54f4fc] transition-colors">
+            <Link href="/landingpage" className="hover:text-cyan-400 transition-colors">
               Home
             </Link>
             <span>/</span>
@@ -25,7 +25,7 @@ export default function TermsPage() {
 
           <Link
             href="/register"
-            className="inline-flex items-center gap-2 text-xs font-semibold text-[#54f4fc] hover:text-white transition-colors"
+            className="inline-flex items-center gap-2 text-xs font-semibold text-cyan-400 hover:text-white transition-colors"
           >
             <span>Back to Registration</span>
             <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
@@ -35,11 +35,11 @@ export default function TermsPage() {
         </div>
 
         {/* Hero Section */}
-        <div className="relative pl-6 sm:pl-8 border-l-[2px] border-[#54f4fc] mb-12">
-          <div className="absolute top-0 left-0 w-6 h-[2px] bg-[#54f4fc]" />
-          <div className="absolute bottom-0 left-0 w-6 h-[2px] bg-[#54f4fc]" />
+        <div className="relative pl-6 sm:pl-8 border-l-2 border-cyan-500/70 mb-12">
+          <div className="absolute top-0 left-0 w-5 h-[2px] bg-cyan-400" />
+          <div className="absolute bottom-0 left-0 w-5 h-[2px] bg-cyan-400" />
 
-          <span className="text-xs font-bold tracking-widest text-[#54f4fc] uppercase">
+          <span className="text-xs font-bold tracking-widest text-cyan-400 uppercase">
             Sentinel Security Governance
           </span>
           <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight text-white mt-2 mb-4">
@@ -63,7 +63,7 @@ export default function TermsPage() {
             onClick={() => setActiveTab("terms")}
             className={`px-5 py-2.5 rounded-xl text-xs font-bold tracking-wide uppercase transition-all cursor-pointer ${
               activeTab === "terms"
-                ? "bg-[#54f4fc] text-black shadow-[0_0_20px_rgba(84,244,252,0.25)]"
+                ? "bg-cyan-500 text-slate-950 shadow-sm"
                 : "bg-slate-900/80 text-slate-300 hover:text-white border border-white/10"
             }`}
           >
@@ -75,7 +75,7 @@ export default function TermsPage() {
             onClick={() => setActiveTab("privacy")}
             className={`px-5 py-2.5 rounded-xl text-xs font-bold tracking-wide uppercase transition-all cursor-pointer ${
               activeTab === "privacy"
-                ? "bg-[#54f4fc] text-black shadow-[0_0_20px_rgba(84,244,252,0.25)]"
+                ? "bg-cyan-500 text-slate-950 shadow-sm"
                 : "bg-slate-900/80 text-slate-300 hover:text-white border border-white/10"
             }`}
           >
@@ -93,7 +93,7 @@ export default function TermsPage() {
                 {/* Clause 1 */}
                 <section id="terms-acceptance" className="p-6 rounded-2xl bg-[#090d14] border border-white/10">
                   <h2 className="text-lg font-bold text-white mb-3 flex items-center gap-3">
-                    <span className="text-xs font-mono text-[#54f4fc] border border-[#54f4fc]/30 px-2 py-0.5 rounded">
+                    <span className="text-xs font-mono text-cyan-400 border border-cyan-500/30 px-2 py-0.5 rounded">
                       SECTION 01
                     </span>
                     Acceptance of Platform Terms
@@ -112,7 +112,7 @@ export default function TermsPage() {
                 {/* Clause 2 */}
                 <section id="terms-multitenancy" className="p-6 rounded-2xl bg-[#090d14] border border-white/10">
                   <h2 className="text-lg font-bold text-white mb-3 flex items-center gap-3">
-                    <span className="text-xs font-mono text-[#54f4fc] border border-[#54f4fc]/30 px-2 py-0.5 rounded">
+                    <span className="text-xs font-mono text-cyan-400 border border-cyan-500/30 px-2 py-0.5 rounded">
                       SECTION 02
                     </span>
                     Tenant Workspaces &amp; Company Boundaries
@@ -142,7 +142,7 @@ export default function TermsPage() {
                 {/* Clause 3 */}
                 <section id="terms-authentication" className="p-6 rounded-2xl bg-[#090d14] border border-white/10">
                   <h2 className="text-lg font-bold text-white mb-3 flex items-center gap-3">
-                    <span className="text-xs font-mono text-[#54f4fc] border border-[#54f4fc]/30 px-2 py-0.5 rounded">
+                    <span className="text-xs font-mono text-cyan-400 border border-cyan-500/30 px-2 py-0.5 rounded">
                       SECTION 03
                     </span>
                     Authentication Factors &amp; Credential Governance
@@ -167,7 +167,7 @@ export default function TermsPage() {
                 {/* Clause 4 */}
                 <section id="terms-rbac" className="p-6 rounded-2xl bg-[#090d14] border border-white/10">
                   <h2 className="text-lg font-bold text-white mb-3 flex items-center gap-3">
-                    <span className="text-xs font-mono text-[#54f4fc] border border-[#54f4fc]/30 px-2 py-0.5 rounded">
+                    <span className="text-xs font-mono text-cyan-400 border border-cyan-500/30 px-2 py-0.5 rounded">
                       SECTION 04
                     </span>
                     Role-Based Access Control &amp; Application Provisioning
@@ -185,7 +185,7 @@ export default function TermsPage() {
                 {/* Clause 5 */}
                 <section id="terms-prohibited" className="p-6 rounded-2xl bg-[#090d14] border border-white/10">
                   <h2 className="text-lg font-bold text-white mb-3 flex items-center gap-3">
-                    <span className="text-xs font-mono text-[#54f4fc] border border-[#54f4fc]/30 px-2 py-0.5 rounded">
+                    <span className="text-xs font-mono text-cyan-400 border border-cyan-500/30 px-2 py-0.5 rounded">
                       SECTION 05
                     </span>
                     Acceptable Use &amp; Security Prohibitions
@@ -205,7 +205,7 @@ export default function TermsPage() {
                 {/* Clause 6 */}
                 <section id="terms-termination" className="p-6 rounded-2xl bg-[#090d14] border border-white/10">
                   <h2 className="text-lg font-bold text-white mb-3 flex items-center gap-3">
-                    <span className="text-xs font-mono text-[#54f4fc] border border-[#54f4fc]/30 px-2 py-0.5 rounded">
+                    <span className="text-xs font-mono text-cyan-400 border border-cyan-500/30 px-2 py-0.5 rounded">
                       SECTION 06
                     </span>
                     Offboarding &amp; Account Termination
@@ -226,7 +226,7 @@ export default function TermsPage() {
                 {/* Privacy Clause 1 */}
                 <section id="privacy-collection" className="p-6 rounded-2xl bg-[#090d14] border border-white/10">
                   <h2 className="text-lg font-bold text-white mb-3 flex items-center gap-3">
-                    <span className="text-xs font-mono text-[#54f4fc] border border-[#54f4fc]/30 px-2 py-0.5 rounded">
+                    <span className="text-xs font-mono text-cyan-400 border border-cyan-500/30 px-2 py-0.5 rounded">
                       PRIVACY 01
                     </span>
                     Information Collected Under Least Privilege
@@ -254,7 +254,7 @@ export default function TermsPage() {
                 {/* Privacy Clause 2 */}
                 <section id="privacy-encryption" className="p-6 rounded-2xl bg-[#090d14] border border-white/10">
                   <h2 className="text-lg font-bold text-white mb-3 flex items-center gap-3">
-                    <span className="text-xs font-mono text-[#54f4fc] border border-[#54f4fc]/30 px-2 py-0.5 rounded">
+                    <span className="text-xs font-mono text-cyan-400 border border-cyan-500/30 px-2 py-0.5 rounded">
                       PRIVACY 02
                     </span>
                     Zero Plaintext Credential Storage
@@ -281,7 +281,7 @@ export default function TermsPage() {
                 {/* Privacy Clause 3 */}
                 <section id="privacy-isolation" className="p-6 rounded-2xl bg-[#090d14] border border-white/10">
                   <h2 className="text-lg font-bold text-white mb-3 flex items-center gap-3">
-                    <span className="text-xs font-mono text-[#54f4fc] border border-[#54f4fc]/30 px-2 py-0.5 rounded">
+                    <span className="text-xs font-mono text-cyan-400 border border-cyan-500/30 px-2 py-0.5 rounded">
                       PRIVACY 03
                     </span>
                     Multi-Tenant Data Confidentiality
@@ -301,7 +301,7 @@ export default function TermsPage() {
                 {/* Privacy Clause 4 */}
                 <section id="privacy-audit" className="p-6 rounded-2xl bg-[#090d14] border border-white/10">
                   <h2 className="text-lg font-bold text-white mb-3 flex items-center gap-3">
-                    <span className="text-xs font-mono text-[#54f4fc] border border-[#54f4fc]/30 px-2 py-0.5 rounded">
+                    <span className="text-xs font-mono text-cyan-400 border border-cyan-500/30 px-2 py-0.5 rounded">
                       PRIVACY 04
                     </span>
                     Audit Logs &amp; Forensics Compliance
@@ -321,7 +321,7 @@ export default function TermsPage() {
                 {/* Privacy Clause 5 */}
                 <section id="privacy-rights" className="p-6 rounded-2xl bg-[#090d14] border border-white/10">
                   <h2 className="text-lg font-bold text-white mb-3 flex items-center gap-3">
-                    <span className="text-xs font-mono text-[#54f4fc] border border-[#54f4fc]/30 px-2 py-0.5 rounded">
+                    <span className="text-xs font-mono text-cyan-400 border border-cyan-500/30 px-2 py-0.5 rounded">
                       PRIVACY 05
                     </span>
                     Data Portability &amp; Tenant Rights
@@ -348,7 +348,7 @@ export default function TermsPage() {
           <aside className="lg:col-span-4">
             <div className="sticky top-28 p-6 rounded-2xl bg-[#090d14] border border-white/10 space-y-6">
               <div>
-                <h3 className="text-xs font-bold tracking-wider text-[#54f4fc] uppercase mb-1">
+                <h3 className="text-xs font-bold tracking-wider text-cyan-400 uppercase mb-1">
                   Governance Quick Links
                 </h3>
                 <p className="text-[11px] text-slate-400">
@@ -359,40 +359,40 @@ export default function TermsPage() {
               <div className="space-y-2 text-xs">
                 {activeTab === "terms" ? (
                   <>
-                    <a href="#terms-acceptance" className="block text-slate-300 hover:text-[#54f4fc] transition-colors py-1">
+                    <a href="#terms-acceptance" className="block text-slate-300 hover:text-cyan-400 transition-colors py-1">
                       01. Acceptance of Terms
                     </a>
-                    <a href="#terms-multitenancy" className="block text-slate-300 hover:text-[#54f4fc] transition-colors py-1">
+                    <a href="#terms-multitenancy" className="block text-slate-300 hover:text-cyan-400 transition-colors py-1">
                       02. Tenant Workspace Isolation
                     </a>
-                    <a href="#terms-authentication" className="block text-slate-300 hover:text-[#54f4fc] transition-colors py-1">
+                    <a href="#terms-authentication" className="block text-slate-300 hover:text-cyan-400 transition-colors py-1">
                       03. Authentication &amp; TOTP Factors
                     </a>
-                    <a href="#terms-rbac" className="block text-slate-300 hover:text-[#54f4fc] transition-colors py-1">
+                    <a href="#terms-rbac" className="block text-slate-300 hover:text-cyan-400 transition-colors py-1">
                       04. Role-Based Access Control
                     </a>
-                    <a href="#terms-prohibited" className="block text-slate-300 hover:text-[#54f4fc] transition-colors py-1">
+                    <a href="#terms-prohibited" className="block text-slate-300 hover:text-cyan-400 transition-colors py-1">
                       05. Security Prohibitions
                     </a>
-                    <a href="#terms-termination" className="block text-slate-300 hover:text-[#54f4fc] transition-colors py-1">
+                    <a href="#terms-termination" className="block text-slate-300 hover:text-cyan-400 transition-colors py-1">
                       06. Offboarding &amp; Termination
                     </a>
                   </>
                 ) : (
                   <>
-                    <a href="#privacy-collection" className="block text-slate-300 hover:text-[#54f4fc] transition-colors py-1">
+                    <a href="#privacy-collection" className="block text-slate-300 hover:text-cyan-400 transition-colors py-1">
                       01. Least Privilege Collection
                     </a>
-                    <a href="#privacy-encryption" className="block text-slate-300 hover:text-[#54f4fc] transition-colors py-1">
+                    <a href="#privacy-encryption" className="block text-slate-300 hover:text-cyan-400 transition-colors py-1">
                       02. Cryptographic Assurance
                     </a>
-                    <a href="#privacy-isolation" className="block text-slate-300 hover:text-[#54f4fc] transition-colors py-1">
+                    <a href="#privacy-isolation" className="block text-slate-300 hover:text-cyan-400 transition-colors py-1">
                       03. Multi-Tenant Confidentiality
                     </a>
-                    <a href="#privacy-audit" className="block text-slate-300 hover:text-[#54f4fc] transition-colors py-1">
+                    <a href="#privacy-audit" className="block text-slate-300 hover:text-cyan-400 transition-colors py-1">
                       04. Audit &amp; Forensics
                     </a>
-                    <a href="#privacy-rights" className="block text-slate-300 hover:text-[#54f4fc] transition-colors py-1">
+                    <a href="#privacy-rights" className="block text-slate-300 hover:text-cyan-400 transition-colors py-1">
                       05. Data Portability &amp; Rights
                     </a>
                   </>

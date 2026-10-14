@@ -22,7 +22,7 @@ export default function Header() {
         <Link href="/landingpage" className="flex items-center gap-2.5 group">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/logo.png" alt="Sentinel Logo" className="w-8 h-8 rounded-lg object-contain" />
-          <span className="text-2xl font-bold tracking-tight text-[#54f4fc] group-hover:brightness-110 transition-all">
+          <span className="text-2xl font-bold tracking-tight text-cyan-400 group-hover:text-cyan-300 transition-all">
             Sentinel
           </span>
         </Link>
@@ -32,15 +32,15 @@ export default function Header() {
         <nav className="hidden md:flex items-center space-x-8 text-sm font-medium text-gray-300">
           <Link
             href="#pricing"
-            className="hover:text-[#54f4fc] transition-colors"
+            className="hover:text-cyan-400 transition-colors"
           >
             Pricing
           </Link>
 
-          <div className="relative group flex items-center cursor-pointer hover:text-[#54f4fc] transition-colors">
+          <div className="relative group flex items-center cursor-pointer hover:text-cyan-400 transition-colors">
             <span>Features</span>
             <svg
-              className="w-3.5 h-3.5 ml-1 transition-transform group-hover:rotate-180 text-gray-400 group-hover:text-[#54f4fc]"
+              className="w-3.5 h-3.5 ml-1 transition-transform group-hover:rotate-180 text-gray-400 group-hover:text-cyan-400"
               fill="currentColor"
               viewBox="0 0 20 20"
             >
@@ -50,28 +50,28 @@ export default function Header() {
                 clipRule="evenodd"
               />
             </svg>
-            <div className="absolute top-full left-0 mt-2 w-48 bg-[#090d14] border border-cyan-900/50 rounded-lg p-2 shadow-2xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200">
+            <div className="absolute top-full left-0 mt-2 w-48 bg-slate-950 border border-white/10 rounded-lg p-2 shadow-2xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200">
               <Link
                 href="#services"
-                className="block px-3 py-2 text-xs text-gray-300 hover:text-[#54f4fc] hover:bg-cyan-950/40 rounded"
+                className="block px-3 py-2 text-xs text-slate-300 hover:text-cyan-400 hover:bg-cyan-500/10 rounded"
               >
                 IAM Services
               </Link>
               <Link
                 href="#services"
-                className="block px-3 py-2 text-xs text-gray-300 hover:text-[#54f4fc] hover:bg-cyan-950/40 rounded"
+                className="block px-3 py-2 text-xs text-slate-300 hover:text-cyan-400 hover:bg-cyan-500/10 rounded"
               >
                 Device Management
               </Link>
               <Link
                 href="#services"
-                className="block px-3 py-2 text-xs text-gray-300 hover:text-[#54f4fc] hover:bg-cyan-950/40 rounded"
+                className="block px-3 py-2 text-xs text-slate-300 hover:text-cyan-400 hover:bg-cyan-500/10 rounded"
               >
                 MFA & Audit
               </Link>
               <Link
                 href="/docs"
-                className="block px-3 py-2 text-xs text-gray-300 hover:text-[#54f4fc] hover:bg-cyan-950/40 rounded"
+                className="block px-3 py-2 text-xs text-slate-300 hover:text-cyan-400 hover:bg-cyan-500/10 rounded"
               >
                 Developer API & Docs
               </Link>
@@ -80,25 +80,25 @@ export default function Header() {
 
           <Link
             href="#developers"
-            className="hover:text-[#54f4fc] transition-colors"
+            className="hover:text-cyan-400 transition-colors"
           >
             API Integration
           </Link>
           <Link
             href="/docs"
-            className="hover:text-[#54f4fc] transition-colors"
+            className="hover:text-cyan-400 transition-colors"
           >
             Docs
           </Link>
           <Link
             href="#faq"
-            className="hover:text-[#54f4fc] transition-colors"
+            className="hover:text-cyan-400 transition-colors"
           >
             FAQ
           </Link>
           <Link
             href="#services"
-            className="hover:text-[#54f4fc] transition-colors"
+            className="hover:text-cyan-400 transition-colors"
           >
             Services
           </Link>
@@ -106,7 +106,7 @@ export default function Header() {
             href="/dw"
             target="_blank"
             rel="noopener noreferrer"
-            className="hover:text-[#54f4fc] transition-colors"
+            className="hover:text-cyan-400 transition-colors"
           >
             Mobile App
           </Link>
@@ -117,7 +117,7 @@ export default function Header() {
           {isAuthenticated ? (
             <Link
               href="/dashboard"
-              className="text-xs font-bold tracking-widest text-[#54f4fc] uppercase hover:text-white transition-colors"
+              className="text-xs font-bold tracking-widest text-cyan-400 uppercase hover:text-white transition-colors"
             >
               DASHBOARD
             </Link>
@@ -125,13 +125,13 @@ export default function Header() {
             <>
               <Link
                 href="/login"
-                className="text-xs font-bold tracking-widest text-gray-300 uppercase hover:text-[#54f4fc] transition-colors"
+                className="text-xs font-bold tracking-widest text-gray-300 uppercase hover:text-cyan-400 transition-colors"
               >
                 SIGN IN
               </Link>
               <Link
                 href="/register"
-                className="text-xs font-bold tracking-widest text-[#54f4fc] uppercase hover:text-white transition-colors"
+                className="text-xs font-bold tracking-widest text-cyan-400 uppercase hover:text-white transition-colors"
               >
                 GET STARTED
               </Link>
@@ -144,7 +144,7 @@ export default function Header() {
           <button
             type="button"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="text-gray-300 hover:text-[#54f4fc] p-2 focus:outline-none"
+            className="text-gray-300 hover:text-cyan-400 p-2 focus:outline-none"
             aria-label="Toggle menu"
           >
             <svg
@@ -175,46 +175,46 @@ export default function Header() {
 
       {/* Mobile Dropdown Menu */}
       {mobileMenuOpen && (
-        <div className="md:hidden bg-[#05080e] border-b border-white/10 px-4 pt-2 pb-6 space-y-3">
+        <div className="md:hidden bg-slate-950 border-b border-white/10 px-4 pt-2 pb-6 space-y-3">
           <Link
             href="#pricing"
             onClick={() => setMobileMenuOpen(false)}
-            className="block text-gray-300 hover:text-[#54f4fc] py-1 text-base font-medium"
+            className="block text-gray-300 hover:text-cyan-400 py-1 text-base font-medium"
           >
             Pricing
           </Link>
           <Link
             href="#services"
             onClick={() => setMobileMenuOpen(false)}
-            className="block text-gray-300 hover:text-[#54f4fc] py-1 text-base font-medium"
+            className="block text-gray-300 hover:text-cyan-400 py-1 text-base font-medium"
           >
             Features
           </Link>
           <Link
             href="/docs"
             onClick={() => setMobileMenuOpen(false)}
-            className="block text-gray-300 hover:text-[#54f4fc] py-1 text-base font-medium"
+            className="block text-gray-300 hover:text-cyan-400 py-1 text-base font-medium"
           >
             Developer API & Docs
           </Link>
           <Link
             href="#support"
             onClick={() => setMobileMenuOpen(false)}
-            className="block text-gray-300 hover:text-[#54f4fc] py-1 text-base font-medium"
+            className="block text-gray-300 hover:text-cyan-400 py-1 text-base font-medium"
           >
             Support
           </Link>
           <Link
             href="#blog"
             onClick={() => setMobileMenuOpen(false)}
-            className="block text-gray-300 hover:text-[#54f4fc] py-1 text-base font-medium"
+            className="block text-gray-300 hover:text-cyan-400 py-1 text-base font-medium"
           >
             Blog
           </Link>
           <Link
             href="#partners"
             onClick={() => setMobileMenuOpen(false)}
-            className="block text-gray-300 hover:text-[#54f4fc] py-1 text-base font-medium"
+            className="block text-gray-300 hover:text-cyan-400 py-1 text-base font-medium"
           >
             Partners
           </Link>
@@ -223,7 +223,7 @@ export default function Header() {
               <Link
                 href="/dashboard"
                 onClick={() => setMobileMenuOpen(false)}
-                className="inline-block text-sm font-bold tracking-widest text-[#54f4fc] uppercase hover:text-white"
+                className="inline-block text-sm font-bold tracking-widest text-cyan-400 uppercase hover:text-white"
               >
                 DASHBOARD
               </Link>
@@ -232,14 +232,14 @@ export default function Header() {
                 <Link
                   href="/login"
                   onClick={() => setMobileMenuOpen(false)}
-                  className="text-sm font-bold tracking-widest text-gray-300 uppercase hover:text-[#54f4fc]"
+                  className="text-sm font-bold tracking-widest text-gray-300 uppercase hover:text-cyan-400"
                 >
                   SIGN IN
                 </Link>
                 <Link
                   href="/register"
                   onClick={() => setMobileMenuOpen(false)}
-                  className="inline-block text-sm font-bold tracking-widest text-[#54f4fc] uppercase hover:text-white"
+                  className="inline-block text-sm font-bold tracking-widest text-cyan-400 uppercase hover:text-white"
                 >
                   GET STARTED
                 </Link>

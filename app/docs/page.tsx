@@ -143,36 +143,36 @@ func ValidateSentinelSession(userId int) (*SentinelIdentity, error) {
   };
 
   return (
-    <div className="min-h-screen bg-black text-white selection:bg-[#54f4fc] selection:text-black font-sans antialiased overflow-x-hidden">
+    <div className="min-h-screen bg-black text-white selection:bg-cyan-500/30 selection:text-white font-sans antialiased overflow-x-hidden">
       {/* 1. Header */}
       <Header />
 
       <main className="max-w-[1600px] mx-auto px-6 sm:px-10 lg:px-16 py-12 md:py-16">
         {/* Breadcrumb & Section Badge */}
-        <div className="flex items-center gap-3 text-xs text-gray-400 mb-6">
-          <Link href="/" className="hover:text-[#54f4fc] transition-colors">
+        <div className="flex items-center gap-3 text-xs text-slate-400 mb-6">
+          <Link href="/" className="hover:text-cyan-400 transition-colors">
             Home
           </Link>
           <span>/</span>
-          <span className="text-[#54f4fc] font-medium">Developer Documentation</span>
+          <span className="text-cyan-400 font-medium">Developer Documentation</span>
         </div>
 
         {/* Header Hero */}
-        <div className="border-l-[2px] border-[#54f4fc] pl-6 sm:pl-8 mb-16 relative">
-          <div className="absolute top-0 left-0 w-6 h-[2px] bg-[#54f4fc]" />
-          <div className="absolute bottom-0 left-0 w-6 h-[2px] bg-[#54f4fc]" />
+        <div className="border-l-2 border-cyan-500/70 pl-6 sm:pl-8 mb-16 relative">
+          <div className="absolute top-0 left-0 w-5 h-[2px] bg-cyan-400" />
+          <div className="absolute bottom-0 left-0 w-5 h-[2px] bg-cyan-400" />
 
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#54f4fc]/10 border border-[#54f4fc]/30 text-[#54f4fc] text-xs font-semibold mb-4">
-            <span className="w-1.5 h-1.5 rounded-full bg-[#54f4fc] animate-pulse" />
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 text-xs font-semibold mb-4">
+            <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
             Sentinel Developer & Integration Guide
           </div>
 
           <h1 className="text-3xl sm:text-4xl md:text-5xl font-black text-white tracking-tight leading-[1.18]">
             Enterprise Application Integration<br />
-            <span className="text-[#54f4fc]">& Central Gateway API Specification</span>
+            <span className="text-cyan-400">& Central Gateway API Specification</span>
           </h1>
 
-          <p className="text-gray-300 text-sm sm:text-base md:text-lg max-w-3xl mt-4 leading-relaxed">
+          <p className="text-slate-300 text-sm sm:text-base md:text-lg max-w-3xl mt-4 leading-relaxed">
             Connect any internal web portal, SaaS tool, or cloud infrastructure client to Sentinel Security.
             Enforce unified identity lifecycles, cross-origin Single Sign-On (SSO), and out-of-band Multi-Factor Authentication.
           </p>
@@ -182,7 +182,7 @@ func ValidateSentinelSession(userId int) (*SentinelIdentity, error) {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-start">
           {/* Left Table of Contents */}
           <aside className="lg:col-span-3 sticky top-28 hidden lg:block bg-[#05080e] border border-white/10 rounded-2xl p-6 text-xs space-y-4">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-[#54f4fc]">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-cyan-400">
               Documentation Index
             </h3>
             <nav className="space-y-2">
@@ -226,7 +226,7 @@ func ValidateSentinelSession(userId int) (*SentinelIdentity, error) {
             {/* Section 1: Enterprise Value & Benefits */}
             <section id="enterprise-benefits" className="scroll-mt-28 space-y-6">
               <h2 className="text-2xl sm:text-3xl font-bold text-white tracking-tight flex items-center gap-3">
-                <span className="text-[#54f4fc]">01.</span> Enterprise Value & Why Companies Adopt Sentinel
+                <span className="text-cyan-400">01.</span> Enterprise Value & Why Companies Adopt Sentinel
               </h2>
               <p className="text-gray-300 text-sm sm:text-base leading-relaxed">
                 Organizations running decoupled web portals and SaaS platforms face rampant credential fragmentation,
@@ -268,7 +268,7 @@ func ValidateSentinelSession(userId int) (*SentinelIdentity, error) {
             {/* Section 2: Architecture & Authentication Flow */}
             <section id="integration-architecture" className="scroll-mt-28 space-y-6">
               <h2 className="text-2xl sm:text-3xl font-bold text-white tracking-tight flex items-center gap-3">
-                <span className="text-[#54f4fc]">02.</span> Integration Architecture & Lifecycle
+                <span className="text-cyan-400">02.</span> Integration Architecture & Lifecycle
               </h2>
               <p className="text-gray-300 text-sm sm:text-base leading-relaxed">
                 Sentinel uses a lightweight token handoff protocol. External web applications do not store passwords or manage user tables; they delegate identity verification directly to the central gateway:
@@ -300,7 +300,7 @@ func ValidateSentinelSession(userId int) (*SentinelIdentity, error) {
             {/* Section 3: Step 1 - Registration */}
             <section id="step-1-registration" className="scroll-mt-28 space-y-6">
               <h2 className="text-2xl sm:text-3xl font-bold text-white tracking-tight flex items-center gap-3">
-                <span className="text-[#54f4fc]">03.</span> Step 1: Registering Your Application
+                <span className="text-cyan-400">03.</span> Step 1: Registering Your Application
               </h2>
               <p className="text-gray-300 text-sm sm:text-base leading-relaxed">
                 To connect a web application, register it either via the Sentinel Web Dashboard or programmatically through the REST API.
@@ -349,13 +349,13 @@ func ValidateSentinelSession(userId int) (*SentinelIdentity, error) {
             {/* Section 4: Step 2 - Handoff */}
             <section id="step-2-handoff" className="scroll-mt-28 space-y-6">
               <h2 className="text-2xl sm:text-3xl font-bold text-white tracking-tight flex items-center gap-3">
-                <span className="text-[#54f4fc]">04.</span> Step 2: Single Sign-On (SSO) Launch Handoff
+                <span className="text-cyan-400">04.</span> Step 2: Single Sign-On (SSO) Launch Handoff
               </h2>
               <p className="text-gray-300 text-sm sm:text-base leading-relaxed">
                 When an authenticated user clicks Launch on their Sentinel Dashboard, the portal opens the registered <code className="text-cyan-300 bg-cyan-950/40 px-1.5 py-0.5 rounded">loginUrl</code> in a new tab, appending the SSO handoff parameters:
               </p>
 
-              <div className="bg-[#05080e] border border-white/10 rounded-xl p-4 font-mono text-xs text-[#54f4fc] break-all">
+              <div className="bg-[#05080e] border border-white/10 rounded-xl p-4 font-mono text-xs text-cyan-300 break-all">
                 https://payroll.company.internal?ssoUserId=1&ssoEmail=user%40example.com
               </div>
 
@@ -367,7 +367,7 @@ func ValidateSentinelSession(userId int) (*SentinelIdentity, error) {
             {/* Section 5: Step 3 - Session Validation */}
             <section id="step-3-validation" className="scroll-mt-28 space-y-6">
               <h2 className="text-2xl sm:text-3xl font-bold text-white tracking-tight flex items-center gap-3">
-                <span className="text-[#54f4fc]">05.</span> Step 3: Session Validation API
+                <span className="text-cyan-400">05.</span> Step 3: Session Validation API
               </h2>
               <p className="text-gray-300 text-sm sm:text-base leading-relaxed">
                 To confirm that the incoming user is authorized and retrieve their verified identity, call the validation endpoint:
@@ -407,7 +407,7 @@ func ValidateSentinelSession(userId int) (*SentinelIdentity, error) {
             {/* Section 6: Zero-Trust Step-Up MFA */}
             <section id="step-up-mfa" className="scroll-mt-28 space-y-6">
               <h2 className="text-2xl sm:text-3xl font-bold text-white tracking-tight flex items-center gap-3">
-                <span className="text-[#54f4fc]">06.</span> Zero-Trust Step-Up MFA Enforcement
+                <span className="text-cyan-400">06.</span> Zero-Trust Step-Up MFA Enforcement
               </h2>
               <p className="text-gray-300 text-sm sm:text-base leading-relaxed">
                 Sentinel allows administrators to flag sensitive services with <code className="text-cyan-300 bg-cyan-950/40 px-1.5 py-0.5 rounded">mfaRequired: true</code>.
@@ -434,12 +434,12 @@ func ValidateSentinelSession(userId int) (*SentinelIdentity, error) {
             <section id="client-sdk-code" className="scroll-mt-28 space-y-6">
               <div className="flex flex-wrap items-center justify-between gap-4">
                 <h2 className="text-2xl sm:text-3xl font-bold text-white tracking-tight flex items-center gap-3">
-                  <span className="text-[#54f4fc]">07.</span> Client Implementation Quickstart
+                  <span className="text-cyan-400">07.</span> Client Implementation Quickstart
                 </h2>
                 <button
                   type="button"
                   onClick={handleCopy}
-                  className="px-3.5 py-1.5 rounded-lg bg-[#54f4fc]/10 hover:bg-[#54f4fc]/20 border border-[#54f4fc]/30 text-[#54f4fc] text-xs font-semibold tracking-wide transition-all cursor-pointer flex items-center gap-1.5"
+                  className="px-3.5 py-1.5 rounded-lg bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/30 text-cyan-400 text-xs font-semibold tracking-wide transition-all cursor-pointer flex items-center gap-1.5"
                 >
                   <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
@@ -455,8 +455,8 @@ func ValidateSentinelSession(userId int) (*SentinelIdentity, error) {
                   onClick={() => setActiveTab("ts")}
                   className={`px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
                     activeTab === "ts"
-                      ? "bg-[#54f4fc] text-black"
-                      : "bg-[#05080e] text-gray-400 hover:text-white"
+                      ? "bg-cyan-500 text-slate-950"
+                      : "bg-[#05080e] text-slate-400 hover:text-white"
                   }`}
                 >
                   TypeScript / React
@@ -466,8 +466,8 @@ func ValidateSentinelSession(userId int) (*SentinelIdentity, error) {
                   onClick={() => setActiveTab("curl")}
                   className={`px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
                     activeTab === "curl"
-                      ? "bg-[#54f4fc] text-black"
-                      : "bg-[#05080e] text-gray-400 hover:text-white"
+                      ? "bg-cyan-500 text-slate-950"
+                      : "bg-[#05080e] text-slate-400 hover:text-white"
                   }`}
                 >
                   cURL CLI
@@ -477,8 +477,8 @@ func ValidateSentinelSession(userId int) (*SentinelIdentity, error) {
                   onClick={() => setActiveTab("py")}
                   className={`px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
                     activeTab === "py"
-                      ? "bg-[#54f4fc] text-black"
-                      : "bg-[#05080e] text-gray-400 hover:text-white"
+                      ? "bg-cyan-500 text-slate-950"
+                      : "bg-[#05080e] text-slate-400 hover:text-white"
                   }`}
                 >
                   Python (FastAPI)
@@ -488,8 +488,8 @@ func ValidateSentinelSession(userId int) (*SentinelIdentity, error) {
                   onClick={() => setActiveTab("go")}
                   className={`px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
                     activeTab === "go"
-                      ? "bg-[#54f4fc] text-black"
-                      : "bg-[#05080e] text-gray-400 hover:text-white"
+                      ? "bg-cyan-500 text-slate-950"
+                      : "bg-[#05080e] text-slate-400 hover:text-white"
                   }`}
                 >
                   Go (Golang)
@@ -507,7 +507,7 @@ func ValidateSentinelSession(userId int) (*SentinelIdentity, error) {
             {/* Section 8: Showcase Clients Reference */}
             <section id="showcase-clients" className="scroll-mt-28 space-y-6">
               <h2 className="text-2xl sm:text-3xl font-bold text-white tracking-tight flex items-center gap-3">
-                <span className="text-[#54f4fc]">08.</span> Showcase Client Implementations
+                <span className="text-cyan-400">08.</span> Showcase Client Implementations
               </h2>
               <p className="text-gray-300 text-sm sm:text-base leading-relaxed">
                 Reference implementations for the 3 official demo clients are open-sourced in the Sentinel Security repository:

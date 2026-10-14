@@ -161,14 +161,14 @@ export default function InteractiveIntegration() {
     <section className="py-20 border-t border-white/5 max-w-[1600px] mx-auto px-6 sm:px-10 lg:px-16">
       {/* Header */}
       <div className="max-w-3xl mb-12">
-        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#54f4fc]/10 border border-[#54f4fc]/30 text-[#54f4fc] text-xs font-semibold mb-4">
-          <span className="w-1.5 h-1.5 rounded-full bg-[#54f4fc] animate-pulse" />
+        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 text-xs font-semibold mb-4">
+          <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
           API-First Architecture
         </div>
         <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-white tracking-tight leading-[1.15]">
-          How Companies Integrate <span className="text-[#54f4fc]">Sentinel IAM</span>
+          How Companies Integrate <span className="text-cyan-400">Sentinel IAM</span>
         </h2>
-        <p className="text-gray-300 text-sm sm:text-base leading-relaxed mt-4">
+        <p className="text-slate-300 text-sm sm:text-base leading-relaxed mt-4">
           Enable enterprise-grade identity, single sign-on, and push multi-factor verification for your web and mobile applications with three lightweight endpoints.
         </p>
       </div>
@@ -184,16 +184,16 @@ export default function InteractiveIntegration() {
               onClick={() => setActiveStep(idx)}
               className={`p-4 rounded-2xl text-left border transition-all cursor-pointer ${
                 isActive
-                  ? "bg-[#0b162a] border-[#54f4fc] shadow-[0_0_20px_rgba(84,244,252,0.15)]"
-                  : "bg-[#050914] border-white/10 hover:border-white/20 hover:bg-[#070e1c]"
+                  ? "bg-[#0c1424] border-cyan-500/50"
+                  : "bg-[#050811] border-white/10 hover:border-white/20 hover:bg-[#070e1c]"
               }`}
             >
               <div className="flex items-center justify-between mb-2">
                 <span
                   className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded ${
                     isActive
-                      ? "bg-[#54f4fc]/15 text-[#54f4fc]"
-                      : "bg-slate-800 text-slate-400"
+                      ? "bg-cyan-500/15 text-cyan-400 border border-cyan-500/30"
+                      : "bg-slate-800 text-slate-400 border border-transparent"
                   }`}
                 >
                   {step.badge}
@@ -210,11 +210,11 @@ export default function InteractiveIntegration() {
       </div>
 
       {/* Main Interactive Stage */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start bg-[#050811] border border-white/10 rounded-3xl p-6 sm:p-8 lg:p-10">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start bg-[#080d1a] border border-white/10 rounded-3xl p-6 sm:p-8 lg:p-10">
         {/* Left Side: Explanatory Context & Actions */}
         <div className="lg:col-span-6 space-y-6">
           <div>
-            <span className="text-xs font-mono text-[#54f4fc] uppercase tracking-wider">
+            <span className="text-xs font-mono text-cyan-400 uppercase tracking-wider">
               Implementation Detail
             </span>
             <h3 className="text-xl sm:text-2xl font-bold text-white tracking-tight mt-1">
@@ -224,11 +224,11 @@ export default function InteractiveIntegration() {
 
           <p className="text-sm text-slate-300 leading-relaxed">{current.description}</p>
 
-          <div className="p-4 rounded-xl bg-[#091122] border border-cyan-500/20">
+          <div className="p-4 rounded-xl bg-[#050811] border border-white/10">
             <div className="text-[11px] font-mono text-slate-400 uppercase tracking-wider mb-1">
               Primary Gateway Route
             </div>
-            <div className="text-xs sm:text-sm font-mono text-[#54f4fc] font-semibold break-all">
+            <div className="text-xs sm:text-sm font-mono text-cyan-300 font-semibold break-all">
               {current.endpoint}
             </div>
           </div>
@@ -248,7 +248,7 @@ export default function InteractiveIntegration() {
           <div className="pt-2 flex flex-wrap items-center gap-3">
             <Link
               href="/docs"
-              className="px-5 py-2.5 bg-[#54f4fc] hover:bg-[#32edf7] text-slate-950 font-bold text-xs uppercase tracking-wider rounded-xl transition-all shadow-md shadow-cyan-500/20"
+              className="px-5 py-2.5 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs uppercase tracking-wider rounded-xl transition-all shadow-sm"
             >
               Explore Full API Docs
             </Link>
@@ -262,7 +262,7 @@ export default function InteractiveIntegration() {
         </div>
 
         {/* Right Side: Code Snippet Card */}
-        <div className="lg:col-span-6 bg-[#03060c] border border-white/10 rounded-2xl overflow-hidden shadow-2xl">
+        <div className="lg:col-span-6 bg-[#050811] border border-white/10 rounded-2xl overflow-hidden shadow-xl">
           {/* Code Window Header */}
           <div className="bg-[#080d1a] px-4 py-3 border-b border-white/10 flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -276,8 +276,8 @@ export default function InteractiveIntegration() {
                 <button
                   type="button"
                   onClick={() => setCodeLang("ts")}
-                  className={`px-2.5 py-1 rounded text-[11px] font-mono font-medium transition-colors ${
-                    codeLang === "ts" ? "bg-cyan-500/20 text-[#54f4fc]" : "text-slate-400 hover:text-white"
+                  className={`px-2.5 py-1 rounded text-[11px] font-mono font-medium transition-colors cursor-pointer ${
+                    codeLang === "ts" ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/30" : "text-slate-400 hover:text-white"
                   }`}
                 >
                   TypeScript
@@ -285,8 +285,8 @@ export default function InteractiveIntegration() {
                 <button
                   type="button"
                   onClick={() => setCodeLang("curl")}
-                  className={`px-2.5 py-1 rounded text-[11px] font-mono font-medium transition-colors ${
-                    codeLang === "curl" ? "bg-cyan-500/20 text-[#54f4fc]" : "text-slate-400 hover:text-white"
+                  className={`px-2.5 py-1 rounded text-[11px] font-mono font-medium transition-colors cursor-pointer ${
+                    codeLang === "curl" ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/30" : "text-slate-400 hover:text-white"
                   }`}
                 >
                   cURL
@@ -294,8 +294,8 @@ export default function InteractiveIntegration() {
                 <button
                   type="button"
                   onClick={() => setCodeLang("py")}
-                  className={`px-2.5 py-1 rounded text-[11px] font-mono font-medium transition-colors ${
-                    codeLang === "py" ? "bg-cyan-500/20 text-[#54f4fc]" : "text-slate-400 hover:text-white"
+                  className={`px-2.5 py-1 rounded text-[11px] font-mono font-medium transition-colors cursor-pointer ${
+                    codeLang === "py" ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/30" : "text-slate-400 hover:text-white"
                   }`}
                 >
                   Python
@@ -306,15 +306,15 @@ export default function InteractiveIntegration() {
             <button
               type="button"
               onClick={handleCopy}
-              className="text-[11px] font-mono text-slate-400 hover:text-[#54f4fc] px-2.5 py-1 rounded border border-white/10 hover:border-cyan-500/40 transition-all cursor-pointer"
+              className="text-[11px] font-mono text-slate-400 hover:text-cyan-300 px-2.5 py-1 rounded border border-white/10 hover:border-cyan-500/40 transition-all cursor-pointer"
             >
               {copied ? "Copied" : "Copy Code"}
             </button>
           </div>
 
           {/* Code Body */}
-          <div className="p-4 sm:p-5 font-mono text-xs leading-relaxed text-slate-300 overflow-x-auto min-h-[220px]">
-            <pre className="text-cyan-200">
+          <div className="p-4 sm:p-5 font-mono text-xs leading-relaxed text-slate-200 overflow-x-auto min-h-[220px]">
+            <pre className="text-cyan-100">
               <code>{activeCode}</code>
             </pre>
           </div>
@@ -322,7 +322,7 @@ export default function InteractiveIntegration() {
           {/* Window Footer Status */}
           <div className="px-4 py-2.5 bg-[#080d1a] border-t border-white/10 text-[11px] text-slate-400 flex items-center justify-between font-mono">
             <span>Gateway: Ready for Integration</span>
-            <span className="text-[#54f4fc]">Zero-Trust Validated</span>
+            <span className="text-cyan-400">Zero-Trust Validated</span>
           </div>
         </div>
       </div>
