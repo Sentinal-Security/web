@@ -211,13 +211,7 @@ export default function DashboardPage() {
   const displayName = user?.fullName || user?.email?.split("@")[0] || "User";
 
   return (
-    <div
-      className="min-h-screen w-full relative flex text-white font-sans antialiased selection:bg-cyan-400 selection:text-black"
-      style={{
-        background:
-          "radial-gradient(ellipse at 60% 36%, #15398a 0%, #0d2561 38%, #071539 72%, #040c21 100%)",
-      }}
-    >
+    <div className="min-h-screen w-full relative flex text-white font-sans antialiased selection:bg-cyan-500/30 selection:text-white bg-[#050811]">
       {/* Mobile Sidebar Overlay */}
       {sidebarOpen && (
         <div
@@ -228,41 +222,48 @@ export default function DashboardPage() {
 
       {/* Left Sidebar */}
       <aside
-        className={`fixed md:relative inset-y-0 left-0 z-40 w-64 sm:w-72 md:w-[280px] bg-black self-stretch min-h-screen shrink-0 shadow-[4px_0_24px_rgba(0,0,0,0.5)] border-r border-white/5 transition-transform duration-300 ease-in-out md:translate-x-0 ${
+        className={`fixed md:relative inset-y-0 left-0 z-40 w-64 sm:w-72 md:w-[260px] bg-slate-950 md:bg-[#070b16] self-stretch min-h-screen shrink-0 border-r border-white/10 transition-transform duration-300 ease-in-out md:translate-x-0 ${
           sidebarOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
         }`}
       >
-        <div className="sticky top-0 flex flex-col justify-between h-screen pt-9 pb-6 px-5 sm:px-6 w-full">
+        <div className="sticky top-0 flex flex-col justify-between h-screen pt-7 pb-6 px-4 sm:px-5 w-full">
           <div>
-            <div className="flex flex-col items-center select-none">
+            {/* Brand Logo & Tenant Badge */}
+            <div className="flex items-center gap-3 select-none px-2 mb-6">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src="/images/sentinel-shield.png"
-                alt="Sentinel Shield"
-                className="w-16 h-16 object-contain drop-shadow-[0_0_16px_rgba(46,224,236,0.6)]"
+                src="/logo.png"
+                alt="Sentinel Logo"
+                className="w-8 h-8 rounded-lg object-contain"
               />
-              <span className="mt-3 text-2xl font-bold tracking-tight text-[#2ee0ec] drop-shadow-[0_0_12px_rgba(46,224,236,0.45)]">
-                Sentinel
-              </span>
-              {isAdmin && (
-                <span className="mt-1 text-[10px] px-2 py-0.5 rounded-full bg-purple-500/20 border border-purple-400/40 text-purple-300 font-bold uppercase tracking-wider">
-                  IAM Admin
+              <div className="flex flex-col min-w-0">
+                <span className="text-base font-bold tracking-tight text-white truncate">
+                  Sentinel IAM
                 </span>
-              )}
+                {isAdmin ? (
+                  <span className="text-[9px] px-1.5 py-0.2 rounded bg-purple-500/10 border border-purple-500/20 text-purple-300 font-semibold uppercase tracking-wider w-max mt-0.5">
+                    Administrator
+                  </span>
+                ) : (
+                  <span className="text-[10px] text-slate-400 truncate font-mono">
+                    {user?.company ? `@${user.company}` : "Employee Portal"}
+                  </span>
+                )}
+              </div>
             </div>
 
             {/* Primary Navigation */}
-            <div className="mt-7 w-full space-y-1">
-              <div className="px-3 pb-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+            <div className="w-full space-y-1">
+              <div className="px-3 pb-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">
                 Workspace
               </div>
 
               <button
                 type="button"
-                className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl bg-gradient-to-r from-[#175beb] via-[#1249c5] to-[#0c338e] text-white font-semibold text-xs shadow-[0_4px_24px_rgba(23,91,235,0.55)] transition-all cursor-pointer text-left"
+                className="w-full flex items-center gap-3 px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-white font-medium text-xs transition-all cursor-pointer text-left"
               >
                 <svg
-                  className="w-4 h-4 text-white shrink-0"
+                  className="w-4 h-4 text-cyan-400 shrink-0"
                   viewBox="0 0 24 24"
                   fill="none"
                   stroke="currentColor"
@@ -273,13 +274,13 @@ export default function DashboardPage() {
                   <rect x="2" y="3" width="20" height="15" rx="2" />
                   <path d="M6 14l3.5-4.5 3 3 4-5" />
                 </svg>
-                <span>{isAdmin ? "Admin Overview" : "My Applications"}</span>
+                <span>Applications</span>
               </button>
 
               {isAdmin && (
                 <Link
                   href="/users"
-                  className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-medium transition-all text-left border hover:bg-purple-500/15 text-slate-300 hover:text-white border-transparent hover:border-purple-400/40"
+                  className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition-all text-left border border-transparent hover:border-white/10 text-slate-400 hover:text-white hover:bg-white/5"
                 >
                   <div className="flex items-center gap-3">
                     <svg className="w-4 h-4 text-purple-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
@@ -290,41 +291,41 @@ export default function DashboardPage() {
                 </Link>
               )}
 
-              {/* Developer & Company Integration */}
-              <div className="pt-4 px-3 pb-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                Company API & SSO
+              {/* Developer & Integration */}
+              <div className="pt-4 px-3 pb-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                Developer &amp; SSO
               </div>
 
               <Link
                 href="/docs"
-                className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl hover:bg-white/5 text-slate-300 hover:text-white font-medium text-xs transition-all text-left border border-transparent hover:border-white/10"
+                className="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-white/5 text-slate-400 hover:text-white font-medium text-xs transition-all text-left border border-transparent hover:border-white/10"
               >
                 <svg className="w-4 h-4 text-cyan-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
                 </svg>
-                <span>API & SDK Docs</span>
+                <span>API &amp; Docs</span>
               </Link>
 
               <button
                 type="button"
                 onClick={() => setAddModalOpen(true)}
-                className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl hover:bg-white/5 text-slate-300 hover:text-white font-medium text-xs transition-all text-left border border-transparent hover:border-white/10 cursor-pointer"
+                className="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-white/5 text-slate-400 hover:text-white font-medium text-xs transition-all text-left border border-transparent hover:border-white/10 cursor-pointer"
               >
                 <svg className="w-4 h-4 text-cyan-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
                 </svg>
-                <span>Register Application</span>
+                <span>Connect Service</span>
               </button>
 
-              {/* Security & Possession Device */}
-              <div className="pt-4 px-3 pb-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                Security & Devices
+              {/* Security & Device */}
+              <div className="pt-4 px-3 pb-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                Security &amp; MFA
               </div>
 
               <button
                 type="button"
                 onClick={handleOpenPairingModal}
-                className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl hover:bg-white/5 text-slate-300 hover:text-white font-medium text-xs transition-all cursor-pointer text-left border border-transparent hover:border-white/10"
+                className="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-white/5 text-slate-400 hover:text-white font-medium text-xs transition-all cursor-pointer text-left border border-transparent hover:border-white/10"
               >
                 <svg className="w-4 h-4 text-cyan-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
@@ -336,12 +337,12 @@ export default function DashboardPage() {
                 href="/dw"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl hover:bg-white/5 text-slate-300 hover:text-white font-medium text-xs transition-all text-left border border-transparent hover:border-white/10"
+                className="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-white/5 text-slate-400 hover:text-white font-medium text-xs transition-all text-left border border-transparent hover:border-white/10"
               >
                 <svg className="w-4 h-4 text-slate-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 1.5H8.25A2.25 2.25 0 006 3.75v16.5a2.25 2.25 0 002.25 2.25h7.5A2.25 2.25 0 0018 20.25V3.75a2.25 2.25 0 00-2.25-2.25H13.5m-3 0V3h3V1.5m-3 0h3m-3 18.75h3" />
                 </svg>
-                <span>Get Authenticator App</span>
+                <span>Mobile App APK</span>
               </Link>
             </div>
           </div>
@@ -355,13 +356,13 @@ export default function DashboardPage() {
               <svg className="w-3.5 h-3.5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
               </svg>
-              <span>Terms & Agreements</span>
+              <span>Terms &amp; Agreements</span>
             </Link>
 
             <button
               type="button"
               onClick={handleLogout}
-              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl hover:bg-red-500/10 text-slate-400 hover:text-red-400 transition-colors text-xs font-medium cursor-pointer"
+              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl hover:bg-rose-500/10 text-slate-400 hover:text-rose-400 transition-colors text-xs font-medium cursor-pointer"
             >
               <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
@@ -376,11 +377,11 @@ export default function DashboardPage() {
       <main className="flex-1 flex flex-col min-w-0 px-4 sm:px-6 lg:px-8 pt-6 pb-8">
         {/* Top Header */}
         <header className="flex items-center justify-between gap-3 sm:gap-4 w-full">
-          <div className="flex items-center gap-2.5 sm:gap-3 flex-1 max-w-[280px] sm:max-w-xs md:max-w-md">
+          <div className="flex items-center gap-2 sm:gap-3 flex-1 max-w-[280px] sm:max-w-xs md:max-w-md">
             <button
               type="button"
               onClick={() => setSidebarOpen(true)}
-              className="md:hidden p-2 rounded-xl bg-black border border-white/10 text-slate-300 hover:text-white cursor-pointer"
+              className="md:hidden p-2 rounded-lg bg-slate-900 border border-white/10 text-slate-300 hover:text-white cursor-pointer"
               aria-label="Open sidebar"
             >
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -388,7 +389,7 @@ export default function DashboardPage() {
               </svg>
             </button>
 
-            <div className="relative flex items-center bg-black rounded-full px-4 py-2.5 w-full border border-white/5 focus-within:border-cyan-500/40 transition-colors">
+            <div className="relative flex items-center bg-slate-900/60 rounded-lg px-3 py-1.5 w-full border border-white/10 focus-within:border-cyan-500/40 transition-colors">
               <svg className="w-4 h-4 text-slate-400 shrink-0 mr-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35m1.35-5.65a7 7 0 11-14 0 7 7 0 0114 0z" />
               </svg>
@@ -406,9 +407,9 @@ export default function DashboardPage() {
             <button
               type="button"
               onClick={() => setAddModalOpen(true)}
-              className="hidden sm:inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 text-xs font-semibold hover:bg-cyan-500/20 transition-all cursor-pointer"
+              className="hidden sm:inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-slate-300 hover:text-white text-xs font-medium transition-colors cursor-pointer"
             >
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+              <svg className="w-3.5 h-3.5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
               </svg>
               <span>Configure Apps</span>
@@ -419,9 +420,9 @@ export default function DashboardPage() {
               <button
                 type="button"
                 onClick={() => setProfileDropdownOpen((prev) => !prev)}
-                className="flex items-center gap-2 bg-black py-1.5 pl-1.5 pr-3 rounded-full border border-white/10 cursor-pointer hover:border-white/20 transition-all select-none"
+                className="flex items-center gap-2 bg-slate-900/60 py-1 pl-1 pr-2.5 rounded-lg border border-white/10 cursor-pointer hover:border-white/20 transition-colors select-none"
               >
-                <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center text-xs font-bold text-slate-950 uppercase shrink-0">
+                <div className="w-6 h-6 rounded-md bg-cyan-500/20 border border-cyan-500/30 flex items-center justify-center text-xs font-semibold text-cyan-300 uppercase shrink-0">
                   {displayName.charAt(0)}
                 </div>
                 <span className="text-xs sm:text-sm font-medium text-white truncate max-w-[120px]">{displayName}</span>
@@ -431,18 +432,18 @@ export default function DashboardPage() {
               </button>
 
               {profileDropdownOpen && (
-                <div className="absolute right-0 mt-2 w-64 rounded-2xl bg-[#0c1424] border border-white/15 shadow-2xl backdrop-blur-xl p-3 z-50">
+                <div className="absolute right-0 mt-2 w-64 rounded-xl bg-slate-950 border border-white/10 shadow-2xl p-3 z-50">
                   <div className="px-3 py-2 border-b border-white/10 mb-2">
-                    <p className="text-xs font-bold text-white truncate">{user?.fullName || displayName}</p>
+                    <p className="text-xs font-semibold text-white truncate">{user?.fullName || displayName}</p>
                     <p className="text-[11px] text-slate-400 truncate">{user?.email}</p>
-                    <p className="text-[10px] text-purple-400 mt-1 uppercase font-mono font-semibold">
+                    <p className="text-[10px] text-purple-400 mt-1 uppercase font-mono font-medium">
                       Role: {user?.role || "USER"}
                     </p>
                   </div>
 
-                  <div className="px-3 py-1.5 mb-2 flex items-center justify-between text-xs">
-                    <span className="text-slate-400">MFA Status</span>
-                    <span className={`font-semibold px-2 py-0.5 rounded-full text-[10px] ${user?.mfaEnabled ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/30" : "bg-amber-500/10 text-amber-400 border border-amber-500/30"}`}>
+                  <div className="px-3 py-1 mb-2 flex items-center justify-between text-xs">
+                    <span className="text-slate-400 text-[11px]">MFA Status</span>
+                    <span className={`font-medium px-2 py-0.5 rounded text-[10px] ${user?.mfaEnabled ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/30" : "bg-amber-500/10 text-amber-400 border border-amber-500/30"}`}>
                       {user?.mfaEnabled ? "Active" : "Disabled"}
                     </span>
                   </div>
@@ -453,9 +454,9 @@ export default function DashboardPage() {
                       setProfileDropdownOpen(false);
                       setAddModalOpen(true);
                     }}
-                    className="w-full text-left px-3 py-2 rounded-xl text-xs text-slate-200 hover:text-white hover:bg-white/5 transition-colors flex items-center gap-2 cursor-pointer mb-1"
+                    className="w-full text-left px-3 py-1.5 rounded-lg text-xs text-slate-300 hover:text-white hover:bg-white/5 transition-colors flex items-center gap-2 cursor-pointer mb-1"
                   >
-                    <svg className="w-4 h-4 text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                    <svg className="w-3.5 h-3.5 text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
                     </svg>
                     <span>Configure Applications</span>
@@ -467,9 +468,9 @@ export default function DashboardPage() {
                       setProfileDropdownOpen(false);
                       setProfileModalOpen(true);
                     }}
-                    className="w-full text-left px-3 py-2 rounded-xl text-xs text-slate-200 hover:text-white hover:bg-white/5 transition-colors flex items-center gap-2 cursor-pointer mb-1"
+                    className="w-full text-left px-3 py-1.5 rounded-lg text-xs text-slate-300 hover:text-white hover:bg-white/5 transition-colors flex items-center gap-2 cursor-pointer mb-1"
                   >
-                    <svg className="w-4 h-4 text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                    <svg className="w-3.5 h-3.5 text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                     </svg>
                     <span>Edit Profile Name</span>
@@ -481,9 +482,9 @@ export default function DashboardPage() {
                       setProfileDropdownOpen(false);
                       handleOpenPairingModal();
                     }}
-                    className="w-full text-left px-3 py-2 rounded-xl text-xs text-slate-200 hover:text-white hover:bg-white/5 transition-colors flex items-center gap-2 cursor-pointer"
+                    className="w-full text-left px-3 py-1.5 rounded-lg text-xs text-slate-300 hover:text-white hover:bg-white/5 transition-colors flex items-center gap-2 cursor-pointer"
                   >
-                    <svg className="w-4 h-4 text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                    <svg className="w-3.5 h-3.5 text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                     </svg>
                     <span>Pair Authenticator</span>
@@ -492,9 +493,9 @@ export default function DashboardPage() {
                   <button
                     type="button"
                     onClick={handleLogout}
-                    className="w-full text-left px-3 py-2 rounded-xl text-xs text-red-400 hover:bg-red-500/10 transition-colors flex items-center gap-2 cursor-pointer mt-1"
+                    className="w-full text-left px-3 py-1.5 rounded-lg text-xs text-red-400 hover:bg-red-500/10 transition-colors flex items-center gap-2 cursor-pointer mt-1"
                   >
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
                     </svg>
                     <span>Sign Out</span>
@@ -505,94 +506,64 @@ export default function DashboardPage() {
           </div>
         </header>
 
-        {/* Welcome Greeting Banner */}
-        <div className="mt-6 mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        {/* Consolidated Section Header & Actions */}
+        <div className="mt-6 mb-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-white/5">
           <div>
             <div className="flex items-center gap-2.5">
-              <h2 className="text-2xl sm:text-3xl font-normal text-white tracking-tight">
-                Welcome, <span className="text-[#38bdf8]">{displayName}</span>
-              </h2>
+              <h1 className="text-lg font-semibold text-white tracking-tight">Applications</h1>
+              <span className="px-2 py-0.5 rounded text-[11px] font-mono font-medium bg-white/5 border border-white/10 text-slate-300">
+                {apps.length} active
+              </span>
               {isAdmin && (
-                <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-purple-500/20 border border-purple-400/40 text-purple-300 font-bold uppercase">
-                  Central IAM Admin
+                <span className="text-[10px] px-2 py-0.5 rounded bg-purple-500/10 border border-purple-400/30 text-purple-300 font-semibold uppercase">
+                  Admin
                 </span>
               )}
             </div>
-            <p className="text-xs text-slate-400 mt-1">
-              Identity: <span className="text-slate-300 font-mono">{user?.email}</span>
-              {isAdmin && " • Full Tenant Control: All Loaded Services & User Provisioning"}
+            <p className="text-xs text-slate-400 mt-0.5">
+              Enterprise single sign-on directory for <span className="text-slate-300 font-mono">{user?.email || "internal tenant"}</span>
             </p>
           </div>
 
-          <div className="flex items-center gap-3">
-            {user?.mfaEnabled ? (
-              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-semibold">
-                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M2.166 4.999A11.954 11.954 0 0010 1.944 11.954 11.954 0 0017.834 5c.11.65.166 1.32.166 2.001 0 5.225-3.34 9.67-8 11.317C5.34 16.67 2 12.225 2 7c0-.682.057-1.35.166-2.001zm11.541 3.708a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                </svg>
-                <span>Two-Factor Authentication: Active</span>
-              </div>
-            ) : (
+          <div className="flex items-center gap-2 shrink-0">
+            {!user?.mfaEnabled && (
               <button
                 type="button"
                 onClick={handleOpenPairingModal}
-                className="px-3.5 py-1.5 rounded-xl bg-cyan-400 hover:bg-cyan-300 text-slate-950 font-bold text-xs transition-all shadow-md shadow-cyan-500/20 cursor-pointer"
+                className="px-3 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-300 hover:bg-amber-500/20 text-xs font-medium transition-colors cursor-pointer flex items-center gap-1.5"
               >
-                Pair MFA Authenticator
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+                <span>Pair MFA</span>
               </button>
             )}
-          </div>
-        </div>
 
-        {/* Company API Integration & SSO Quickstart Strip */}
-        <div className="mb-6 p-4 rounded-2xl bg-[#081224]/80 border border-cyan-500/20 backdrop-blur-md flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-          <div className="flex items-start sm:items-center gap-3.5">
-            <div className="w-10 h-10 rounded-xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400 shrink-0">
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
-              </svg>
-            </div>
-            <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-sm font-bold text-white tracking-tight">Enterprise Application SSO & API Gateway</span>
-                <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                  Ready for Integration
-                </span>
-              </div>
-              <p className="text-xs text-slate-400 mt-0.5">
-                Integrate company applications with Just-In-Time (JIT) provisioning and push MFA using lightweight REST endpoints.
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2.5 flex-wrap sm:flex-nowrap">
             <Link
               href="/docs"
-              className="px-3 py-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-200 hover:text-white text-xs font-semibold border border-slate-700 transition-all flex items-center gap-1.5"
+              className="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white text-xs font-medium transition-colors flex items-center gap-1.5"
             >
-              <span>Integration Guide</span>
-              <svg className="w-3 h-3 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+              <svg className="w-3.5 h-3.5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
               </svg>
+              <span>API Docs</span>
             </Link>
 
             <button
               type="button"
               onClick={() => setAddModalOpen(true)}
-              className="px-3 py-1.5 rounded-xl bg-cyan-500/15 hover:bg-cyan-500/25 text-[#38e1ff] text-xs font-semibold border border-cyan-500/40 transition-all cursor-pointer flex items-center gap-1.5"
+              className="px-3 py-1.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-xs font-semibold transition-colors cursor-pointer flex items-center gap-1.5"
             >
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
               </svg>
-              <span>Add Custom App</span>
+              <span>Add Application</span>
             </button>
           </div>
         </div>
 
         {/* Dynamic Content: Loading vs Empty State vs Configured Services Grid */}
         {servicesLoading ? (
-          <div className="flex-1 flex flex-col items-center justify-center py-24 text-slate-400">
-            <svg className="animate-spin h-8 w-8 text-cyan-400 mb-3" viewBox="0 0 24 24" fill="none">
+          <div className="flex-1 flex flex-col items-center justify-center py-20 text-slate-400">
+            <svg className="animate-spin h-6 w-6 text-cyan-400 mb-2.5" viewBox="0 0 24 24" fill="none">
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
             </svg>
@@ -600,26 +571,26 @@ export default function DashboardPage() {
           </div>
         ) : filteredApps.length === 0 ? (
           /* Clean Empty State (Newly Created Accounts Start Clean) */
-          <div className="flex-1 flex flex-col items-center justify-center p-8 sm:p-14 rounded-3xl bg-black/40 border border-dashed border-white/15 text-center min-h-[380px]">
-            <div className="w-16 h-16 rounded-2xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400 mb-4">
-              <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8">
+          <div className="flex-1 flex flex-col items-center justify-center p-8 sm:p-12 rounded-xl bg-slate-900/20 border border-dashed border-white/10 text-center min-h-[300px]">
+            <div className="w-10 h-10 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-slate-400 mb-3">
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
               </svg>
             </div>
-            <h3 className="text-lg sm:text-xl font-bold text-white tracking-tight">No Applications Configured</h3>
-            <p className="text-xs sm:text-sm text-slate-400 max-w-md mt-2 leading-relaxed">
-              Your account currently has no active applications or integrations. Choose from enterprise application templates or configure custom integrations to get started.
+            <h3 className="text-sm font-semibold text-white tracking-tight">No Applications Configured</h3>
+            <p className="text-xs text-slate-400 max-w-sm mt-1 leading-relaxed">
+              Your account currently has no active integrations. Connect an enterprise template or register a custom application.
             </p>
 
             {/* Quick 1-Click Template Accelerators */}
-            <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+            <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
               {boilerplateTemplates.slice(0, 3).map((tpl) => (
                 <button
                   key={tpl.id}
                   type="button"
                   disabled={connectingId === tpl.id}
                   onClick={() => handleConnectTemplate(tpl.id)}
-                  className="px-3.5 py-2 rounded-xl bg-slate-900/80 hover:bg-slate-800 border border-cyan-500/30 text-xs font-semibold text-cyan-300 hover:text-white transition-all cursor-pointer flex items-center gap-2"
+                  className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-white/10 text-xs font-medium text-slate-200 hover:text-white transition-colors cursor-pointer flex items-center gap-1.5"
                 >
                   <span>+ Add {tpl.name}</span>
                 </button>
@@ -627,7 +598,7 @@ export default function DashboardPage() {
               <button
                 type="button"
                 onClick={() => setAddModalOpen(true)}
-                className="px-4 py-2 rounded-xl bg-cyan-400 hover:bg-cyan-300 text-slate-950 font-bold text-xs transition-all shadow-md shadow-cyan-500/20 cursor-pointer"
+                className="px-3 py-1.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-semibold text-xs transition-colors cursor-pointer"
               >
                 Browse All Templates
               </button>
@@ -635,113 +606,98 @@ export default function DashboardPage() {
           </div>
         ) : (
           /* Configured Services Grid */
-          <div className="space-y-4 flex-1 w-full">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-slate-300 tracking-tight">
-                Configured Services ({filteredApps.length})
-              </h3>
-              <button
-                type="button"
-                onClick={() => setAddModalOpen(true)}
-                className="text-xs font-semibold text-cyan-400 hover:text-cyan-300 flex items-center gap-1.5 cursor-pointer"
-              >
-                <span>+ Add Service</span>
-              </button>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5 lg:gap-6 w-full">
-              {filteredApps.map((app) => {
-                const isExternal = Boolean(app.loginUrl && (app.loginUrl.startsWith("http://") || app.loginUrl.startsWith("https://")));
-                const launchHref = isExternal && app.loginUrl && user?.userId
-                  ? `${app.loginUrl}${app.loginUrl.includes("?") ? "&" : "?"}ssoUserId=${user.userId}&ssoEmail=${encodeURIComponent(user.email || "")}`
-                  : (app.loginUrl || `/apps/${app.id}`);
-                return (
-                  <div
-                    key={app.id}
-                    className="group bg-black rounded-2xl border border-cyan-500/40 p-6 sm:p-7 shadow-[0_0_20px_rgba(6,182,212,0.06)] hover:border-cyan-400/70 hover:shadow-[0_0_26px_rgba(6,182,212,0.12)] transition-all flex flex-col justify-between"
-                  >
-                    {/* Card Top Row: Custom App Logo & Actions */}
-                    <div className="flex items-start justify-between">
-                      <div className="p-2 sm:p-2.5 rounded-xl bg-[#070b14] border border-white/5 group-hover:border-cyan-500/30 transition-all">
-                        {app.logo ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={app.logo}
-                            alt={`${app.name} Logo`}
-                            className="w-12 h-12 sm:w-14 sm:h-14 object-contain"
-                          />
-                        ) : (
-                          <div className="w-12 h-12 sm:w-14 sm:h-14 flex items-center justify-center">
-                            <AppIcon iconType={app.iconType} />
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => removeApp(app.id)}
-                          title="Remove integration"
-                          className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 hover:border-red-500/40 hover:bg-red-500/10 text-slate-400 hover:text-red-400 flex items-center justify-center transition-all cursor-pointer"
-                        >
-                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>
-                        </button>
-
-                        <Link
-                          href={launchHref}
-                          target={isExternal ? "_blank" : undefined}
-                          rel={isExternal ? "noopener noreferrer" : undefined}
-                          className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-slate-400 group-hover:text-cyan-300 group-hover:border-cyan-500/40 group-hover:bg-cyan-950/20 transition-all cursor-pointer"
-                          title="Launch service"
-                        >
-                          <svg
-                            className="w-4 h-4"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              d="M7 17L17 7M17 7H9M17 7V15"
-                            />
-                          </svg>
-                        </Link>
-                      </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5 w-full">
+            {filteredApps.map((app) => {
+              const isExternal = Boolean(app.loginUrl && (app.loginUrl.startsWith("http://") || app.loginUrl.startsWith("https://")));
+              const launchHref = isExternal && app.loginUrl && user?.userId
+                ? `${app.loginUrl}${app.loginUrl.includes("?") ? "&" : "?"}ssoUserId=${user.userId}&ssoEmail=${encodeURIComponent(user.email || "")}`
+                : (app.loginUrl || `/apps/${app.id}`);
+              return (
+                <div
+                  key={app.id}
+                  className="group relative bg-slate-900/30 hover:bg-slate-900/60 border border-white/10 hover:border-cyan-500/40 rounded-xl p-4 transition-all flex flex-col justify-between"
+                >
+                  {/* Card Top Row: Custom App Logo & Actions */}
+                  <div className="flex items-start justify-between">
+                    <div className="w-9 h-9 rounded-lg bg-slate-950 border border-white/10 flex items-center justify-center p-1.5 shrink-0">
+                      {app.logo ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={app.logo}
+                          alt={`${app.name} Logo`}
+                          className="w-6 h-6 object-contain"
+                        />
+                      ) : (
+                        <div className="w-6 h-6 flex items-center justify-center">
+                          <AppIcon iconType={app.iconType} />
+                        </div>
+                      )}
                     </div>
 
-                    {/* Card Bottom Area: App Name, Category, and Status Pill */}
-                    <div className="mt-6 sm:mt-8">
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => removeApp(app.id)}
+                        title="Remove integration"
+                        className="w-7 h-7 rounded-md bg-white/5 border border-white/5 hover:border-red-500/30 hover:bg-red-500/10 text-slate-400 hover:text-red-400 flex items-center justify-center transition-colors cursor-pointer"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
+
                       <Link
                         href={launchHref}
                         target={isExternal ? "_blank" : undefined}
                         rel={isExternal ? "noopener noreferrer" : undefined}
+                        className="w-7 h-7 rounded-md bg-white/5 border border-white/5 hover:border-cyan-500/30 hover:bg-cyan-500/10 text-slate-400 hover:text-cyan-300 flex items-center justify-center transition-colors cursor-pointer"
+                        title="Launch service"
                       >
-                        <h3 className="text-xl sm:text-2xl font-bold text-white tracking-tight group-hover:text-[#38bdf8] transition-colors cursor-pointer">
-                          {app.name}
-                        </h3>
+                        <svg
+                          className="w-3.5 h-3.5"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            d="M7 17L17 7M17 7H9M17 7V15"
+                          />
+                        </svg>
                       </Link>
-                      <p className="text-xs sm:text-sm text-slate-400 font-normal mt-1">
-                        {app.category}
-                      </p>
-
-                      <div className="mt-3.5 flex items-center gap-2">
-                        <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-[#08152e] border border-cyan-500/25 text-cyan-300">
-                          <span className={`w-1.5 h-1.5 rounded-full ${app.statusColor || "bg-cyan-400"}`} />
-                          <span>{app.status || "Active"}</span>
-                        </div>
-                        <span className="text-[11px] text-slate-500">
-                          Total Logins: {app.metrics?.totalLogins || 0}
-                        </span>
-                      </div>
                     </div>
                   </div>
-                );
-              })}
-            </div>
+
+                  {/* Card Bottom Area: App Name, Category, and Status Pill */}
+                  <div className="mt-4">
+                    <Link
+                      href={launchHref}
+                      target={isExternal ? "_blank" : undefined}
+                      rel={isExternal ? "noopener noreferrer" : undefined}
+                    >
+                      <h3 className="text-sm font-semibold text-white tracking-tight group-hover:text-cyan-300 transition-colors cursor-pointer truncate">
+                        {app.name}
+                      </h3>
+                    </Link>
+                    <p className="text-xs text-slate-400 truncate mt-0.5">
+                      {app.category}
+                    </p>
+
+                    <div className="mt-3 pt-2.5 border-t border-white/5 flex items-center justify-between">
+                      <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-medium bg-white/5 border border-white/10 text-slate-300">
+                        <span className={`w-1.5 h-1.5 rounded-full ${app.statusColor || "bg-cyan-400"}`} />
+                        <span>{app.status || "Active"}</span>
+                      </div>
+                      <span className="text-[10px] text-slate-500 font-mono">
+                        Logins: {app.metrics?.totalLogins || 0}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
       </main>
@@ -749,20 +705,20 @@ export default function DashboardPage() {
       {/* Configure / Add Application Modal */}
       {addModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center px-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="relative w-full max-w-2xl rounded-3xl bg-[#0c1424] border border-cyan-500/30 p-6 sm:p-8 shadow-2xl text-white max-h-[90vh] overflow-y-auto">
+          <div className="relative w-full max-w-2xl rounded-xl bg-slate-950 border border-white/10 p-5 sm:p-6 shadow-2xl text-white max-h-[90vh] overflow-y-auto">
             <button
               type="button"
               onClick={() => setAddModalOpen(false)}
-              className="absolute top-5 right-5 p-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-colors cursor-pointer"
+              className="absolute top-4 right-4 p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-colors cursor-pointer"
             >
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
 
-            <div className="mb-6">
-              <h3 className="text-xl font-bold tracking-tight text-white">Configure Applications</h3>
-              <p className="text-xs text-slate-400 mt-1">
+            <div className="mb-5">
+              <h3 className="text-base font-semibold tracking-tight text-white">Configure Applications</h3>
+              <p className="text-xs text-slate-400 mt-0.5">
                 Select enterprise templates or register custom applications to add them to your dashboard.
               </p>
             </div>
@@ -772,9 +728,9 @@ export default function DashboardPage() {
               <button
                 type="button"
                 onClick={() => setActiveModalTab("templates")}
-                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
                   activeModalTab === "templates"
-                    ? "bg-cyan-400 text-slate-950 shadow-md shadow-cyan-500/20"
+                    ? "bg-cyan-500 text-slate-950 font-semibold"
                     : "text-slate-400 hover:text-white hover:bg-white/5"
                 }`}
               >
@@ -783,9 +739,9 @@ export default function DashboardPage() {
               <button
                 type="button"
                 onClick={() => setActiveModalTab("custom")}
-                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
                   activeModalTab === "custom"
-                    ? "bg-cyan-400 text-slate-950 shadow-md shadow-cyan-500/20"
+                    ? "bg-cyan-500 text-slate-950 font-semibold"
                     : "text-slate-400 hover:text-white hover:bg-white/5"
                 }`}
               >
@@ -794,7 +750,7 @@ export default function DashboardPage() {
             </div>
 
             {modalSuccess && (
-              <div className="mb-4 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs flex items-center gap-2">
+              <div className="mb-4 p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs flex items-center gap-2">
                 <svg className="w-4 h-4 shrink-0 text-emerald-400" viewBox="0 0 20 20" fill="currentColor">
                   <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                 </svg>
@@ -803,7 +759,7 @@ export default function DashboardPage() {
             )}
 
             {modalErr && (
-              <div className="mb-4 p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-300 text-xs flex items-center gap-2">
+              <div className="mb-4 p-2.5 rounded-lg bg-red-500/10 border border-red-500/30 text-red-300 text-xs flex items-center gap-2">
                 <svg className="w-4 h-4 shrink-0 text-red-400" viewBox="0 0 20 20" fill="currentColor">
                   <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
                 </svg>
@@ -812,7 +768,7 @@ export default function DashboardPage() {
             )}
 
             {activeModalTab === "templates" ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {boilerplateTemplates.map((template) => {
                   const isConnected = apps.some(
                     (a) => a.id === template.id || a.name.toLowerCase() === template.name.toLowerCase()
@@ -822,24 +778,24 @@ export default function DashboardPage() {
                   return (
                     <div
                       key={template.id}
-                      className="p-4 rounded-2xl bg-black border border-white/10 hover:border-cyan-500/30 transition-all flex flex-col justify-between"
+                      className="p-3.5 rounded-lg bg-slate-900/40 border border-white/10 hover:border-white/20 transition-all flex flex-col justify-between"
                     >
                       <div>
-                        <div className="flex items-center gap-3 mb-2.5">
-                          <div className="w-10 h-10 rounded-xl bg-[#070b14] border border-white/10 flex items-center justify-center p-1.5 shrink-0">
+                        <div className="flex items-center gap-2.5 mb-2">
+                          <div className="w-8 h-8 rounded-lg bg-slate-950 border border-white/10 flex items-center justify-center p-1 shrink-0">
                             {template.logo ? (
                               // eslint-disable-next-line @next/next/no-img-element
-                              <img src={template.logo} alt={template.name} className="w-7 h-7 object-contain" />
+                              <img src={template.logo} alt={template.name} className="w-5 h-5 object-contain" />
                             ) : (
                               <AppIcon iconType={template.iconType} />
                             )}
                           </div>
                           <div>
-                            <h4 className="text-sm font-bold text-white leading-tight">{template.name}</h4>
-                            <p className="text-[11px] text-slate-400">{template.category}</p>
+                            <h4 className="text-xs font-semibold text-white leading-tight">{template.name}</h4>
+                            <p className="text-[10px] text-slate-400">{template.category}</p>
                           </div>
                         </div>
-                        <p className="text-xs text-slate-400 line-clamp-2 leading-relaxed mb-4">
+                        <p className="text-xs text-slate-400 line-clamp-2 leading-relaxed mb-3">
                           {template.description}
                         </p>
                       </div>
@@ -848,10 +804,10 @@ export default function DashboardPage() {
                         type="button"
                         disabled={isConnected || isConnecting}
                         onClick={() => handleConnectTemplate(template.id)}
-                        className={`w-full py-2 px-3 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-2 ${
+                        className={`w-full py-1.5 px-3 rounded-lg text-xs font-medium transition-colors cursor-pointer flex items-center justify-center gap-2 ${
                           isConnected
                             ? "bg-white/5 border border-white/10 text-emerald-400 cursor-default"
-                            : "bg-cyan-400 hover:bg-cyan-300 text-slate-950 shadow-md shadow-cyan-500/20"
+                            : "bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-semibold"
                         }`}
                       >
                         {isConnecting ? (
@@ -873,36 +829,36 @@ export default function DashboardPage() {
                 })}
               </div>
             ) : (
-              <form onSubmit={handleAddCustom} className="space-y-4">
+              <form onSubmit={handleAddCustom} className="space-y-3.5">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1">Application Name *</label>
+                  <label className="block text-xs font-medium text-slate-300 mb-1">Application Name *</label>
                   <input
                     type="text"
                     value={customName}
                     onChange={(e) => setCustomName(e.target.value)}
                     placeholder="e.g. Internal Payroll, CRM Portal"
-                    className="w-full px-3 py-2 rounded-xl bg-black border border-white/20 text-xs text-white outline-none focus:border-cyan-400"
+                    className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-white/10 text-xs text-white outline-none focus:border-cyan-500/60"
                     required
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1">Category</label>
+                  <label className="block text-xs font-medium text-slate-300 mb-1">Category</label>
                   <input
                     type="text"
                     value={customCategory}
                     onChange={(e) => setCustomCategory(e.target.value)}
                     placeholder="e.g. Enterprise HR, Finance"
-                    className="w-full px-3 py-2 rounded-xl bg-black border border-white/20 text-xs text-white outline-none focus:border-cyan-400"
+                    className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-white/10 text-xs text-white outline-none focus:border-cyan-500/60"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1">Auth Protocol</label>
+                  <label className="block text-xs font-medium text-slate-300 mb-1">Auth Protocol</label>
                   <select
                     value={customType}
                     onChange={(e) => setCustomType(e.target.value as IntegrationType)}
-                    className="w-full px-3 py-2 rounded-xl bg-black border border-white/20 text-xs text-white outline-none focus:border-cyan-400"
+                    className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-white/10 text-xs text-white outline-none focus:border-cyan-500/60"
                   >
                     <option value="sso_oauth">OAuth 2.0 / OpenID Connect</option>
                     <option value="saml">SAML 2.0 Web SSO</option>
@@ -912,25 +868,25 @@ export default function DashboardPage() {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1">Launch / Login URL *</label>
+                  <label className="block text-xs font-medium text-slate-300 mb-1">Launch / Login URL *</label>
                   <input
                     type="url"
                     value={customLoginUrl}
                     onChange={(e) => setCustomLoginUrl(e.target.value)}
                     placeholder="https://app.company.internal/login"
-                    className="w-full px-3 py-2 rounded-xl bg-black border border-white/20 text-xs text-white outline-none focus:border-cyan-400"
+                    className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-white/10 text-xs text-white outline-none focus:border-cyan-500/60"
                     required
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1">Client ID / Entity ID</label>
+                  <label className="block text-xs font-medium text-slate-300 mb-1">Client ID / Entity ID</label>
                   <input
                     type="text"
                     value={customClientId}
                     onChange={(e) => setCustomClientId(e.target.value)}
                     placeholder="e.g. client_sentinel_8492"
-                    className="w-full px-3 py-2 rounded-xl bg-black border border-white/20 text-xs text-white outline-none focus:border-cyan-400"
+                    className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-white/10 text-xs text-white outline-none focus:border-cyan-500/60"
                   />
                 </div>
 
@@ -940,7 +896,7 @@ export default function DashboardPage() {
                     id="enforceMfa"
                     checked={customMfaRequired}
                     onChange={(e) => setCustomMfaRequired(e.target.checked)}
-                    className="w-4 h-4 rounded border-slate-700 bg-black text-cyan-400 accent-cyan-400 cursor-pointer"
+                    className="w-4 h-4 rounded border-slate-700 bg-slate-900 text-cyan-400 accent-cyan-500 cursor-pointer"
                   />
                   <label htmlFor="enforceMfa" className="text-xs text-slate-300 cursor-pointer select-none">
                     Enforce Multi-Factor Authentication (MFA) before launch
@@ -951,13 +907,13 @@ export default function DashboardPage() {
                   <button
                     type="button"
                     onClick={() => setAddModalOpen(false)}
-                    className="px-4 py-2 rounded-xl bg-slate-900 text-slate-300 text-xs font-semibold hover:bg-slate-800 transition-all cursor-pointer"
+                    className="px-3.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-slate-300 text-xs font-medium transition-colors cursor-pointer"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
-                    className="px-5 py-2 rounded-xl bg-cyan-400 hover:bg-cyan-300 text-slate-950 text-xs font-bold transition-all shadow-md shadow-cyan-500/20 cursor-pointer"
+                    className="px-4 py-1.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-xs font-semibold transition-colors cursor-pointer"
                   >
                     Register Application
                   </button>
@@ -970,32 +926,32 @@ export default function DashboardPage() {
 
       {/* MFA Pairing Modal */}
       {pairingModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center px-4 bg-black/75 backdrop-blur-md animate-in fade-in duration-200">
-          <div className="relative w-full max-w-md rounded-3xl bg-[#0c1424] border border-cyan-500/30 p-6 sm:p-8 shadow-2xl text-white">
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="relative w-full max-w-md rounded-xl bg-slate-950 border border-white/10 p-5 sm:p-6 shadow-2xl text-white">
             <button
               type="button"
               onClick={() => setPairingModalOpen(false)}
-              className="absolute top-5 right-5 p-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-colors cursor-pointer"
+              className="absolute top-4 right-4 p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-colors cursor-pointer"
             >
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
 
-            <div className="text-center mb-6">
-              <div className="inline-flex p-3 rounded-2xl bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 mb-3">
-                <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8">
+            <div className="text-center mb-5">
+              <div className="inline-flex p-2.5 rounded-lg bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 mb-2.5">
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
                 </svg>
               </div>
-              <h3 className="text-xl font-bold tracking-tight text-white">Pair Mobile Authenticator</h3>
-              <p className="text-xs text-slate-400 mt-1.5">
+              <h3 className="text-base font-semibold tracking-tight text-white">Pair Mobile Authenticator</h3>
+              <p className="text-xs text-slate-400 mt-1">
                 Scan the QR code with your mobile authenticator app or enter the manual pairing key.
               </p>
             </div>
 
             {(pairingValidationErr || mfaError) && (
-              <div className="mb-4 p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-300 text-xs flex items-center gap-2">
+              <div className="mb-4 p-2.5 rounded-lg bg-red-500/10 border border-red-500/30 text-red-300 text-xs flex items-center gap-2">
                 <svg className="w-4 h-4 shrink-0 text-red-400" viewBox="0 0 20 20" fill="currentColor">
                   <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
                 </svg>
@@ -1004,7 +960,7 @@ export default function DashboardPage() {
             )}
 
             {pairingSuccess && (
-              <div className="mb-4 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs flex items-center gap-2">
+              <div className="mb-4 p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs flex items-center gap-2">
                 <svg className="w-4 h-4 shrink-0 text-emerald-400" viewBox="0 0 20 20" fill="currentColor">
                   <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                 </svg>
@@ -1013,22 +969,22 @@ export default function DashboardPage() {
             )}
 
             {mfaLoading && !setupData ? (
-              <div className="py-12 flex flex-col items-center justify-center gap-3">
-                <svg className="animate-spin h-8 w-8 text-cyan-400" viewBox="0 0 24 24" fill="none">
+              <div className="py-10 flex flex-col items-center justify-center gap-2.5">
+                <svg className="animate-spin h-6 w-6 text-cyan-400" viewBox="0 0 24 24" fill="none">
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                 </svg>
                 <p className="text-xs text-slate-400">Generating secure pairing secret...</p>
               </div>
             ) : setupData ? (
-              <div className="space-y-4">
+              <div className="space-y-3.5">
                 {setupData.otpAuthUri && (
-                  <div className="flex flex-col items-center p-3 rounded-2xl bg-white/5 border border-white/10">
+                  <div className="flex flex-col items-center p-3 rounded-xl bg-slate-900 border border-white/10">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(setupData.otpAuthUri)}`}
                       alt="Authenticator QR Code"
-                      className="w-40 h-40 rounded-xl bg-white p-2 object-contain"
+                      className="w-36 h-36 rounded-lg bg-white p-2 object-contain"
                     />
                     <span className="text-[11px] text-slate-400 mt-2 font-mono">{setupData.accountEmail || user?.email}</span>
                   </div>
@@ -1039,14 +995,14 @@ export default function DashboardPage() {
                     <label className="block text-[11px] font-medium text-slate-400 mb-1">
                       Manual Secret Key
                     </label>
-                    <div className="flex items-center gap-2 p-2.5 rounded-xl bg-[#131926] border border-slate-700/60">
+                    <div className="flex items-center gap-2 p-2 rounded-lg bg-slate-900 border border-white/10">
                       <code className="text-xs text-cyan-300 font-mono tracking-wider flex-1 truncate">
                         {setupData.secretKey}
                       </code>
                       <button
                         type="button"
                         onClick={handleCopySecret}
-                        className="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-xs font-semibold text-white transition-colors cursor-pointer shrink-0"
+                        className="px-2.5 py-1 rounded-md bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-medium text-white transition-colors cursor-pointer shrink-0"
                       >
                         {copiedKey ? "Copied" : "Copy"}
                       </button>
@@ -1054,7 +1010,7 @@ export default function DashboardPage() {
                   </div>
                 )}
 
-                <form onSubmit={handleVerifyPairing} className="pt-2">
+                <form onSubmit={handleVerifyPairing} className="pt-1">
                   <label className="block text-xs font-medium text-slate-300 mb-1.5 text-center">
                     Enter 6-Digit Authenticator Code
                   </label>
@@ -1066,17 +1022,17 @@ export default function DashboardPage() {
                     value={totpCode}
                     onChange={(e) => setTotpCode(e.target.value)}
                     placeholder="000000"
-                    className="w-full text-center text-xl tracking-[0.4em] font-mono font-bold bg-[#131926] border border-cyan-500/40 rounded-xl py-2.5 text-cyan-300 placeholder-slate-600 focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400 transition-all mb-4 shadow-inner"
+                    className="w-full text-center text-lg tracking-[0.3em] font-mono font-bold bg-slate-900 border border-white/15 rounded-lg py-2 text-cyan-300 placeholder-slate-600 focus:outline-none focus:border-cyan-500/60 transition-colors mb-3.5"
                   />
 
                   <button
                     type="submit"
                     disabled={mfaLoading || !!pairingSuccess}
-                    className="w-full py-3 px-4 bg-[#3bf0ff] hover:bg-[#2fe0ef] disabled:opacity-60 disabled:cursor-not-allowed active:scale-[0.99] text-slate-950 font-bold text-sm rounded-xl transition-all shadow-lg shadow-cyan-500/20 cursor-pointer flex items-center justify-center gap-2"
+                    className="w-full py-2.5 px-4 bg-cyan-500 hover:bg-cyan-400 disabled:opacity-50 disabled:cursor-not-allowed text-slate-950 font-semibold text-xs rounded-lg transition-colors cursor-pointer flex items-center justify-center gap-2"
                   >
                     {mfaLoading ? (
                       <>
-                        <svg className="animate-spin h-4 w-4 text-slate-950" viewBox="0 0 24 24" fill="none">
+                        <svg className="animate-spin h-3.5 w-3.5 text-slate-950" viewBox="0 0 24 24" fill="none">
                           <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                           <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                         </svg>
@@ -1096,10 +1052,10 @@ export default function DashboardPage() {
       {/* Account Profile Modal (Name Edit Only with Locked Credentials) */}
       {profileModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-          <div className="bg-slate-950 border border-white/15 rounded-3xl max-w-md w-full p-6 shadow-2xl relative">
+          <div className="bg-slate-950 border border-white/10 rounded-xl max-w-md w-full p-5 sm:p-6 shadow-2xl relative">
             <div className="flex items-center justify-between border-b border-white/10 pb-3 mb-4">
               <div>
-                <h3 className="text-base font-bold text-white">Account Profile Settings</h3>
+                <h3 className="text-base font-semibold text-white">Account Profile Settings</h3>
                 <p className="text-[11px] text-slate-400 mt-0.5">Manage identity details and view credential permissions.</p>
               </div>
               <button
@@ -1112,19 +1068,19 @@ export default function DashboardPage() {
             </div>
 
             {profileSuccess && (
-              <div className="mb-4 p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs">
+              <div className="mb-4 p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs">
                 {profileSuccess}
               </div>
             )}
             {profileError && (
-              <div className="mb-4 p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs">
+              <div className="mb-4 p-2.5 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs">
                 {profileError}
               </div>
             )}
 
-            <form onSubmit={handleSaveProfile} className="space-y-4">
+            <form onSubmit={handleSaveProfile} className="space-y-3.5">
               <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">
+                <label className="block text-xs font-medium text-slate-300 mb-1">
                   Account Display Name <span className="text-cyan-400 font-normal">(Editable)</span>
                 </label>
                 <input
@@ -1132,14 +1088,14 @@ export default function DashboardPage() {
                   value={editFullName}
                   onChange={(e) => setEditFullName(e.target.value)}
                   placeholder="Your full name"
-                  className="w-full px-3 py-2 rounded-xl bg-black border border-white/20 text-xs text-white outline-none focus:border-cyan-400"
+                  className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-white/10 text-xs text-white outline-none focus:border-cyan-500/60"
                   required
                 />
               </div>
 
               <div>
                 <div className="flex items-center justify-between mb-1">
-                  <label className="text-xs font-semibold text-slate-400">Login Credential / Email</label>
+                  <label className="text-xs font-medium text-slate-400">Login Credential / Email</label>
                   <span className="text-[10px] text-amber-400 font-medium flex items-center gap-1">
                     <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
@@ -1151,7 +1107,7 @@ export default function DashboardPage() {
                   type="email"
                   value={user?.email || ""}
                   disabled
-                  className="w-full px-3 py-2 rounded-xl bg-slate-900/60 border border-white/5 text-xs text-slate-400 outline-none cursor-not-allowed select-none"
+                  className="w-full px-3 py-2 rounded-lg bg-slate-900/60 border border-white/5 text-xs text-slate-400 outline-none cursor-not-allowed select-none"
                 />
                 <p className="text-[10px] text-slate-500 mt-1">
                   Login credentials and emails are governed by Sentinel IAM policy and cannot be modified by account owners. Contact an administrator to request a credential update.
@@ -1159,12 +1115,12 @@ export default function DashboardPage() {
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-400 mb-1">Assigned Privilege Tier</label>
+                <label className="block text-xs font-medium text-slate-400 mb-1">Assigned Privilege Tier</label>
                 <input
                   type="text"
                   value={user?.role || "USER"}
                   disabled
-                  className="w-full px-3 py-2 rounded-xl bg-slate-900/60 border border-white/5 text-xs text-slate-400 outline-none cursor-not-allowed select-none"
+                  className="w-full px-3 py-2 rounded-lg bg-slate-900/60 border border-white/5 text-xs text-slate-400 outline-none cursor-not-allowed select-none"
                 />
               </div>
 
@@ -1172,14 +1128,14 @@ export default function DashboardPage() {
                 <button
                   type="button"
                   onClick={() => setProfileModalOpen(false)}
-                  className="px-3.5 py-1.5 rounded-xl bg-slate-900 text-slate-300 text-xs font-semibold hover:bg-slate-800 transition-all cursor-pointer"
+                  className="px-3.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-slate-300 text-xs font-medium transition-colors cursor-pointer"
                 >
                   Close
                 </button>
                 <button
                   type="submit"
                   disabled={profileSaving}
-                  className="px-4 py-1.5 rounded-xl bg-cyan-400 hover:bg-cyan-300 text-slate-950 text-xs font-bold transition-all disabled:opacity-50 cursor-pointer"
+                  className="px-4 py-1.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-xs font-semibold transition-colors disabled:opacity-50 cursor-pointer"
                 >
                   {profileSaving ? "Saving..." : "Save Name"}
                 </button>
