@@ -19,7 +19,7 @@ export default function Header() {
     <header className="sticky top-0 z-50 w-full bg-black/90 backdrop-blur-md border-b border-white/10 transition-colors">
       <div className="max-w-[1600px] mx-auto px-6 sm:px-10 lg:px-16 h-20 flex items-center justify-between">
         {/* Brand Logo */}
-        <Link href="/landingpage" className="flex items-center gap-2.5 group">
+        <Link href="/" className="flex items-center gap-2.5 group">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/logo.png" alt="Sentinel Logo" className="w-8 h-8 rounded-lg object-contain" />
           <span className="text-2xl font-bold tracking-tight text-cyan-400 group-hover:text-cyan-300 transition-all">

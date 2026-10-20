@@ -16,7 +16,7 @@ export default function TermsPage() {
         {/* Breadcrumb & Navigation Action */}
         <div className="flex items-center justify-between gap-4 mb-8 pb-4 border-b border-white/10">
           <div className="flex items-center gap-2 text-xs text-slate-400">
-            <Link href="/landingpage" className="hover:text-cyan-400 transition-colors">
+            <Link href="/" className="hover:text-cyan-400 transition-colors">
               Home
             </Link>
             <span>/</span>
