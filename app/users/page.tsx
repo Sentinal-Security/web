@@ -9,6 +9,7 @@ import { getStoredSession, updateStoredUser, clearSession } from "@/lib/session"
 import { useAdmin } from "@/hooks/useAdmin";
 import { useIntegrations } from "@/hooks/useIntegrations";
 import { updateUserProfile } from "@/lib/api";
+import { SecurityAuditPanel } from "@/components/SecurityAuditPanel";
 
 function generateSecureTempPassword(prefix = "Sec!"): string {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!#$*";
@@ -32,6 +33,17 @@ export default function UserManagementPage() {
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
 
   // Authentication & Guard
+  const [adminViewTab, setAdminViewTab] = useState<"directory" | "audit">("directory");
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.get("tab") === "audit") {
+        setAdminViewTab("audit");
+      }
+    }
+  }, []);
+
   useEffect(() => {
     const session = getStoredSession();
     if (!session || !session.user) {
@@ -525,7 +537,48 @@ export default function UserManagementPage() {
           </div>
         </div>
 
-        {/* Directory Metrics Overview */}
+        {/* Admin Navigation View Tabs */}
+        <div className="flex items-center gap-2 border-b border-white/10 pb-3">
+          <button
+            type="button"
+            onClick={() => setAdminViewTab("directory")}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              adminViewTab === "directory"
+                ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40"
+                : "bg-slate-900/60 text-slate-400 hover:text-white border border-transparent hover:border-white/10"
+            }`}
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+            </svg>
+            <span>Member Directory</span>
+            <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-cyan-950 text-cyan-400 border border-cyan-800">
+              {users.length}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setAdminViewTab("audit")}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              adminViewTab === "audit"
+                ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40"
+                : "bg-slate-900/60 text-slate-400 hover:text-white border border-transparent hover:border-white/10"
+            }`}
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            <span>Security & Audit Logs</span>
+            <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
+          </button>
+        </div>
+
+        {adminViewTab === "audit" ? (
+          <SecurityAuditPanel adminId={currentUser?.userId} company={currentUser?.company} />
+        ) : (
+          <>
+            {/* Directory Metrics Overview */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="p-4 rounded-2xl bg-black border border-white/10 flex flex-col">
             <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Total Directory</span>
@@ -805,7 +858,9 @@ export default function UserManagementPage() {
             </table>
           </div>
         </div>
-      </main>
+      </>
+    )}
+  </main>
 
       {/* UNIFIED MODAL: PROVISION MEMBERS (SINGLE + BULK) */}
       {provisionModalOpen && (

@@ -14,10 +14,12 @@ import {
   LaunchServiceResponse,
 } from "@/types/integration";
 import { AdminUser, CreateUserPayload, BatchCreateUsersPayload } from "@/types/admin";
+import { SecurityAuditRecord, ClientTelemetryPayload } from "@/types/audit";
 
 export * from "@/types/auth";
 export * from "@/types/integration";
 export * from "@/types/admin";
+export * from "@/types/audit";
 
 export const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL || "https://backend-pi68.onrender.com";
@@ -420,5 +422,46 @@ export async function adminDeleteUser(
     return res.ok;
   } catch {
     return false;
+  }
+}
+
+export async function fetchAuditLogs(options?: {
+  adminId?: number;
+  company?: string;
+  category?: string;
+  severity?: string;
+  search?: string;
+  limit?: number;
+}): Promise<SecurityAuditRecord[]> {
+  try {
+    const params = new URLSearchParams();
+    if (options?.adminId) params.append("adminId", options.adminId.toString());
+    if (options?.company) params.append("company", options.company);
+    if (options?.category && options.category !== "ALL") params.append("category", options.category);
+    if (options?.severity && options.severity !== "ALL") params.append("severity", options.severity);
+    if (options?.search) params.append("search", options.search.trim());
+    if (options?.limit) params.append("limit", options.limit.toString());
+
+    const queryString = params.toString() ? `?${params.toString()}` : "";
+    const res = await fetch(`${API_BASE_URL}/api/admin/audit-logs${queryString}`, {
+      cache: "no-store",
+    });
+    if (!res.ok) return [];
+    const json = await res.json();
+    return json?.data || [];
+  } catch {
+    return [];
+  }
+}
+
+export async function recordAuditEvent(payload: ClientTelemetryPayload): Promise<void> {
+  try {
+    await fetch(`${API_BASE_URL}/api/audit/event`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+  } catch {
+    // Fire and forget - never block the client UI
   }
 }

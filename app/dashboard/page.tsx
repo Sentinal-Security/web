@@ -328,17 +328,34 @@ export default function DashboardPage() {
               </button>
 
               {isAdmin && (
-                <Link
-                  href="/users"
-                  className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition-all text-left border border-transparent hover:border-white/10 text-slate-400 hover:text-white hover:bg-white/5"
-                >
-                  <div className="flex items-center gap-3">
-                    <svg className="w-4 h-4 text-purple-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-                    </svg>
-                    <span>User Directory</span>
-                  </div>
-                </Link>
+                <>
+                  <Link
+                    href="/users"
+                    className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition-all text-left border border-transparent hover:border-white/10 text-slate-400 hover:text-white hover:bg-white/5"
+                  >
+                    <div className="flex items-center gap-3">
+                      <svg className="w-4 h-4 text-purple-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                      </svg>
+                      <span>User Directory</span>
+                    </div>
+                  </Link>
+
+                  <Link
+                    href="/users?tab=audit"
+                    className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition-all text-left border border-transparent hover:border-white/10 text-slate-400 hover:text-white hover:bg-white/5"
+                  >
+                    <div className="flex items-center gap-3">
+                      <svg className="w-4 h-4 text-cyan-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                      <span>Audit Logs</span>
+                    </div>
+                    <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-cyan-950 text-cyan-400 border border-cyan-800">
+                      Live
+                    </span>
+                  </Link>
+                </>
               )}
 
               {/* Developer & Integration */}
