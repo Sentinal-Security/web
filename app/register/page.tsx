@@ -60,8 +60,16 @@ export default function RegisterPage() {
       setValidationError("Password is required.");
       return;
     }
-    if (password.length < 6) {
-      setValidationError("Password must be at least 6 characters.");
+    if (password.length < 8) {
+      setValidationError("Password must be at least 8 characters long.");
+      return;
+    }
+    const hasUpper = /[A-Z]/.test(password);
+    const hasLower = /[a-z]/.test(password);
+    const hasDigit = /[0-9]/.test(password);
+    const hasSpecial = /[!@#$%^&*()_+\-=\[\]{}|;':",./<>?`~]/.test(password);
+    if (!hasUpper || !hasLower || !hasDigit || !hasSpecial) {
+      setValidationError("Password must include uppercase, lowercase, a number, and a special character.");
       return;
     }
 
@@ -362,10 +370,30 @@ export default function RegisterPage() {
                     type="password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Create a strong password (min. 6 characters)"
+                    placeholder="Create a strong password (min. 8 characters)"
                     className="w-full bg-transparent border-none outline-none text-white text-sm placeholder-slate-500"
                   />
                 </div>
+                {password && (
+                  <div className="mt-2 p-2.5 rounded-lg bg-slate-900/60 border border-slate-700/60 text-[11px] space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className={`w-1.5 h-1.5 rounded-full ${password.length >= 8 ? "bg-emerald-400" : "bg-slate-600"}`}></span>
+                      <span className={password.length >= 8 ? "text-emerald-300 font-medium" : "text-slate-400"}>At least 8 characters</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className={`w-1.5 h-1.5 rounded-full ${/[A-Z]/.test(password) && /[a-z]/.test(password) ? "bg-emerald-400" : "bg-slate-600"}`}></span>
+                      <span className={/[A-Z]/.test(password) && /[a-z]/.test(password) ? "text-emerald-300 font-medium" : "text-slate-400"}>Uppercase and lowercase letters</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className={`w-1.5 h-1.5 rounded-full ${/[0-9]/.test(password) ? "bg-emerald-400" : "bg-slate-600"}`}></span>
+                      <span className={/[0-9]/.test(password) ? "text-emerald-300 font-medium" : "text-slate-400"}>At least one numeric digit</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className={`w-1.5 h-1.5 rounded-full ${/[!@#$%^&*()_+\-=\[\]{}|;':",./<>?`~]/.test(password) ? "bg-emerald-400" : "bg-slate-600"}`}></span>
+                      <span className={/[!@#$%^&*()_+\-=\[\]{}|;':",./<>?`~]/.test(password) ? "text-emerald-300 font-medium" : "text-slate-400"}>At least one special symbol (!@#$%...)</span>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Terms and Privacy Policy Checkbox */}
