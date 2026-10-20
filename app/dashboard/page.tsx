@@ -291,7 +291,7 @@ export default function DashboardPage() {
                 className="w-8 h-8 rounded-lg object-contain"
               />
               <div className="flex flex-col min-w-0">
-                <span className="text-base font-bold tracking-tight text-white truncate">
+                <span className="text-base font-bold tracking-wider text-white truncate font-orbitron">
                   Sentinel IAM
                 </span>
                 {isAdmin ? (

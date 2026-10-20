@@ -122,7 +122,7 @@ export default function RegisterPage() {
       <header className="w-full max-w-[1600px] mx-auto px-6 sm:px-10 lg:px-16 pt-8 pb-6 flex items-center justify-between">
         <Link
           href="/"
-          className="text-2xl font-bold tracking-tight text-[#38e1ff] hover:opacity-90 transition-opacity flex items-center gap-2.5"
+          className="text-2xl font-bold tracking-wider text-[#38e1ff] hover:opacity-90 transition-opacity flex items-center gap-2.5 font-orbitron"
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/logo.png" alt="Sentinel Logo" className="w-8 h-8 rounded-lg object-contain" />

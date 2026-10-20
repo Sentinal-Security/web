@@ -22,7 +22,7 @@ export default function Header() {
         <Link href="/" className="flex items-center gap-2.5 group">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/logo.png" alt="Sentinel Logo" className="w-8 h-8 rounded-lg object-contain" />
-          <span className="text-2xl font-bold tracking-tight text-cyan-400 group-hover:text-cyan-300 transition-all">
+          <span className="text-2xl font-bold tracking-wider text-cyan-400 group-hover:text-cyan-300 transition-all font-orbitron">
             Sentinel
           </span>
         </Link>
