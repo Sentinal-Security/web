@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Header from "@/app/partials/header";
 import Footer from "@/app/partials/footer";
 
 export default function DownloadsPage() {
@@ -30,37 +31,7 @@ export default function DownloadsPage() {
       />
 
       {/* Top Header Navigation */}
-      <header className="w-full max-w-[1600px] mx-auto px-6 sm:px-10 lg:px-16 pt-8 pb-6 flex items-center justify-between relative z-10">
-        <Link
-          href="/"
-          className="text-2xl font-bold tracking-tight text-[#38e1ff] hover:opacity-90 transition-opacity flex items-center gap-2.5"
-        >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/logo.png" alt="Sentinel Logo" className="w-8 h-8 rounded-lg object-contain" />
-          <span>Sentinel</span>
-        </Link>
-
-        <nav className="flex items-center gap-6 sm:gap-10 text-xs sm:text-sm text-slate-300 font-medium">
-          <Link href="/pricing" className="hover:text-white transition-colors">
-            Pricing
-          </Link>
-          <Link href="/features" className="hover:text-white transition-colors">
-            Features
-          </Link>
-          <Link href="/docs" className="hover:text-white transition-colors">
-            API &amp; Docs
-          </Link>
-          <Link href="/dashboard" className="hover:text-white transition-colors hidden sm:inline-block">
-            Dashboard
-          </Link>
-          <Link
-            href="/login"
-            className="px-4 py-2 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 text-white font-semibold text-xs border border-slate-700 transition-all"
-          >
-            Sign In
-          </Link>
-        </nav>
-      </header>
+      <Header />
 
       {/* Main Content Showcase */}
       <main className="flex-1 w-full max-w-[1200px] mx-auto px-6 sm:px-10 py-10 sm:py-16 relative z-10">
