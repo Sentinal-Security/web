@@ -9,6 +9,7 @@ import {
   revokeUserService,
   batchCreateAdminUsers,
   adminDeleteUser,
+  adminUnlockUser,
 } from "@/lib/api";
 import { exportUsersToCsv } from "@/lib/csvExport";
 
@@ -155,6 +156,34 @@ export function useAdmin(isAdmin: boolean = false, adminId?: number, company?: s
     [adminId]
   );
 
+  const unlockUser = useCallback(
+    async (userId: number): Promise<boolean> => {
+      setActionError(null);
+      setActionSuccess(null);
+      try {
+        const ok = await adminUnlockUser(userId, adminId);
+        if (ok) {
+          setActionSuccess("Account unlocked successfully.");
+          setUsers((prev) =>
+            prev.map((u) =>
+              u.id === userId
+                ? { ...u, accountLocked: false, failedAttempts: 0 }
+                : u
+            )
+          );
+          return true;
+        } else {
+          setActionError("Failed to unlock account.");
+          return false;
+        }
+      } catch (err: any) {
+        setActionError(err?.message || "Failed to unlock account.");
+        return false;
+      }
+    },
+    [adminId]
+  );
+
   const exportCsv = useCallback(() => {
     exportUsersToCsv(users);
   }, [users]);
@@ -168,6 +197,7 @@ export function useAdmin(isAdmin: boolean = false, adminId?: number, company?: s
     createUser,
     batchCreateUsers,
     deleteUser,
+    unlockUser,
     assignService,
     revokeService,
     exportCsv,

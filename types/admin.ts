@@ -5,6 +5,8 @@ export interface AdminUser {
   role: "ADMIN" | "USER" | string;
   company?: string;
   mfaEnabled: boolean;
+  accountLocked?: boolean;
+  failedAttempts?: number;
   createdAt: string;
   assignedServicesCount: number;
   assignedServiceIds: number[];

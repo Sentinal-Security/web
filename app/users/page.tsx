@@ -65,6 +65,7 @@ export default function UserManagementPage() {
     createUser,
     batchCreateUsers,
     deleteUser,
+    unlockUser,
     assignService,
     revokeService,
     exportCsv,
@@ -744,11 +745,15 @@ export default function UserManagementPage() {
                             <div>
                               <div className="flex items-center gap-2">
                                 <span className="font-semibold text-white">{u.fullName}</span>
-                                {isSelf && (
+                                {u.accountLocked ? (
+                                  <span className="text-[9px] px-1.5 py-0.2 rounded bg-rose-950/80 border border-rose-500/40 text-rose-300 font-bold uppercase tracking-wider">
+                                    Locked ({u.failedAttempts}/5)
+                                  </span>
+                                ) : isSelf ? (
                                   <span className="text-[9px] px-1.5 py-0.2 rounded bg-cyan-950 border border-cyan-800 text-cyan-400 font-semibold">
                                     You
                                   </span>
-                                )}
+                                ) : null}
                               </div>
                               <span className="text-slate-400 text-[11px] block">{u.email}</span>
                             </div>
@@ -817,6 +822,17 @@ export default function UserManagementPage() {
                           <div className="inline-flex items-center gap-2">
                             {isAdmin && (
                               <>
+                                {u.accountLocked && (
+                                  <button
+                                    type="button"
+                                    onClick={() => unlockUser(u.id)}
+                                    className="px-2.5 py-1 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 text-amber-300 text-xs font-bold transition-all cursor-pointer"
+                                    title="Unlock Account"
+                                  >
+                                    Unlock
+                                  </button>
+                                )}
+
                                 <button
                                   type="button"
                                   onClick={() => setAssignModalUser(u)}

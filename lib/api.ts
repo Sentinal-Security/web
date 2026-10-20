@@ -425,6 +425,21 @@ export async function adminDeleteUser(
   }
 }
 
+export async function adminUnlockUser(
+  userId: number,
+  adminId?: number
+): Promise<boolean> {
+  try {
+    const queryString = adminId ? `?adminId=${adminId}` : "";
+    const res = await fetch(`${API_BASE_URL}/api/admin/users/${userId}/unlock${queryString}`, {
+      method: "POST",
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
 export async function fetchAuditLogs(options?: {
   adminId?: number;
   company?: string;
