@@ -105,7 +105,7 @@ export default function Header() {
             Services
           </Link>
           <Link
-            href="/dw"
+            href="/download"
             target="_blank"
             rel="noopener noreferrer"
             className="hover:text-cyan-400 transition-colors"
@@ -214,7 +214,7 @@ export default function Header() {
             Services
           </Link>
           <Link
-            href="/dw"
+            href="/download"
             target="_blank"
             rel="noopener noreferrer"
             onClick={() => setMobileMenuOpen(false)}

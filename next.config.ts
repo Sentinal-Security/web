@@ -9,13 +9,13 @@ const nextConfig: NextConfig = {
         permanent: true,
       },
       {
-        source: "/download",
-        destination: "/dw",
-        permanent: false,
+        source: "/dw",
+        destination: "/download",
+        permanent: true,
       },
       {
         source: "/app",
-        destination: "/dw",
+        destination: "/download",
         permanent: false,
       },
     ];

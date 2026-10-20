@@ -29,7 +29,7 @@ export default function Footer() {
         { label: "Feature Matrix", href: "/features" },
         { label: "FAQ & Support", href: "/faq" },
         { label: "Developer API Docs", href: "/docs" },
-        { label: "Mobile Authenticator APK", href: "/dw" },
+        { label: "Mobile Authenticator APK", href: "/download" },
       ],
     },
     {

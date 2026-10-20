@@ -38,7 +38,7 @@ const FAQ_ITEMS: FaqItem[] = [
     answer:
       "Sentinel provides dual-choice verification: (1) Push Notification / Number Matching on the Sentinel Authenticator mobile app to stop push fatigue attacks, and (2) RFC 6238 standard 6-digit TOTP passcodes generated every 30 seconds. Users can switch between methods with a single click.",
     linkText: "Get Android Authenticator App",
-    linkHref: "/dw",
+    linkHref: "/download",
   },
   {
     category: "Access Policy Enforcement",

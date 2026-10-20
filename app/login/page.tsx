@@ -546,10 +546,14 @@ function LoginPageContent() {
 
                   {/* Title & Subtitle */}
                   <h2 className="text-2xl sm:text-[26px] font-bold text-white text-center tracking-tight">
-                    Welcome to <span className="text-[#38e1ff]">Sentinel</span>
+                    {redirectUri ? (
+                      <>Enterprise <span className="text-[#38e1ff]">Single Sign-On (SSO)</span></>
+                    ) : (
+                      <>Welcome to <span className="text-[#38e1ff]">Sentinel</span></>
+                    )}
                   </h2>
                   <p className="text-xs sm:text-sm text-slate-400 font-normal text-center mt-1 mb-6">
-                    {redirectUri ? `Sign in to authenticate with ${appName || "your application"}` : "Sign in to continue to your account"}
+                    {redirectUri ? `Sign in with your organization email to access ${appName || "the client application"}` : "Sign in with your corporate email or identity provider"}
                   </p>
 
               {/* 3 Horizontal Social Buttons: Google, Apple, Microsoft */}
@@ -616,7 +620,7 @@ function LoginPageContent() {
               <div className="relative flex items-center mb-5">
                 <div className="flex-grow border-t border-slate-700/60"></div>
                 <span className="flex-shrink mx-3 text-[11px] sm:text-xs text-slate-400 font-normal">
-                  or continue with email
+                  or sign in with email
                 </span>
                 <div className="flex-grow border-t border-slate-700/60"></div>
               </div>
@@ -786,7 +790,7 @@ function LoginPageContent() {
                   {/* Email Address */}
                   <div className="mb-3.5">
                     <label className="block text-xs font-medium text-slate-300 mb-1.5 text-left">
-                      Email Address
+                      Corporate Email
                     </label>
                     <div className="relative flex items-center bg-[#18293d]/60 border border-slate-600/40 rounded-xl px-3.5 py-3 focus-within:border-cyan-400 focus-within:ring-1 focus-within:ring-cyan-400 transition-all">
                       <svg
@@ -882,7 +886,7 @@ function LoginPageContent() {
                         <span>Signing in...</span>
                       </>
                     ) : (
-                      <span>Sign in</span>
+                      <span>{redirectUri ? "Sign in with Enterprise SSO" : "Sign in with Email"}</span>
                     )}
                   </button>
 
