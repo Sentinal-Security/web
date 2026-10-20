@@ -210,15 +210,54 @@ export async function initiateMfaChallenge(
   }
 }
 
-export async function validateSsoSession(
-  userId: number
+export async function loginWithGoogle(
+  idToken: string
 ): Promise<AuthResponse> {
-  const res = await fetch(`${API_BASE_URL}/api/auth/validate`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ userId }),
-  });
-  return res.json();
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/auth/google`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ idToken }),
+    });
+    if (!res.ok && (res.status === 502 || res.status === 503 || res.status === 504)) {
+      return {
+        success: false,
+        message: "Network issue, please wait a few seconds...",
+      };
+    }
+    const contentType = res.headers.get("content-type");
+    if (contentType && contentType.includes("application/json")) {
+      return await res.json();
+    }
+    return {
+      success: false,
+      message: "Network issue, please wait a few seconds...",
+    };
+  } catch {
+    return {
+      success: false,
+      message: "Network issue, please wait a few seconds...",
+    };
+  }
+}
+
+export async function validateSsoSession(
+  userId?: number,
+  ssoToken?: string
+): Promise<AuthResponse> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/auth/validate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId, ssoToken }),
+    });
+    return await res.json();
+  } catch {
+    return {
+      success: false,
+      message: "Session validation failed due to network error.",
+    };
+  }
 }
 
 // User Services REST Client

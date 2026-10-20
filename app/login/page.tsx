@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import { useMfa } from "@/hooks/useMfa";
 import { saveSession, getStoredSession, clearSession } from "@/lib/session";
-import { getMfaChallengeStatus } from "@/lib/api";
+import { getMfaChallengeStatus, loginWithGoogle } from "@/lib/api";
 import { User } from "@/types/auth";
 import Footer from "@/app/partials/footer";
 
@@ -80,6 +80,37 @@ function LoginPageContent() {
   const [totpCode, setTotpCode] = useState("");
   const [networkWait, setNetworkWait] = useState(false);
   const [mfaNetworkWait, setMfaNetworkWait] = useState(false);
+  const [googleModalOpen, setGoogleModalOpen] = useState(false);
+  const [googleTokenInput, setGoogleTokenInput] = useState("");
+  const [googleLoading, setGoogleLoading] = useState(false);
+
+  // Initialize Google Identity Services if client ID is configured
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
+    if (!clientId) return;
+
+    if (!document.getElementById("google-gsi-client")) {
+      const script = document.createElement("script");
+      script.id = "google-gsi-client";
+      script.src = "https://accounts.google.com/gsi/client";
+      script.async = true;
+      script.defer = true;
+      script.onload = () => {
+        if ((window as any).google?.accounts?.id) {
+          (window as any).google.accounts.id.initialize({
+            client_id: clientId,
+            callback: (resp: any) => {
+              if (resp?.credential) {
+                executeGoogleAuth(resp.credential);
+              }
+            },
+          });
+        }
+      };
+      document.body.appendChild(script);
+    }
+  }, []);
 
   // Polling for mobile push approval resolution
   useEffect(() => {
@@ -105,7 +136,7 @@ function LoginPageContent() {
               role: resolvedRole,
               company: resolvedCompany,
               mfaEnabled: true,
-            });
+            }, res.data.ssoToken);
             handleSuccessfulHandoff(finalUserId, finalEmail, res.data.ssoToken);
           } else if (res.data.status === "DENIED") {
             clearInterval(interval);
@@ -174,7 +205,7 @@ function LoginPageContent() {
             role: (res.role as any) || "USER",
             company: res.company || "",
             mfaEnabled: false,
-          });
+          }, res.ssoToken);
           handleSuccessfulHandoff(res.userId || 1, res.email || email.trim(), res.ssoToken);
         }
       }
@@ -225,7 +256,7 @@ function LoginPageContent() {
           role: resolvedRole,
           company: resolvedCompany,
           mfaEnabled: true,
-        });
+        }, res.ssoToken);
         handleSuccessfulHandoff(finalUserId, finalEmail, res.ssoToken);
       }
     } finally {
@@ -234,15 +265,65 @@ function LoginPageContent() {
     }
   };
 
+  const executeGoogleAuth = async (idToken: string) => {
+    setValidationError("");
+    setAuthError(null);
+    setGoogleLoading(true);
+
+    try {
+      const res = await loginWithGoogle(idToken.trim());
+      if (res.success) {
+        setGoogleModalOpen(false);
+        if (res.mfaEnabled || res.mfaRequired) {
+          setMfaChallenge({
+            required: true,
+            userId: res.userId,
+            email: res.email || "google.user@example.com",
+            fullName: res.fullName,
+            role: res.role,
+            company: res.company,
+            challengeId: res.challengeId,
+            matchCode: res.matchCode,
+          });
+          setMfaMode(res.matchCode ? "push" : "totp");
+        } else {
+          saveSession({
+            userId: res.userId || 1,
+            email: res.email || "",
+            fullName: res.fullName || "Google User",
+            role: (res.role as any) || "USER",
+            company: res.company || "",
+            mfaEnabled: false,
+          }, res.ssoToken);
+          handleSuccessfulHandoff(res.userId || 1, res.email || "", res.ssoToken);
+        }
+      } else {
+        setValidationError(res.message || "Google authentication failed.");
+      }
+    } catch {
+      setValidationError("Failed to complete Google sign-in. Please try again.");
+    } finally {
+      setGoogleLoading(false);
+    }
+  };
+
   const handleSocialAuth = (provider: "Google" | "Apple" | "Microsoft") => {
+    if (provider === "Google") {
+      const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
+      if (clientId && (window as any).google?.accounts?.id) {
+        (window as any).google.accounts.id.prompt();
+      } else {
+        setGoogleModalOpen(true);
+      }
+      return;
+    }
+
     const providerEmail =
-      provider === "Google"
-        ? "demo.user@gmail.com"
-        : provider === "Apple"
+      provider === "Apple"
         ? "demo.user@privaterelay.appleid.com"
         : "demo.user@outlook.com";
 
-    const ssoId = provider === "Google" ? 101 : provider === "Apple" ? 102 : 103;
+    const ssoId = provider === "Apple" ? 102 : 103;
     saveSession({
       userId: ssoId,
       email: providerEmail,
@@ -834,6 +915,102 @@ function LoginPageContent() {
           </div>
         </div>
       </main>
+
+      {/* Google Identity Services Modal */}
+      {googleModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="w-full max-w-lg rounded-2xl bg-[#0c1424] border border-cyan-500/30 shadow-2xl p-6 sm:p-8">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-xl bg-cyan-500/10 border border-cyan-500/20">
+                  <svg className="w-5 h-5" viewBox="0 0 24 24">
+                    <path
+                      fill="#4285F4"
+                      d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.8-2.4 3.66v3.05h3.88c2.27-2.09 3.66-5.17 3.66-9.15z"
+                    />
+                    <path
+                      fill="#34A853"
+                      d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.33 24 12 24z"
+                    />
+                    <path
+                      fill="#FBBC05"
+                      d="M5.28 14.27a7.18 7.18 0 0 1 0-4.54V6.58H1.25a11.96 11.96 0 0 0 0 10.84l4.03-3.15z"
+                    />
+                    <path
+                      fill="#EA4335"
+                      d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"
+                    />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-white tracking-tight">Google Identity Services</h3>
+                  <p className="text-xs text-slate-400">Spring Boot Server-Side Token Verification</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setGoogleModalOpen(false)}
+                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800/60 transition-colors cursor-pointer"
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-300 mb-5 leading-relaxed">
+              Sentinel securely validates Google ID tokens directly via the Spring Boot gateway using Google tokeninfo endpoints, without client-side GoTrue dependencies.
+            </p>
+
+            <div className="space-y-4">
+              {/* Option A: Quick Coursework Demo Account */}
+              <div className="p-4 rounded-xl bg-slate-900/60 border border-slate-700/60">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-semibold text-cyan-400 uppercase tracking-wider">Fast Evaluation Demo</span>
+                  <span className="text-[10px] text-slate-400 font-mono">@demo.invalid</span>
+                </div>
+                <p className="text-xs text-slate-400 mb-3">
+                  Instantly authenticate using a sandboxed demo identity to test Sentinel Single Sign-On and MFA enforcement.
+                </p>
+                <button
+                  type="button"
+                  disabled={googleLoading}
+                  onClick={() => executeGoogleAuth("demo_google:demo.user@demo.invalid")}
+                  className="w-full py-2.5 px-3 bg-cyan-500/20 hover:bg-cyan-500/30 active:scale-[0.99] border border-cyan-500/40 text-cyan-300 font-semibold text-xs rounded-lg transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                >
+                  {googleLoading ? "Verifying..." : "Sign In as demo.user@demo.invalid"}
+                </button>
+              </div>
+
+              {/* Option B: Real Google ID Token */}
+              <div className="p-4 rounded-xl bg-slate-900/60 border border-slate-700/60">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-semibold text-slate-200 uppercase tracking-wider">Custom Google ID Token</span>
+                  <span className="text-[10px] text-slate-400 font-mono">JWT / tokeninfo</span>
+                </div>
+                <p className="text-xs text-slate-400 mb-2">
+                  Paste a verified Google ID Token (e.g. from Google OAuth Playground or Google Cloud Console) to test full cryptographic validation:
+                </p>
+                <textarea
+                  value={googleTokenInput}
+                  onChange={(e) => setGoogleTokenInput(e.target.value)}
+                  placeholder="Paste Google ID Token (eyJhbGciOiJSUzI1NiIs...)"
+                  rows={3}
+                  className="w-full p-2.5 rounded-lg bg-black/50 border border-slate-700 text-xs text-slate-200 font-mono placeholder:text-slate-600 focus:outline-none focus:border-cyan-400 mb-3 resize-none"
+                />
+                <button
+                  type="button"
+                  disabled={googleLoading || !googleTokenInput.trim()}
+                  onClick={() => executeGoogleAuth(googleTokenInput)}
+                  className="w-full py-2.5 px-3 bg-[#3bf0ff] hover:bg-[#2fe0ef] active:scale-[0.99] text-slate-950 font-bold text-xs rounded-lg transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                >
+                  {googleLoading ? "Verifying against Google..." : "Verify & Authenticate Google Token"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Footer */}
       <Footer />

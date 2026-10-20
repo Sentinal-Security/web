@@ -13,10 +13,13 @@ export function getStoredSession(): AuthSession | null {
   }
 }
 
-export function saveSession(user: User): AuthSession {
+export function saveSession(user: User, token?: string): AuthSession {
+  const current = getStoredSession();
+  const effectiveToken = token || current?.token;
   const session: AuthSession = {
     user,
-    loginTime: new Date().toISOString(),
+    token: effectiveToken,
+    loginTime: current?.loginTime || new Date().toISOString(),
   };
   if (typeof window !== "undefined") {
     localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session));

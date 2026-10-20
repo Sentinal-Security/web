@@ -106,6 +106,7 @@ export default function DashboardPage() {
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileError, setProfileError] = useState("");
   const [profileSuccess, setProfileSuccess] = useState("");
+  const [ssoToken, setSsoToken] = useState<string | null>(null);
 
   useEffect(() => {
     const session = getStoredSession();
@@ -115,6 +116,9 @@ export default function DashboardPage() {
     }
     setUser(session.user);
     setEditFullName(session.user.fullName || "");
+    if (session.token) {
+      setSsoToken(session.token);
+    }
   }, [router]);
 
   const handleLogout = () => {
@@ -790,8 +794,9 @@ export default function DashboardPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5 w-full">
             {filteredApps.map((app) => {
               const isExternal = Boolean(app.loginUrl && (app.loginUrl.startsWith("http://") || app.loginUrl.startsWith("https://")));
+              const tokenParam = ssoToken ? `&ssoToken=${ssoToken}` : "";
               const launchHref = isExternal && app.loginUrl && user?.userId
-                ? `${app.loginUrl}${app.loginUrl.includes("?") ? "&" : "?"}ssoUserId=${user.userId}&ssoEmail=${encodeURIComponent(user.email || "")}`
+                ? `${app.loginUrl}${app.loginUrl.includes("?") ? "&" : "?"}ssoUserId=${user.userId}&ssoEmail=${encodeURIComponent(user.email || "")}${tokenParam}`
                 : (app.loginUrl || `/apps/${app.id}`);
               return (
                 <div
