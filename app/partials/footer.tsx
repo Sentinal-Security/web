@@ -16,10 +16,10 @@ export default function Footer() {
     {
       title: "Infrastructure",
       links: [
-        { label: "Supabase PostgreSQL", href: "https://supabase.com" },
-        { label: "Render Cloud Gateway", href: "https://render.com" },
-        { label: "Expo Mobile Framework", href: "https://expo.dev" },
-        { label: "Spring Boot Security", href: "https://spring.io/projects/spring-boot" },
+        { label: "Zero-Trust API Gateway", href: "https://backend-pi68.onrender.com/api/health" },
+        { label: "Vercel Edge Platform", href: "/services" },
+        { label: "Supabase Identity Vault", href: "/docs" },
+        { label: "Android Authenticator", href: "/download" },
       ],
     },
     {
