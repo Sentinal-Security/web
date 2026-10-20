@@ -406,14 +406,12 @@ export default function DashboardPage() {
 
               <Link
                 href="/dw"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-white/5 text-slate-400 hover:text-white font-medium text-xs transition-all text-left border border-transparent hover:border-white/10"
+                className="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-white/5 text-slate-300 hover:text-white font-medium text-xs transition-all text-left border border-transparent hover:border-white/10"
               >
-                <svg className="w-4 h-4 text-slate-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                <svg className="w-4 h-4 text-cyan-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 1.5H8.25A2.25 2.25 0 006 3.75v16.5a2.25 2.25 0 002.25 2.25h7.5A2.25 2.25 0 0018 20.25V3.75a2.25 2.25 0 00-2.25-2.25H13.5m-3 0V3h3V1.5m-3 0h3m-3 18.75h3" />
                 </svg>
-                <span>Mobile App APK</span>
+                <span>Download Sentinel App</span>
               </Link>
             </div>
           </div>
@@ -1229,6 +1227,19 @@ export default function DashboardPage() {
                     )}
                   </button>
                 </form>
+
+                <div className="mt-3 pt-3 border-t border-slate-800 text-center">
+                  <Link
+                    href="/dw"
+                    target="_blank"
+                    className="text-[11px] text-cyan-400 hover:text-cyan-300 font-medium transition-colors inline-flex items-center gap-1.5"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                    </svg>
+                    <span>Need the app? Download Sentinel Authenticator APK</span>
+                  </Link>
+                </div>
               </div>
             ) : null}
           </div>
