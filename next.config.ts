@@ -18,6 +18,11 @@ const nextConfig: NextConfig = {
         destination: "/download",
         permanent: false,
       },
+      {
+        source: "/builds/:path*",
+        destination: "https://backend-pi68.onrender.com/api/builds/download",
+        permanent: false,
+      },
     ];
   },
 };
