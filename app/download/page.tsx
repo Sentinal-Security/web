@@ -7,9 +7,9 @@ import Footer from "@/app/partials/footer";
 export default function DownloadsPage() {
   const apkFileName = "sentinal-authenticator-arm64.apk";
   const downloadUrl = `/builds/${apkFileName}`;
-  const fileSize = "42.1 MB";
-  const version = "1.0.0";
-  const buildDate = "September 19, 2026";
+  const fileSize = "50.9 MB";
+  const version = "1.0.1";
+  const buildDate = "October 22, 2026";
   const architecture = "ARM64-v8a (Android 10+)";
 
   return (

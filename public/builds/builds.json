@@ -4,8 +4,8 @@
     "name": "sentinal-authenticator-arm64.apk",
     "type": "Android Release APK (arm64-v8a)",
     "branch": "development",
-    "commit": "05b7e18",
+    "commit": "c9dd8ba",
     "downloadUrl": "/builds/sentinal-authenticator-arm64.apk",
-    "finishedAt": "Sep 19, 2026, 07:33:09 PM"
+    "finishedAt": "Oct 21, 2026, 11:54:14 PM"
   }
 ]
