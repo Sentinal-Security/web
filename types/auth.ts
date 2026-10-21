@@ -4,6 +4,7 @@ export interface User {
   fullName: string;
   role?: "ADMIN" | "HR" | "FINANCE" | "DEVOPS" | "USER" | string;
   company?: string;
+  subscriptionTier?: "COMMUNITY" | "PROFESSIONAL" | "ENTERPRISE" | string;
   mfaEnabled: boolean;
 }
 
@@ -45,6 +46,7 @@ export interface AuthResponse {
   fullName?: string;
   role?: string;
   company?: string;
+  subscriptionTier?: string;
   mfaEnabled?: boolean;
   mfaRequired?: boolean;
   ssoToken?: string;

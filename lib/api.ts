@@ -519,3 +519,97 @@ export async function recordAuditEvent(payload: ClientTelemetryPayload): Promise
     // Fire and forget - never block the client UI
   }
 }
+
+export interface BillingTierResponse {
+  success: boolean;
+  message?: string;
+  data?: {
+    company: string;
+    tier: string;
+    status: string;
+    isAdmin: boolean;
+    updatedAt?: string;
+  };
+}
+
+export interface PaypalOrderResponse {
+  success: boolean;
+  message?: string;
+  data?: {
+    orderId: string;
+    tier: string;
+    billingCycle: string;
+    amount: number;
+    currency: string;
+    company: string;
+    adminEmail: string;
+    environment: string;
+    status: string;
+  };
+}
+
+export interface PaypalCaptureResponse {
+  success: boolean;
+  message?: string;
+  data?: {
+    company: string;
+    tier: string;
+    billingCycle: string;
+    orderId: string;
+    status: string;
+    membersUpdated: number;
+    updatedAt: string;
+  };
+}
+
+export async function fetchBillingTier(userId?: number, company?: string): Promise<BillingTierResponse> {
+  try {
+    const params = new URLSearchParams();
+    if (userId) params.append("userId", userId.toString());
+    if (company) params.append("company", company);
+    const res = await fetch(`${API_BASE_URL}/api/billing/tier?${params.toString()}`, {
+      cache: "no-store",
+    });
+    if (!res.ok) {
+      return { success: false, message: "Failed to fetch billing tier status" };
+    }
+    return await res.json();
+  } catch {
+    return { success: false, message: "Network error fetching billing tier" };
+  }
+}
+
+export async function createPaypalOrder(
+  userId: number,
+  tier: string,
+  billingCycle: string
+): Promise<PaypalOrderResponse> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/billing/paypal/create-order`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId, tier, billingCycle }),
+    });
+    return await res.json();
+  } catch {
+    return { success: false, message: "Network error creating PayPal sandbox order" };
+  }
+}
+
+export async function capturePaypalOrder(
+  userId: number,
+  orderId: string,
+  tier: string,
+  billingCycle: string
+): Promise<PaypalCaptureResponse> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/billing/paypal/capture-order`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId, orderId, tier, billingCycle }),
+    });
+    return await res.json();
+  } catch {
+    return { success: false, message: "Network error capturing PayPal sandbox order" };
+  }
+}
