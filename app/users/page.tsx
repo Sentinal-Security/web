@@ -10,6 +10,8 @@ import { useAdmin } from "@/hooks/useAdmin";
 import { useIntegrations } from "@/hooks/useIntegrations";
 import { updateUserProfile } from "@/lib/api";
 import { SecurityAuditPanel } from "@/components/SecurityAuditPanel";
+import { useInactivityTimeout } from "@/hooks/useInactivityTimeout";
+import { InactivityWarningModal } from "@/components/session/InactivityWarningModal";
 
 function generateSecureTempPassword(prefix = "Sec!"): string {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!#$*";
@@ -377,6 +379,22 @@ export default function UserManagementPage() {
     clearSession();
     router.push("/login");
   };
+
+  const handleInactivityTimeout = () => {
+    clearSession();
+    router.push("/login?reason=inactivity_timeout");
+  };
+
+  const {
+    isWarningOpen: isInactivityWarningOpen,
+    secondsRemaining: inactivitySecondsRemaining,
+    extendSession: extendInactivitySession,
+  } = useInactivityTimeout({
+    timeoutMinutes: 15,
+    warningSeconds: 60,
+    onTimeout: handleInactivityTimeout,
+    enabled: Boolean(currentUser),
+  });
 
   return (
     <div className="min-h-screen bg-[#030712] text-slate-100 flex flex-col font-sans selection:bg-cyan-500 selection:text-black">
@@ -1583,6 +1601,14 @@ export default function UserManagementPage() {
           </div>
         </div>
       )}
+
+      {/* Inactivity Warning Modal */}
+      <InactivityWarningModal
+        isOpen={isInactivityWarningOpen}
+        secondsRemaining={inactivitySecondsRemaining}
+        onExtend={extendInactivitySession}
+        onLogout={handleSignOut}
+      />
     </div>
   );
 }

@@ -9,6 +9,8 @@ import { getStoredSession, updateStoredUser, clearSession } from "@/lib/session"
 import { useMfa } from "@/hooks/useMfa";
 import { useIntegrations } from "@/hooks/useIntegrations";
 import { updateUserProfile, checkBackendHealth } from "@/lib/api";
+import { useInactivityTimeout } from "@/hooks/useInactivityTimeout";
+import { InactivityWarningModal } from "@/components/session/InactivityWarningModal";
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -144,6 +146,22 @@ export default function DashboardPage() {
     clearSession();
     router.push("/login");
   };
+
+  const handleInactivityTimeout = useCallback(() => {
+    clearSession();
+    router.push("/login?reason=inactivity_timeout");
+  }, [router]);
+
+  const {
+    isWarningOpen: isInactivityWarningOpen,
+    secondsRemaining: inactivitySecondsRemaining,
+    extendSession: extendInactivitySession,
+  } = useInactivityTimeout({
+    timeoutMinutes: 15,
+    warningSeconds: 60,
+    onTimeout: handleInactivityTimeout,
+    enabled: Boolean(user),
+  });
 
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1398,9 +1416,12 @@ export default function DashboardPage() {
               <button
                 type="button"
                 onClick={() => setProfileModalOpen(false)}
-                className="text-slate-400 hover:text-white cursor-pointer"
+                className="text-slate-400 hover:text-white cursor-pointer p-1"
+                aria-label="Close"
               >
-                ✕
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
               </button>
             </div>
 
@@ -1481,6 +1502,14 @@ export default function DashboardPage() {
           </div>
         </div>
       )}
+
+      {/* Zero-Trust Inactivity Timeout Countdown Modal */}
+      <InactivityWarningModal
+        isOpen={isInactivityWarningOpen}
+        secondsRemaining={inactivitySecondsRemaining}
+        onExtend={extendInactivitySession}
+        onLogout={handleLogout}
+      />
     </div>
   );
 }
