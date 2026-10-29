@@ -8,7 +8,7 @@ import { AppIntegration, IntegrationType } from "@/types/integration";
 import { getStoredSession, updateStoredUser, clearSession } from "@/lib/session";
 import { useMfa } from "@/hooks/useMfa";
 import { useIntegrations } from "@/hooks/useIntegrations";
-import { updateUserProfile, checkBackendHealth } from "@/lib/api";
+import { updateUserProfile, checkBackendHealth, getRecoveryCodesStatus, regenerateRecoveryCodes } from "@/lib/api";
 import { useInactivityTimeout } from "@/hooks/useInactivityTimeout";
 import { InactivityWarningModal } from "@/components/session/InactivityWarningModal";
 
@@ -85,9 +85,55 @@ export default function DashboardPage() {
       updateStoredUser({ mfaEnabled: false });
       setUser((prev) => (prev ? { ...prev, mfaEnabled: false } : null));
       setDisableModalOpen(false);
+      setRecoveryCodes([]);
+      setRemainingRecoveryCount(0);
     } else {
       setDisableError(res?.message || "Failed to disable Two-Factor Authentication.");
     }
+  };
+
+  // Recovery Codes State
+  const [recoveryModalOpen, setRecoveryModalOpen] = useState(false);
+  const [recoveryCodes, setRecoveryCodes] = useState<string[]>([]);
+  const [remainingRecoveryCount, setRemainingRecoveryCount] = useState<number>(0);
+  const [recoveryLoading, setRecoveryLoading] = useState(false);
+  const [recoveryCopied, setRecoveryCopied] = useState(false);
+  const [recoverySuccess, setRecoverySuccess] = useState("");
+  const [recoveryError, setRecoveryError] = useState("");
+
+  const handleRegenerateCodes = async () => {
+    if (!user) return;
+    setRecoveryLoading(true);
+    setRecoveryError("");
+    setRecoverySuccess("");
+    const res = await regenerateRecoveryCodes(user.userId);
+    setRecoveryLoading(false);
+    if (res.success && res.data) {
+      setRecoveryCodes(res.data.recoveryCodes);
+      setRemainingRecoveryCount(res.data.remainingCount);
+      setRecoverySuccess("8 fresh emergency recovery codes generated. Previous codes have been invalidated.");
+    } else {
+      setRecoveryError(res.message || "Failed to regenerate recovery codes.");
+    }
+  };
+
+  const handleCopyRecoveryCodes = () => {
+    if (recoveryCodes.length === 0) return;
+    navigator.clipboard.writeText(recoveryCodes.join("\n"));
+    setRecoveryCopied(true);
+    setTimeout(() => setRecoveryCopied(false), 2000);
+  };
+
+  const handleDownloadRecoveryCodes = () => {
+    if (recoveryCodes.length === 0) return;
+    const content = `SENTINEL SECURITY - EMERGENCY MFA BACKUP RECOVERY CODES\nGenerated: ${new Date().toISOString()}\nAccount: ${user?.email || ""}\n\nKeep these single-use recovery codes in a secure location.\nEach code can only be used once.\n\n` + recoveryCodes.map((c, i) => `${i + 1}. ${c}`).join("\n") + "\n";
+    const blob = new Blob([content], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `sentinel-recovery-codes-${user?.email || "backup"}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
   const {
     apps,
@@ -229,11 +275,21 @@ export default function DashboardPage() {
       setPairingSuccess("Authenticator successfully paired and activated.");
       updateStoredUser({ mfaEnabled: true });
       setUser((prev) => (prev ? { ...prev, mfaEnabled: true } : null));
+
+      if (res.recoveryCodes && res.recoveryCodes.length > 0) {
+        setRecoveryCodes(res.recoveryCodes);
+        setRemainingRecoveryCount(res.recoveryCodes.length);
+        setRecoverySuccess("MFA activated! Please save your 8 single-use emergency recovery codes below.");
+      }
+
       setTimeout(() => {
         setPairingModalOpen(false);
         setSetupData(null);
         setTotpCode("");
-      }, 1500);
+        if (res.recoveryCodes && res.recoveryCodes.length > 0) {
+          setRecoveryModalOpen(true);
+        }
+      }, 1200);
     }
   };
 
@@ -721,20 +777,46 @@ export default function DashboardPage() {
                   </button>
 
                   {user?.mfaEnabled ? (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setProfileDropdownOpen(false);
-                        setDisableError("");
-                        setDisableModalOpen(true);
-                      }}
-                      className="w-full text-left px-3 py-1.5 rounded-lg text-xs text-amber-400 hover:bg-amber-500/10 transition-colors flex items-center gap-2 cursor-pointer"
-                    >
-                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
-                      </svg>
-                      <span>Disable 2FA</span>
-                    </button>
+                    <>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          setProfileDropdownOpen(false);
+                          setRecoveryModalOpen(true);
+                          setRecoveryError("");
+                          setRecoverySuccess("");
+                          if (user) {
+                            setRecoveryLoading(true);
+                            const res = await getRecoveryCodesStatus(user.userId);
+                            setRecoveryLoading(false);
+                            if (res.success && res.data) {
+                              setRemainingRecoveryCount(res.data.remainingCount);
+                            }
+                          }
+                        }}
+                        className="w-full text-left px-3 py-1.5 rounded-lg text-xs text-amber-300 hover:bg-amber-500/10 transition-colors flex items-center gap-2 cursor-pointer mb-1"
+                      >
+                        <svg className="w-3.5 h-3.5 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+                        </svg>
+                        <span>MFA Recovery Codes</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setProfileDropdownOpen(false);
+                          setDisableError("");
+                          setDisableModalOpen(true);
+                        }}
+                        className="w-full text-left px-3 py-1.5 rounded-lg text-xs text-amber-400 hover:bg-amber-500/10 transition-colors flex items-center gap-2 cursor-pointer"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                        </svg>
+                        <span>Disable 2FA</span>
+                      </button>
+                    </>
                   ) : (
                     <button
                       type="button"
@@ -1499,6 +1581,125 @@ export default function DashboardPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Emergency MFA Backup Recovery Codes Modal */}
+      {recoveryModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <div className="bg-slate-950 border border-amber-500/30 rounded-2xl max-w-lg w-full p-6 shadow-2xl relative">
+            <div className="flex items-center justify-between border-b border-white/10 pb-3 mb-4">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="text-base font-semibold text-white">Emergency MFA Backup Recovery Codes</h3>
+                  <p className="text-[11px] text-slate-400">Single-use disaster recovery authentication tokens</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setRecoveryModalOpen(false)}
+                className="text-slate-400 hover:text-white cursor-pointer p-1"
+                aria-label="Close"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-300 leading-relaxed mb-4">
+              Store these emergency recovery codes in a secure password manager. If you lose, damage, or wipe your paired mobile device, each code can be used <span className="text-amber-400 font-semibold">exactly once</span> to bypass the MFA challenge and unlock your account.
+            </p>
+
+            {recoverySuccess && (
+              <div className="mb-4 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs">
+                {recoverySuccess}
+              </div>
+            )}
+            {recoveryError && (
+              <div className="mb-4 p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-300 text-xs">
+                {recoveryError}
+              </div>
+            )}
+
+            {recoveryCodes.length > 0 ? (
+              <div className="mb-5">
+                <div className="p-3.5 rounded-xl bg-slate-900/90 border border-white/10 grid grid-cols-2 gap-2 mb-3">
+                  {recoveryCodes.map((code, idx) => (
+                    <div
+                      key={code}
+                      className="p-2 rounded-lg bg-slate-950 border border-white/5 font-mono text-center font-bold text-xs tracking-wider text-amber-300 select-all"
+                    >
+                      <span className="text-slate-500 mr-1.5 text-[10px] select-none font-normal">#{idx + 1}</span>
+                      {code}
+                    </div>
+                  ))}
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleCopyRecoveryCodes}
+                    className="flex-1 py-2 px-3 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-200 text-xs font-semibold border border-white/10 transition-colors cursor-pointer flex items-center justify-center gap-1.5"
+                  >
+                    <svg className="w-3.5 h-3.5 text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                    </svg>
+                    <span>{recoveryCopied ? "Copied to Clipboard!" : "Copy All Codes"}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleDownloadRecoveryCodes}
+                    className="flex-1 py-2 px-3 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-200 text-xs font-semibold border border-white/10 transition-colors cursor-pointer flex items-center justify-center gap-1.5"
+                  >
+                    <svg className="w-3.5 h-3.5 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                    </svg>
+                    <span>Download .txt</span>
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="mb-5 p-4 rounded-xl bg-slate-900/60 border border-white/10">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-xs text-slate-300">Active Unused Recovery Codes:</span>
+                  <span className="text-sm font-mono font-bold text-amber-400">
+                    {recoveryLoading ? "Checking..." : `${remainingRecoveryCount} of 8 remaining`}
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-400 mb-4 leading-relaxed">
+                  For security, individual code values cannot be displayed again once dismissed. If you misplaced your codes, generate a new set of 8 codes below.
+                </p>
+                <button
+                  type="button"
+                  disabled={recoveryLoading}
+                  onClick={handleRegenerateCodes}
+                  className="w-full py-2.5 px-4 rounded-xl bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white font-bold text-xs transition-all cursor-pointer flex items-center justify-center gap-2"
+                >
+                  {recoveryLoading ? (
+                    <span>Regenerating codes...</span>
+                  ) : (
+                    <span>Generate 8 New Emergency Codes</span>
+                  )}
+                </button>
+              </div>
+            )}
+
+            <div className="flex items-center justify-end">
+              <button
+                type="button"
+                onClick={() => setRecoveryModalOpen(false)}
+                className="py-2 px-4 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-xs font-bold transition-colors cursor-pointer"
+              >
+                Done
+              </button>
+            </div>
           </div>
         </div>
       )}

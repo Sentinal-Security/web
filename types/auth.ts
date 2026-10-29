@@ -53,6 +53,7 @@ export interface AuthResponse {
   challengeId?: number;
   matchCode?: string;
   emailVerified?: boolean;
+  recoveryCodes?: string[];
 }
 
 export interface GenericApiResponse<T = any> {

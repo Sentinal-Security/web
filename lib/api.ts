@@ -160,6 +160,63 @@ export async function disableMfa(
   return res.json();
 }
 
+export async function verifyRecoveryCode(data: {
+  userId?: number;
+  email?: string;
+  code: string;
+}): Promise<AuthResponse> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/mfa/verify-recovery-code`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+    return res.json();
+  } catch {
+    return {
+      success: false,
+      message: "Network issue, please check connection and try again.",
+    };
+  }
+}
+
+export async function getRecoveryCodesStatus(userId: number): Promise<{
+  success: boolean;
+  message?: string;
+  data?: {
+    mfaEnabled: boolean;
+    remainingCount: number;
+    hasCodes: boolean;
+  };
+}> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/mfa/recovery-codes/status?userId=${userId}`);
+    return res.json();
+  } catch {
+    return { success: false, message: "Failed to fetch recovery codes status." };
+  }
+}
+
+export async function regenerateRecoveryCodes(userId: number): Promise<{
+  success: boolean;
+  message?: string;
+  data?: {
+    recoveryCodes: string[];
+    remainingCount: number;
+  };
+}> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/mfa/recovery-codes/regenerate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId }),
+    });
+    return res.json();
+  } catch {
+    return { success: false, message: "Failed to regenerate recovery codes." };
+  }
+}
+
 export async function getMfaChallengeStatus(challengeId: number): Promise<{
   success: boolean;
   message?: string;

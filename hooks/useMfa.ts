@@ -6,6 +6,7 @@ import {
   verifyMfaSetup,
   verifyMfaLogin,
   disableMfa,
+  verifyRecoveryCode,
   AuthResponse,
   MfaSetupResponse,
 } from "@/lib/api";
@@ -95,10 +96,34 @@ export function useMfa() {
     }
   };
 
+  const verifyRecovery = async (
+    userId: number | undefined,
+    email: string | undefined,
+    code: string
+  ): Promise<AuthResponse> => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await verifyRecoveryCode({ userId, email, code });
+      if (!res.success) {
+        setError(res.message);
+      }
+      return res;
+    } catch (err: unknown) {
+      const msg =
+        err instanceof Error ? err.message : "Failed to verify emergency recovery code.";
+      setError(msg);
+      return { success: false, message: msg };
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return {
     setup,
     verifySetup,
     verifyLogin,
+    verifyRecovery,
     disable,
     loading,
     error,
