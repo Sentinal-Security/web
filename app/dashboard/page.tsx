@@ -67,7 +67,26 @@ export default function DashboardPage() {
     probeGateway();
   };
 
-  const { setup, verifySetup, loading: mfaLoading, error: mfaError, setError: setMfaError } = useMfa();
+  const { setup, verifySetup, disable: disableMfaAction, loading: mfaLoading, error: mfaError, setError: setMfaError } = useMfa();
+  const [disableModalOpen, setDisableModalOpen] = useState(false);
+  const [disableLoading, setDisableLoading] = useState(false);
+  const [disableError, setDisableError] = useState("");
+
+  const handleConfirmDisableMfa = async () => {
+    if (!user) return;
+    setDisableLoading(true);
+    setDisableError("");
+
+    const res = await disableMfaAction(user.userId);
+    setDisableLoading(false);
+    if (res && res.success) {
+      updateStoredUser({ mfaEnabled: false });
+      setUser((prev) => (prev ? { ...prev, mfaEnabled: false } : null));
+      setDisableModalOpen(false);
+    } else {
+      setDisableError(res?.message || "Failed to disable Two-Factor Authentication.");
+    }
+  };
   const {
     apps,
     loading: servicesLoading,
@@ -683,19 +702,36 @@ export default function DashboardPage() {
                     <span>Edit Profile Name</span>
                   </button>
 
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setProfileDropdownOpen(false);
-                      handleOpenPairingModal();
-                    }}
-                    className="w-full text-left px-3 py-1.5 rounded-lg text-xs text-slate-300 hover:text-white hover:bg-white/5 transition-colors flex items-center gap-2 cursor-pointer"
-                  >
-                    <svg className="w-3.5 h-3.5 text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                    </svg>
-                    <span>Pair Authenticator</span>
-                  </button>
+                  {user?.mfaEnabled ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setProfileDropdownOpen(false);
+                        setDisableError("");
+                        setDisableModalOpen(true);
+                      }}
+                      className="w-full text-left px-3 py-1.5 rounded-lg text-xs text-amber-400 hover:bg-amber-500/10 transition-colors flex items-center gap-2 cursor-pointer"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                      </svg>
+                      <span>Disable 2FA</span>
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setProfileDropdownOpen(false);
+                        handleOpenPairingModal();
+                      }}
+                      className="w-full text-left px-3 py-1.5 rounded-lg text-xs text-slate-300 hover:text-white hover:bg-white/5 transition-colors flex items-center gap-2 cursor-pointer"
+                    >
+                      <svg className="w-3.5 h-3.5 text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                      </svg>
+                      <span>Enable 2FA (Pair App)</span>
+                    </button>
+                  )}
 
                   <button
                     type="button"
@@ -733,14 +769,28 @@ export default function DashboardPage() {
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
-            {!user?.mfaEnabled && (
+            {user?.mfaEnabled ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setDisableError("");
+                  setDisableModalOpen(true);
+                }}
+                className="px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/20 text-xs font-medium transition-colors cursor-pointer flex items-center gap-1.5"
+                title="2-Factor Authentication is active. Click to disable."
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                <span>2FA: ON</span>
+              </button>
+            ) : (
               <button
                 type="button"
                 onClick={handleOpenPairingModal}
                 className="px-3 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-300 hover:bg-amber-500/20 text-xs font-medium transition-colors cursor-pointer flex items-center gap-1.5"
+                title="2-Factor Authentication is disabled. Click to pair device."
               >
                 <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
-                <span>Pair MFA</span>
+                <span>2FA: OFF (Pair)</span>
               </button>
             )}
 
@@ -1281,6 +1331,57 @@ export default function DashboardPage() {
                 </div>
               </div>
             ) : null}
+          </div>
+        </div>
+      )}
+
+      {/* 2FA Disable Confirmation Modal */}
+      {disableModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <div className="bg-[#0d1522] border border-amber-500/30 rounded-2xl max-w-md w-full p-6 shadow-2xl relative text-left">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-white">Disable Two-Factor Authentication</h3>
+                <p className="text-xs text-slate-400 mt-0.5">MFA Security Policy Adjustment</p>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-300 leading-relaxed mb-4">
+              Are you sure you want to turn off 2FA for <span className="font-mono text-cyan-300">{user?.email}</span>?
+            </p>
+            <div className="p-3 bg-amber-950/30 border border-amber-500/20 rounded-xl text-[11px] text-amber-200/90 leading-relaxed mb-6">
+              Disabling 2FA will delete your paired secret key. Subsequent sign-ins will only require your password without secondary authenticator challenge.
+            </div>
+
+            {disableError && (
+              <div className="mb-4 p-2.5 rounded-lg bg-red-500/10 border border-red-500/30 text-red-300 text-xs">
+                {disableError}
+              </div>
+            )}
+
+            <div className="flex items-center justify-end gap-2.5">
+              <button
+                type="button"
+                disabled={disableLoading}
+                onClick={() => setDisableModalOpen(false)}
+                className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-semibold border border-slate-700 transition-colors cursor-pointer"
+              >
+                Keep 2FA Enabled
+              </button>
+              <button
+                type="button"
+                disabled={disableLoading}
+                onClick={handleConfirmDisableMfa}
+                className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 active:scale-[0.99] text-white text-xs font-bold transition-all cursor-pointer flex items-center gap-2 disabled:opacity-50"
+              >
+                {disableLoading ? "Disabling..." : "Confirm & Turn Off 2FA"}
+              </button>
+            </div>
           </div>
         </div>
       )}
