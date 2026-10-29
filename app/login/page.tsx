@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import { useMfa } from "@/hooks/useMfa";
 import { saveSession, getStoredSession, clearSession } from "@/lib/session";
-import { getMfaChallengeStatus, loginWithGoogle } from "@/lib/api";
+import { getMfaChallengeStatus, loginWithGoogle, resendVerification } from "@/lib/api";
 import { User } from "@/types/auth";
 import Footer from "@/app/partials/footer";
 
@@ -83,6 +83,8 @@ function LoginPageContent() {
   const [googleModalOpen, setGoogleModalOpen] = useState(false);
   const [googleTokenInput, setGoogleTokenInput] = useState("");
   const [googleLoading, setGoogleLoading] = useState(false);
+  const [resendLoading, setResendLoading] = useState(false);
+  const [resendMsg, setResendMsg] = useState("");
 
   // Initialize Google Identity Services if client ID is configured
   useEffect(() => {
@@ -779,11 +781,35 @@ function LoginPageContent() {
                 <form onSubmit={handleLoginSubmit} noValidate>
                   {/* Alert: Validation or Login Error */}
                   {(validationError || authError) && (
-                    <div className="mb-4 p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-300 text-xs flex items-center gap-2">
-                      <svg className="w-4 h-4 shrink-0 text-red-400" viewBox="0 0 20 20" fill="currentColor">
-                        <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                      </svg>
-                      <span>{validationError || authError}</span>
+                    <div className="mb-4 p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-300 text-xs">
+                      <div className="flex items-center gap-2">
+                        <svg className="w-4 h-4 shrink-0 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                        </svg>
+                        <span>{validationError || authError}</span>
+                      </div>
+                      {authError && (authError.includes("not been activated") || authError.includes("verify your email")) && (
+                        <div className="mt-2.5 pt-2 border-t border-red-500/20 flex items-center justify-between">
+                          <span className="text-[11px] text-slate-400">Didn't receive the email?</span>
+                          <button
+                            type="button"
+                            disabled={resendLoading || !email.trim()}
+                            onClick={async () => {
+                              setResendLoading(true);
+                              setResendMsg("");
+                              const r = await resendVerification(email.trim());
+                              setResendLoading(false);
+                              setResendMsg(r.message || "Fresh activation link sent.");
+                            }}
+                            className="text-[11px] text-cyan-400 hover:text-cyan-300 font-semibold underline cursor-pointer disabled:opacity-50"
+                          >
+                            {resendLoading ? "Resending..." : "Resend Activation Link"}
+                          </button>
+                        </div>
+                      )}
+                      {resendMsg && (
+                        <p className="mt-1.5 text-[11px] text-cyan-300">{resendMsg}</p>
+                      )}
                     </div>
                   )}
 
@@ -864,7 +890,7 @@ function LoginPageContent() {
                     </div>
 
                     <Link
-                      href="/faq"
+                      href="/forgot-password"
                       className="text-cyan-400 hover:text-cyan-300 font-medium transition-colors"
                     >
                       Forgot password?

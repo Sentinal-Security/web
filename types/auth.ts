@@ -52,6 +52,14 @@ export interface AuthResponse {
   ssoToken?: string;
   challengeId?: number;
   matchCode?: string;
+  emailVerified?: boolean;
+}
+
+export interface GenericApiResponse<T = any> {
+  success: boolean;
+  message: string;
+  data?: T;
+  timestamp?: string;
 }
 
 export interface MfaSetupResponse {

@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
+import { resendVerification } from "@/lib/api";
 import Footer from "@/app/partials/footer";
 
 export default function RegisterPage() {
@@ -19,6 +20,9 @@ export default function RegisterPage() {
   const [agreed, setAgreed] = useState(false);
   const [validationError, setValidationError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
+  const [activationPending, setActivationPending] = useState<{ email: string } | null>(null);
+  const [resending, setResending] = useState(false);
+  const [resendStatus, setResendStatus] = useState("");
 
   const detectCompany = (val: string): string => {
     if (!val.includes("@")) return "";
@@ -93,12 +97,7 @@ export default function RegisterPage() {
     });
 
     if (res.success) {
-      setSuccessMessage(
-        res.message || "Account registered successfully! Redirecting to login..."
-      );
-      setTimeout(() => {
-        router.push("/login");
-      }, 1500);
+      setActivationPending({ email: email.trim() });
     }
   };
 
@@ -220,9 +219,57 @@ export default function RegisterPage() {
 
           {/* Right Column: Sign Up Account Form Area */}
           <div className="lg:col-span-6 w-full max-w-xl xl:max-w-2xl mx-auto flex flex-col justify-center">
-            
-            {/* Header Titles */}
-            <div className="text-center mb-6">
+            {activationPending ? (
+              <div className="bg-[#0d1522] border border-cyan-500/30 rounded-2xl p-6 sm:p-8 text-center shadow-[0_0_35px_rgba(56,225,255,0.1)]">
+                <div className="w-16 h-16 rounded-2xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center mx-auto mb-5 text-cyan-400">
+                  <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                  </svg>
+                </div>
+                <h3 className="text-xl font-bold text-white mb-2">Check Your Email</h3>
+                <p className="text-sm text-slate-300 leading-relaxed mb-4">
+                  We have dispatched an activation link via Google SMTP to:
+                </p>
+                <div className="py-2.5 px-4 bg-slate-900 border border-slate-700 rounded-xl font-mono text-cyan-300 text-sm font-semibold mb-6 break-all">
+                  {activationPending.email}
+                </div>
+                <p className="text-xs text-slate-400 leading-relaxed mb-6">
+                  Please open your email inbox and click the activation button to verify your identity. If you do not see it within a minute, check your spam or promotions folder.
+                </p>
+
+                {resendStatus && (
+                  <div className="mb-4 p-3 rounded-xl bg-cyan-950/60 border border-cyan-500/30 text-cyan-300 text-xs text-center">
+                    {resendStatus}
+                  </div>
+                )}
+
+                <div className="flex flex-col gap-3">
+                  <Link
+                    href="/login"
+                    className="w-full py-3.5 px-4 bg-[#3bf0ff] hover:bg-[#2fe0ef] text-slate-950 font-bold text-sm rounded-xl transition-all shadow-lg shadow-cyan-500/20 text-center block"
+                  >
+                    Proceed to Sign In
+                  </Link>
+                  <button
+                    type="button"
+                    disabled={resending}
+                    onClick={async () => {
+                      setResending(true);
+                      setResendStatus("");
+                      const r = await resendVerification(activationPending.email);
+                      setResending(false);
+                      setResendStatus(r.message || "Fresh activation link sent.");
+                    }}
+                    className="w-full py-3 px-4 bg-slate-800/80 hover:bg-slate-700/80 text-slate-300 hover:text-white text-xs font-semibold rounded-xl border border-slate-700 transition-all cursor-pointer disabled:opacity-50"
+                  >
+                    {resending ? "Resending..." : "Resend Activation Email"}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div>
+                {/* Header Titles */}
+                <div className="text-center mb-6">
               <h2 className="text-2xl sm:text-3xl font-semibold text-white tracking-tight">
                 Sign up account
               </h2>
@@ -519,6 +566,8 @@ export default function RegisterPage() {
                 </p>
               </div>
             </div>
+          )}
+          </div>
           </div>
         </main>
 
