@@ -8,7 +8,17 @@ import { AppIntegration, IntegrationType } from "@/types/integration";
 import { getStoredSession, updateStoredUser, clearSession } from "@/lib/session";
 import { useMfa } from "@/hooks/useMfa";
 import { useIntegrations } from "@/hooks/useIntegrations";
-import { updateUserProfile, checkBackendHealth, getRecoveryCodesStatus, regenerateRecoveryCodes } from "@/lib/api";
+import {
+  updateUserProfile,
+  checkBackendHealth,
+  getRecoveryCodesStatus,
+  regenerateRecoveryCodes,
+  getUserSessions,
+  revokeUserSession,
+  revokeUserOtherSessions,
+  getOrganizationPolicy,
+} from "@/lib/api";
+import { SessionDto } from "@/types/admin";
 import { useInactivityTimeout } from "@/hooks/useInactivityTimeout";
 import { InactivityWarningModal } from "@/components/session/InactivityWarningModal";
 
@@ -175,6 +185,14 @@ export default function DashboardPage() {
   const [profileSuccess, setProfileSuccess] = useState("");
   const [ssoToken, setSsoToken] = useState<string | null>(null);
 
+  // Compliance Mandate & Active Sessions Governance
+  const [mfaMandateActive, setMfaMandateActive] = useState(false);
+  const [userSessionsModalOpen, setUserSessionsModalOpen] = useState(false);
+  const [userSessions, setUserSessions] = useState<SessionDto[]>([]);
+  const [userSessionsLoading, setUserSessionsLoading] = useState(false);
+  const [revokingUserSessionId, setRevokingUserSessionId] = useState<number | null>(null);
+  const [sessionFeedbackMsg, setSessionFeedbackMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
   useEffect(() => {
     const session = getStoredSession();
     if (!session || !session.user) {
@@ -186,7 +204,62 @@ export default function DashboardPage() {
     if (session.token) {
       setSsoToken(session.token);
     }
+
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("setup_mfa") === "required") {
+        setMfaMandateActive(true);
+        if (!session.user.mfaEnabled) {
+          setPairingModalOpen(true);
+        }
+      }
+    }
+
+    if (session.user.company) {
+      getOrganizationPolicy(session.user.userId, session.user.company).then((res) => {
+        if (res.success && res.data?.mfaEnforced) {
+          setMfaMandateActive(true);
+        }
+      });
+    }
   }, [router]);
+
+  const loadUserSessions = useCallback(async () => {
+    if (!user) return;
+    setUserSessionsLoading(true);
+    setSessionFeedbackMsg(null);
+    const res = await getUserSessions(user.userId, ssoToken || undefined);
+    setUserSessionsLoading(false);
+    if (res.success && res.data) {
+      setUserSessions(res.data);
+    }
+  }, [user, ssoToken]);
+
+  const handleRevokeSingleUserSession = async (sessionId: number) => {
+    if (!user) return;
+    setRevokingUserSessionId(sessionId);
+    const res = await revokeUserSession(sessionId, user.userId);
+    setRevokingUserSessionId(null);
+    if (res.success) {
+      setUserSessions((prev) => prev.filter((s) => s.id !== sessionId));
+      setSessionFeedbackMsg({ type: "success", text: "Session terminated successfully." });
+    } else {
+      setSessionFeedbackMsg({ type: "error", text: res.message || "Failed to terminate session." });
+    }
+  };
+
+  const handleRevokeAllOtherUserSessions = async () => {
+    if (!user || !ssoToken) return;
+    setUserSessionsLoading(true);
+    const res = await revokeUserOtherSessions(user.userId, ssoToken);
+    setUserSessionsLoading(false);
+    if (res.success) {
+      setUserSessions((prev) => prev.filter((s) => s.currentSession));
+      setSessionFeedbackMsg({ type: "success", text: "All other sessions have been logged out." });
+    } else {
+      setSessionFeedbackMsg({ type: "error", text: res.message || "Failed to terminate other sessions." });
+    }
+  };
 
   const handleLogout = () => {
     clearSession();
@@ -618,9 +691,36 @@ export default function DashboardPage() {
             <button
               type="button"
               onClick={() => setShowConnectedNotice(false)}
-              className="text-slate-400 hover:text-white text-xs cursor-pointer"
+              className="text-slate-400 hover:text-white p-1 rounded hover:bg-white/5 transition-colors cursor-pointer"
+              aria-label="Dismiss notice"
             >
-              ✕
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        )}
+
+        {/* Organization MFA Mandate Policy Alert Banner */}
+        {mfaMandateActive && !user?.mfaEnabled && (
+          <div className="mb-4 px-4 py-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-200 text-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div className="flex items-start gap-2.5">
+              <svg className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+              <div>
+                <p className="font-semibold text-amber-300">Organization Compliance Mandate: Multi-Factor Authentication Required</p>
+                <p className="text-[11px] text-slate-300 mt-0.5">
+                  Your enterprise administrator enforces Multi-Factor Authentication (MFA) for all accounts at <span className="font-mono text-amber-300">{user?.company || "your organization"}</span>. Access to single sign-on applications is restricted until an authenticator device is paired.
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={handleOpenPairingModal}
+              className="px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs shrink-0 cursor-pointer transition-colors"
+            >
+              Pair Device Now
             </button>
           </div>
         )}
@@ -774,6 +874,24 @@ export default function DashboardPage() {
                       <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                     </svg>
                     <span>Edit Profile Name</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setProfileDropdownOpen(false);
+                      setUserSessionsModalOpen(true);
+                      loadUserSessions();
+                    }}
+                    className="w-full text-left px-3 py-1.5 rounded-lg text-xs text-slate-300 hover:text-white hover:bg-white/5 transition-colors flex items-center justify-between cursor-pointer mb-1"
+                  >
+                    <div className="flex items-center gap-2">
+                      <svg className="w-3.5 h-3.5 text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                      </svg>
+                      <span>Active Sessions &amp; Devices</span>
+                    </div>
+                    <span className="text-[10px] text-slate-400 font-mono">Manage</span>
                   </button>
 
                   {user?.mfaEnabled ? (
@@ -1696,6 +1814,145 @@ export default function DashboardPage() {
                 type="button"
                 onClick={() => setRecoveryModalOpen(false)}
                 className="py-2 px-4 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-xs font-bold transition-colors cursor-pointer"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Active Sessions Governance Modal */}
+      {userSessionsModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+          <div className="w-full max-w-2xl bg-slate-950 border border-white/10 rounded-2xl shadow-2xl p-6 max-h-[85vh] flex flex-col">
+            <div className="flex items-center justify-between pb-4 border-b border-white/10 shrink-0">
+              <div className="flex items-center gap-2">
+                <svg className="w-5 h-5 text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                </svg>
+                <h3 className="text-base font-bold text-white">Active Sessions &amp; Connected Devices</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setUserSessionsModalOpen(false)}
+                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-white/5 transition-colors cursor-pointer"
+                aria-label="Close modal"
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="py-3 shrink-0 flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-white/5">
+              <p className="text-xs text-slate-400">
+                Manage your authenticated sessions across web browsers and client applications.
+              </p>
+              {userSessions.filter((s) => !s.currentSession).length > 0 && (
+                <button
+                  type="button"
+                  disabled={userSessionsLoading}
+                  onClick={handleRevokeAllOtherUserSessions}
+                  className="px-3 py-1.5 rounded-lg bg-red-600/20 hover:bg-red-600/30 text-red-300 border border-red-500/30 text-xs font-semibold shrink-0 cursor-pointer transition-colors disabled:opacity-50"
+                >
+                  Terminate All Other Sessions
+                </button>
+              )}
+            </div>
+
+            {sessionFeedbackMsg && (
+              <div
+                className={`my-3 p-3 rounded-xl text-xs shrink-0 ${
+                  sessionFeedbackMsg.type === "success"
+                    ? "bg-emerald-500/10 border border-emerald-500/30 text-emerald-300"
+                    : "bg-red-500/10 border border-red-500/30 text-red-300"
+                }`}
+              >
+                {sessionFeedbackMsg.text}
+              </div>
+            )}
+
+            <div className="overflow-y-auto space-y-2.5 py-4 flex-1">
+              {userSessionsLoading && userSessions.length === 0 ? (
+                <div className="py-12 text-center text-xs text-slate-400">Loading active session telemetry...</div>
+              ) : userSessions.length === 0 ? (
+                <div className="py-12 text-center text-xs text-slate-400">No active sessions found.</div>
+              ) : (
+                userSessions.map((s) => (
+                  <div
+                    key={s.id}
+                    className={`p-3.5 rounded-xl border transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+                      s.currentSession
+                        ? "bg-cyan-950/20 border-cyan-500/40"
+                        : "bg-slate-900/60 border-white/5 hover:border-white/10"
+                    }`}
+                  >
+                    <div className="flex items-start gap-3 min-w-0">
+                      <div className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center shrink-0 mt-0.5">
+                        <svg className="w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                        </svg>
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-xs font-semibold text-white">
+                            {s.userAgent
+                              ? s.userAgent.includes("Firefox")
+                                ? "Mozilla Firefox"
+                                : s.userAgent.includes("Edg")
+                                ? "Microsoft Edge"
+                                : s.userAgent.includes("Chrome")
+                                ? "Google Chrome"
+                                : s.userAgent.includes("Safari")
+                                ? "Apple Safari"
+                                : "Web Browser"
+                              : "Web Client"}
+                          </span>
+                          {s.currentSession ? (
+                            <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-500/40">
+                              Current Session
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 rounded text-[10px] font-mono text-emerald-400 bg-emerald-500/10 border border-emerald-500/30">
+                              Active Remote
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 mt-1 text-[11px] text-slate-400 font-mono flex-wrap">
+                          <span>IP: {s.clientIp || "Direct Gateway"}</span>
+                          <span>•</span>
+                          <span>Origin: {s.clientOrigin || "Sentinel Portal"}</span>
+                        </div>
+                        <p className="text-[10px] text-slate-400 mt-0.5">
+                          Established: {new Date(s.createdAt).toLocaleString()} (Valid until {new Date(s.expiresAt).toLocaleTimeString()})
+                        </p>
+                      </div>
+                    </div>
+
+                    {!s.currentSession && (
+                      <button
+                        type="button"
+                        disabled={revokingUserSessionId === s.id}
+                        onClick={() => handleRevokeSingleUserSession(s.id)}
+                        className="self-end sm:self-center px-3 py-1.5 rounded-lg bg-red-600/20 hover:bg-red-600/30 text-red-300 border border-red-500/30 text-xs font-semibold transition-colors cursor-pointer disabled:opacity-50 shrink-0"
+                      >
+                        {revokingUserSessionId === s.id ? "Terminating..." : "Terminate"}
+                      </button>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div className="pt-4 border-t border-white/10 shrink-0 flex items-center justify-between">
+              <span className="text-[11px] text-slate-400 font-mono">
+                {userSessions.length} total active session{userSessions.length === 1 ? "" : "s"}
+              </span>
+              <button
+                type="button"
+                onClick={() => setUserSessionsModalOpen(false)}
+                className="py-1.5 px-4 rounded-xl bg-white/5 hover:bg-white/10 text-white text-xs font-medium transition-colors cursor-pointer"
               >
                 Done
               </button>

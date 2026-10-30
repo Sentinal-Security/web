@@ -192,6 +192,19 @@ function LoginPageContent() {
       });
 
       if (res.success) {
+        if (res.mfaEnrollmentRequired) {
+          saveSession({
+            userId: res.userId || 1,
+            email: res.email || email.trim(),
+            fullName: res.fullName || "",
+            role: (res.role as any) || "USER",
+            company: res.company || "",
+            mfaEnabled: false,
+          }, res.ssoToken);
+          router.push("/dashboard?setup_mfa=required");
+          return;
+        }
+
         if (res.mfaEnabled || res.mfaRequired) {
           setMfaChallenge({
             required: true,
@@ -320,6 +333,19 @@ function LoginPageContent() {
       const res = await loginWithGoogle(idToken.trim());
       if (res.success) {
         setGoogleModalOpen(false);
+        if (res.mfaEnrollmentRequired) {
+          saveSession({
+            userId: res.userId || 1,
+            email: res.email || "google.user@example.com",
+            fullName: res.fullName || "Google User",
+            role: (res.role as any) || "USER",
+            company: res.company || "",
+            mfaEnabled: false,
+          }, res.ssoToken);
+          router.push("/dashboard?setup_mfa=required");
+          return;
+        }
+
         if (res.mfaEnabled || res.mfaRequired) {
           setMfaChallenge({
             required: true,

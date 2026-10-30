@@ -51,3 +51,39 @@ export interface UserTemplateConfig {
   assignedServiceIds: number[];
   count: number;
 }
+
+export interface OrganizationPolicy {
+  id?: number;
+  company: string;
+  mfaEnforced: boolean;
+  sessionDurationHours: number;
+  updatedAt?: string;
+  updatedByAdminId?: number;
+}
+
+export interface SessionDto {
+  id: number;
+  userId: number;
+  userEmail: string;
+  company: string;
+  clientIp: string;
+  userAgent: string;
+  clientOrigin: string;
+  createdAt: string;
+  expiresAt: string;
+  currentSession: boolean;
+}
+
+export interface CsvImportReport {
+  totalProcessed: number;
+  importedCount: number;
+  skippedCount: number;
+  importedUsers: AdminUser[];
+  skippedEmails: string[];
+  credentials: {
+    email: string;
+    fullName: string;
+    temporaryPassword: string;
+    role: string;
+  }[];
+}

@@ -54,6 +54,8 @@ export interface AuthResponse {
   matchCode?: string;
   emailVerified?: boolean;
   recoveryCodes?: string[];
+  mfaEnrollmentRequired?: boolean;
+  mfaEnforced?: boolean;
 }
 
 export interface GenericApiResponse<T = any> {

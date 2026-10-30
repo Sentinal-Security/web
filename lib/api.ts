@@ -13,7 +13,14 @@ import {
   LaunchServicePayload,
   LaunchServiceResponse,
 } from "@/types/integration";
-import { AdminUser, CreateUserPayload, BatchCreateUsersPayload } from "@/types/admin";
+import {
+  AdminUser,
+  CreateUserPayload,
+  BatchCreateUsersPayload,
+  OrganizationPolicy,
+  SessionDto,
+  CsvImportReport,
+} from "@/types/admin";
 import { SecurityAuditRecord, ClientTelemetryPayload } from "@/types/audit";
 
 export * from "@/types/auth";
@@ -722,6 +729,146 @@ export async function resetPassword(token: string, newPassword: string): Promise
     return data;
   } catch {
     return { success: false, message: "Failed to connect to authentication gateway." };
+  }
+}
+
+// --- BATCH 3: ENTERPRISE ADMINISTRATION & COMPLIANCE GOVERNANCE ---
+
+export async function getOrganizationPolicy(
+  adminId?: number,
+  company?: string
+): Promise<{ success: boolean; message: string; data?: OrganizationPolicy }> {
+  try {
+    const params = new URLSearchParams();
+    if (adminId) params.append("adminId", adminId.toString());
+    if (company) params.append("company", company);
+
+    const res = await fetch(`${API_BASE_URL}/api/admin/policy?${params.toString()}`);
+    return await res.json();
+  } catch {
+    return { success: false, message: "Failed to fetch organization compliance policy." };
+  }
+}
+
+export async function updateOrganizationPolicy(payload: {
+  adminId?: number;
+  company?: string;
+  mfaEnforced: boolean;
+  sessionDurationHours?: number;
+}): Promise<{ success: boolean; message: string; data?: OrganizationPolicy }> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/admin/policy`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    return await res.json();
+  } catch {
+    return { success: false, message: "Failed to update organization compliance policy." };
+  }
+}
+
+export async function importUsersCsv(payload: {
+  csvContent: string;
+  adminId?: number;
+  company?: string;
+}): Promise<{ success: boolean; message: string; data?: CsvImportReport }> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/admin/users/csv-import`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    return await res.json();
+  } catch {
+    return { success: false, message: "Failed to execute CSV roster import." };
+  }
+}
+
+export async function getAdminSessions(
+  adminId?: number,
+  company?: string
+): Promise<{ success: boolean; message: string; data?: SessionDto[] }> {
+  try {
+    const params = new URLSearchParams();
+    if (adminId) params.append("adminId", adminId.toString());
+    if (company) params.append("company", company);
+
+    const res = await fetch(`${API_BASE_URL}/api/admin/sessions?${params.toString()}`);
+    return await res.json();
+  } catch {
+    return { success: false, message: "Failed to retrieve active tenant sessions." };
+  }
+}
+
+export async function revokeAdminSession(
+  sessionId: number,
+  adminId?: number
+): Promise<{ success: boolean; message: string }> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/admin/sessions/${sessionId}/revoke${adminId ? `?adminId=${adminId}` : ""}`, {
+      method: "POST",
+    });
+    return await res.json();
+  } catch {
+    return { success: false, message: "Failed to terminate session." };
+  }
+}
+
+export async function revokeAdminUserSessions(
+  userId: number,
+  adminId?: number
+): Promise<{ success: boolean; message: string }> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/admin/sessions/revoke-user?userId=${userId}${adminId ? `&adminId=${adminId}` : ""}`, {
+      method: "POST",
+    });
+    return await res.json();
+  } catch {
+    return { success: false, message: "Failed to terminate user sessions." };
+  }
+}
+
+export async function getUserSessions(
+  userId: number,
+  currentSsoToken?: string
+): Promise<{ success: boolean; message: string; data?: SessionDto[] }> {
+  try {
+    const params = new URLSearchParams({ userId: userId.toString() });
+    if (currentSsoToken) params.append("ssoToken", currentSsoToken);
+
+    const res = await fetch(`${API_BASE_URL}/api/auth/sessions?${params.toString()}`);
+    return await res.json();
+  } catch {
+    return { success: false, message: "Failed to retrieve active user sessions." };
+  }
+}
+
+export async function revokeUserSession(
+  sessionId: number,
+  userId: number
+): Promise<{ success: boolean; message: string }> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/auth/sessions/${sessionId}/revoke?userId=${userId}`, {
+      method: "POST",
+    });
+    return await res.json();
+  } catch {
+    return { success: false, message: "Failed to terminate session." };
+  }
+}
+
+export async function revokeUserOtherSessions(
+  userId: number,
+  ssoToken: string
+): Promise<{ success: boolean; message: string }> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/auth/sessions/revoke-others?userId=${userId}&ssoToken=${encodeURIComponent(ssoToken)}`, {
+      method: "POST",
+    });
+    return await res.json();
+  } catch {
+    return { success: false, message: "Failed to terminate other sessions." };
   }
 }
 

@@ -1,14 +1,22 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { User } from "@/types/auth";
-import { AdminUser } from "@/types/admin";
+import { AdminUser, OrganizationPolicy, SessionDto, CsvImportReport } from "@/types/admin";
 import { getStoredSession, updateStoredUser, clearSession } from "@/lib/session";
 import { useAdmin } from "@/hooks/useAdmin";
 import { useIntegrations } from "@/hooks/useIntegrations";
-import { updateUserProfile } from "@/lib/api";
+import {
+  updateUserProfile,
+  getOrganizationPolicy,
+  updateOrganizationPolicy,
+  importUsersCsv,
+  getAdminSessions,
+  revokeAdminSession,
+  revokeAdminUserSessions
+} from "@/lib/api";
 import { SecurityAuditPanel } from "@/components/SecurityAuditPanel";
 import { useInactivityTimeout } from "@/hooks/useInactivityTimeout";
 import { InactivityWarningModal } from "@/components/session/InactivityWarningModal";
@@ -35,13 +43,34 @@ export default function UserManagementPage() {
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
 
   // Authentication & Guard
-  const [adminViewTab, setAdminViewTab] = useState<"directory" | "audit">("directory");
+  const [adminViewTab, setAdminViewTab] = useState<"directory" | "sessions" | "policy" | "audit">("directory");
+
+  // Organization Compliance Policy State
+  const [orgPolicy, setOrgPolicy] = useState<OrganizationPolicy | null>(null);
+  const [policyLoading, setPolicyLoading] = useState(false);
+  const [policySaving, setPolicySaving] = useState(false);
+  const [policyFeedback, setPolicyFeedback] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+  // Active Sessions Explorer State
+  const [adminSessions, setAdminSessions] = useState<SessionDto[]>([]);
+  const [sessionsLoading, setSessionsLoading] = useState(false);
+  const [sessionSearchQuery, setSessionSearchQuery] = useState("");
+  const [revokingSessionId, setRevokingSessionId] = useState<number | null>(null);
+  const [sessionFeedback, setSessionFeedback] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+  // CSV Roster Import State
+  const [csvText, setCsvText] = useState("");
+  const [csvFileName, setCsvFileName] = useState("");
+  const [csvLoading, setCsvLoading] = useState(false);
+  const [csvErr, setCsvErr] = useState("");
+  const [csvPreviewRows, setCsvPreviewRows] = useState<Array<{ fullName: string; email: string; role: string; tempPass: string }>>([]);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
       const urlParams = new URLSearchParams(window.location.search);
-      if (urlParams.get("tab") === "audit") {
-        setAdminViewTab("audit");
+      const tabParam = urlParams.get("tab");
+      if (tabParam === "audit" || tabParam === "sessions" || tabParam === "policy") {
+        setAdminViewTab(tabParam as any);
       }
     }
   }, []);
@@ -84,7 +113,7 @@ export default function UserManagementPage() {
 
   // Unified Provisioning Modal State (Single + Bulk)
   const [provisionModalOpen, setProvisionModalOpen] = useState(false);
-  const [provisionTab, setProvisionTab] = useState<"single" | "bulk">("single");
+  const [provisionTab, setProvisionTab] = useState<"single" | "bulk" | "csv">("single");
 
   // Single Member Provisioning Form State
   const [singleName, setSingleName] = useState("");
@@ -375,6 +404,194 @@ export default function UserManagementPage() {
     setDeleteConfirmUser(null);
   };
 
+  // Data Loaders for Policy and Active Sessions
+  const loadOrgPolicy = useCallback(async () => {
+    if (!currentUser?.company) return;
+    setPolicyLoading(true);
+    const res = await getOrganizationPolicy(currentUser.userId, currentUser.company);
+    setPolicyLoading(false);
+    if (res.success && res.data) {
+      setOrgPolicy(res.data);
+    }
+  }, [currentUser?.company, currentUser?.userId]);
+
+  const loadAdminSessions = useCallback(async () => {
+    if (!currentUser?.company) return;
+    setSessionsLoading(true);
+    const res = await getAdminSessions(currentUser.userId, currentUser.company);
+    setSessionsLoading(false);
+    if (res.success && res.data) {
+      setAdminSessions(res.data);
+    }
+  }, [currentUser?.company, currentUser?.userId]);
+
+  useEffect(() => {
+    if (currentUser?.company) {
+      loadOrgPolicy();
+      loadAdminSessions();
+    }
+  }, [currentUser?.company, loadOrgPolicy, loadAdminSessions]);
+
+  // Policy Handlers
+  const handleTogglePolicyMfa = async () => {
+    if (!currentUser?.company) return;
+    setPolicySaving(true);
+    setPolicyFeedback(null);
+    const nextVal = !orgPolicy?.mfaEnforced;
+    const res = await updateOrganizationPolicy({
+      adminId: currentUser.userId,
+      company: currentUser.company,
+      mfaEnforced: nextVal,
+      sessionDurationHours: orgPolicy?.sessionDurationHours || 24,
+    });
+    setPolicySaving(false);
+    if (res.success && res.data) {
+      setOrgPolicy(res.data);
+      setPolicyFeedback({
+        type: "success",
+        text: `Organization policy updated: Multi-Factor Authentication is now ${nextVal ? "ENFORCED" : "OPTIONAL"}.`,
+      });
+    } else {
+      setPolicyFeedback({
+        type: "error",
+        text: res.message || "Failed to update organization security policy.",
+      });
+    }
+  };
+
+  // Sessions Handlers
+  const handleRevokeSession = async (sessionId: number) => {
+    setRevokingSessionId(sessionId);
+    setSessionFeedback(null);
+    const res = await revokeAdminSession(sessionId, currentUser?.userId);
+    setRevokingSessionId(null);
+    if (res.success) {
+      setAdminSessions((prev) => prev.filter((s) => s.id !== sessionId));
+      setSessionFeedback({ type: "success", text: `Session #${sessionId} terminated successfully.` });
+    } else {
+      setSessionFeedback({ type: "error", text: res.message || "Failed to terminate session." });
+    }
+  };
+
+  const handleRevokeAllUserSessions = async (userId: number, email: string) => {
+    setSessionFeedback(null);
+    const res = await revokeAdminUserSessions(userId, currentUser?.userId);
+    if (res.success) {
+      setAdminSessions((prev) => prev.filter((s) => s.userId !== userId));
+      setSessionFeedback({ type: "success", text: `All active sessions for ${email} terminated.` });
+    } else {
+      setSessionFeedback({ type: "error", text: res.message || "Failed to terminate user sessions." });
+    }
+  };
+
+  // Filtered Sessions
+  const filteredSessions = useMemo(() => {
+    if (!sessionSearchQuery.trim()) return adminSessions;
+    const q = sessionSearchQuery.toLowerCase();
+    return adminSessions.filter(
+      (s) =>
+        s.userEmail.toLowerCase().includes(q) ||
+        s.clientIp.toLowerCase().includes(q) ||
+        s.clientOrigin.toLowerCase().includes(q) ||
+        s.userAgent.toLowerCase().includes(q)
+    );
+  }, [adminSessions, sessionSearchQuery]);
+
+  // CSV Roster Handlers
+  const handleDownloadCsvTemplate = () => {
+    const template = "Full Name,Email,Role,Initial Password\nJane Doe,jane.doe@example.com,USER,TempPass@1234\nAlex Smith,alex.smith@example.com,ADMIN,TempPass@5678\nCarlos Ray,carlos.ray@example.com,USER,TempPass@9012\n";
+    const blob = new Blob([template], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "sentinel_roster_template.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const parseCsvText = (text: string) => {
+    const lines = text.split(/\r?\n/).filter((l) => l.trim().length > 0);
+    if (lines.length <= 1) return [];
+
+    let nameCol = 0, emailCol = 1, roleCol = 2, passCol = 3;
+    const header = lines[0].toLowerCase();
+    let startIdx = 0;
+    if (header.includes("email") || header.includes("name")) {
+      startIdx = 1;
+      const headers = lines[0].split(",");
+      headers.forEach((h, i) => {
+        const clean = h.trim().toLowerCase().replace(/^"|"$/g, "");
+        if (clean.includes("name")) nameCol = i;
+        else if (clean.includes("email")) emailCol = i;
+        else if (clean.includes("role")) roleCol = i;
+        else if (clean.includes("pass")) passCol = i;
+      });
+    }
+
+    const preview: Array<{ fullName: string; email: string; role: string; tempPass: string }> = [];
+    for (let i = startIdx; i < Math.min(lines.length, startIdx + 10); i++) {
+      const parts = lines[i].split(",").map((p) => p.trim().replace(/^"|"$/g, ""));
+      if (parts.length > emailCol && parts[emailCol].includes("@")) {
+        preview.push({
+          fullName: parts[nameCol] || "Employee",
+          email: parts[emailCol],
+          role: parts[roleCol] || "USER",
+          tempPass: parts[passCol] || "Auto-Generated",
+        });
+      }
+    }
+    return preview;
+  };
+
+  const handleCsvFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setCsvFileName(file.name);
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      const content = String(evt.target?.result || "");
+      setCsvText(content);
+      const rows = parseCsvText(content);
+      setCsvPreviewRows(rows);
+    };
+    reader.readAsText(file);
+  };
+
+  const handleExecuteCsvImport = async () => {
+    if (!csvText.trim()) {
+      setCsvErr("Please upload or paste a CSV roster first.");
+      return;
+    }
+    setCsvLoading(true);
+    setCsvErr("");
+    const res = await importUsersCsv({
+      csvContent: csvText,
+      adminId: currentUser?.userId,
+      company: currentUser?.company,
+    });
+    setCsvLoading(false);
+    if (res.success && res.data) {
+      if (res.data.credentials && res.data.credentials.length > 0) {
+        setCreatedCredentialsList(
+          res.data.credentials.map((c: { fullName: string; email: string; temporaryPassword: string; role: string }) => ({
+            fullName: c.fullName,
+            email: c.email,
+            tempPass: c.temporaryPassword,
+            role: c.role,
+          }))
+        );
+        setCredentialsModalOpen(true);
+      }
+      setProvisionModalOpen(false);
+      setCsvText("");
+      setCsvFileName("");
+      setCsvPreviewRows([]);
+      window.location.reload();
+    } else {
+      setCsvErr(res.message || "Failed to import CSV roster.");
+    }
+  };
+
   const handleSignOut = () => {
     clearSession();
     router.push("/login");
@@ -514,16 +731,16 @@ export default function UserManagementPage() {
         {actionSuccess && (
           <div className="p-3.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs flex items-center justify-between">
             <span>{actionSuccess}</span>
-            <button type="button" onClick={clearFeedback} className="text-emerald-400 hover:text-white cursor-pointer">
-              ✕
+            <button type="button" onClick={clearFeedback} className="text-emerald-400 hover:text-white cursor-pointer text-xs font-bold">
+              CLEAR
             </button>
           </div>
         )}
         {actionError && (
           <div className="p-3.5 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-center justify-between">
             <span>{actionError}</span>
-            <button type="button" onClick={clearFeedback} className="text-rose-400 hover:text-white cursor-pointer">
-              ✕
+            <button type="button" onClick={clearFeedback} className="text-rose-400 hover:text-white cursor-pointer text-xs font-bold">
+              CLEAR
             </button>
           </div>
         )}
@@ -557,7 +774,7 @@ export default function UserManagementPage() {
         </div>
 
         {/* Admin Navigation View Tabs */}
-        <div className="flex items-center gap-2 border-b border-white/10 pb-3">
+        <div className="flex flex-wrap items-center gap-2 border-b border-white/10 pb-3">
           <button
             type="button"
             onClick={() => setAdminViewTab("directory")}
@@ -578,6 +795,46 @@ export default function UserManagementPage() {
 
           <button
             type="button"
+            onClick={() => setAdminViewTab("sessions")}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              adminViewTab === "sessions"
+                ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40"
+                : "bg-slate-900/60 text-slate-400 hover:text-white border border-transparent hover:border-white/10"
+            }`}
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+            </svg>
+            <span>Active Sessions</span>
+            <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-cyan-950 text-cyan-400 border border-cyan-800">
+              {adminSessions.length}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setAdminViewTab("policy")}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              adminViewTab === "policy"
+                ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40"
+                : "bg-slate-900/60 text-slate-400 hover:text-white border border-transparent hover:border-white/10"
+            }`}
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+            </svg>
+            <span>Compliance Policy</span>
+            <span className={`text-[9px] font-mono px-1.5 py-0.2 rounded uppercase font-bold border ${
+              orgPolicy?.mfaEnforced
+                ? "bg-emerald-950 text-emerald-300 border-emerald-800"
+                : "bg-slate-800 text-slate-400 border-slate-700"
+            }`}>
+              {orgPolicy?.mfaEnforced ? "MFA Enforced" : "MFA Optional"}
+            </span>
+          </button>
+
+          <button
+            type="button"
             onClick={() => setAdminViewTab("audit")}
             className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
               adminViewTab === "audit"
@@ -588,13 +845,282 @@ export default function UserManagementPage() {
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
             </svg>
-            <span>Security & Audit Logs</span>
+            <span>Security &amp; Audit Logs</span>
             <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
           </button>
         </div>
 
         {adminViewTab === "audit" ? (
           <SecurityAuditPanel adminId={currentUser?.userId} company={currentUser?.company} />
+        ) : adminViewTab === "sessions" ? (
+          <div className="space-y-6">
+            {/* Session Feedback Banner */}
+            {sessionFeedback && (
+              <div className={`p-3.5 rounded-2xl text-xs flex items-center justify-between ${
+                sessionFeedback.type === "success"
+                  ? "bg-emerald-500/10 border border-emerald-500/30 text-emerald-300"
+                  : "bg-rose-500/10 border border-rose-500/30 text-rose-300"
+              }`}>
+                <span>{sessionFeedback.text}</span>
+                <button
+                  type="button"
+                  onClick={() => setSessionFeedback(null)}
+                  className="text-slate-400 hover:text-white font-bold cursor-pointer"
+                >
+                  CLEAR
+                </button>
+              </div>
+            )}
+
+            {/* Metrics Overview */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="p-4 rounded-2xl bg-black border border-white/10 flex flex-col">
+                <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Active Live Sessions</span>
+                <div className="flex items-baseline justify-between mt-2">
+                  <span className="text-2xl font-bold text-cyan-400">{adminSessions.length}</span>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-cyan-500/10 border border-cyan-500/30 text-cyan-300">
+                    SSO Tokens
+                  </span>
+                </div>
+              </div>
+
+              <div className="p-4 rounded-2xl bg-black border border-white/10 flex flex-col">
+                <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Distinct Active Accounts</span>
+                <div className="flex items-baseline justify-between mt-2">
+                  <span className="text-2xl font-bold text-white">
+                    {new Set(adminSessions.map((s) => s.userId)).size}
+                  </span>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/10 border border-purple-500/30 text-purple-300">
+                    Members
+                  </span>
+                </div>
+              </div>
+
+              <div className="p-4 rounded-2xl bg-black border border-white/10 flex flex-col">
+                <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Tenant Scope</span>
+                <div className="flex items-baseline justify-between mt-2">
+                  <span className="text-sm font-bold text-white font-mono truncate">
+                    @{currentUser?.company || "Organization"}
+                  </span>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-300">
+                    Isolated
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Filter and Refresh Bar */}
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 p-3 rounded-2xl bg-black/60 border border-white/10">
+              <div className="flex-1 flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-900/90 border border-white/10">
+                <svg className="w-4 h-4 text-slate-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+                <input
+                  type="text"
+                  value={sessionSearchQuery}
+                  onChange={(e) => setSessionSearchQuery(e.target.value)}
+                  placeholder="Filter sessions by email, IP, origin application, or device..."
+                  className="w-full bg-transparent text-xs text-white placeholder-slate-500 outline-none"
+                />
+                {sessionSearchQuery && (
+                  <button type="button" onClick={() => setSessionSearchQuery("")} className="text-slate-500 hover:text-white text-xs font-bold">
+                    CLEAR
+                  </button>
+                )}
+              </div>
+
+              <button
+                type="button"
+                onClick={loadAdminSessions}
+                disabled={sessionsLoading}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-white/10 text-slate-300 hover:text-white text-xs font-semibold transition-all cursor-pointer"
+              >
+                <svg className={`w-3.5 h-3.5 ${sessionsLoading ? "animate-spin text-cyan-400" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                <span>{sessionsLoading ? "Refreshing..." : "Refresh Sessions"}</span>
+              </button>
+            </div>
+
+            {/* Sessions Table */}
+            <div className="rounded-2xl bg-black border border-white/10 overflow-hidden shadow-2xl">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="bg-slate-950/80 border-b border-white/10 text-slate-400 font-semibold uppercase text-[10px] tracking-wider">
+                      <th className="py-3 px-4">Member Identity</th>
+                      <th className="py-3 px-4">Client IP</th>
+                      <th className="py-3 px-4">Application Origin</th>
+                      <th className="py-3 px-4">Client Device / User-Agent</th>
+                      <th className="py-3 px-4">Session Issued</th>
+                      <th className="py-3 px-4 text-right">Kill Switch Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-white/5">
+                    {sessionsLoading ? (
+                      <tr>
+                        <td colSpan={6} className="py-12 text-center text-slate-400">
+                          <div className="flex flex-col items-center justify-center gap-2">
+                            <svg className="animate-spin h-6 w-6 text-cyan-400" viewBox="0 0 24 24" fill="none">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            <span className="text-xs">Inspecting active authenticated sessions...</span>
+                          </div>
+                        </td>
+                      </tr>
+                    ) : filteredSessions.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="py-12 text-center text-slate-400">
+                          <p className="text-sm font-semibold text-slate-300">No Active Sessions Found</p>
+                          <p className="text-xs text-slate-500 mt-1">There are currently no active SSO session tokens matching this filter.</p>
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredSessions.map((s) => (
+                        <tr key={s.id} className="hover:bg-white/[0.02] transition-colors">
+                          <td className="py-3 px-4">
+                            <div className="font-semibold text-white">{s.userEmail}</div>
+                            <div className="text-[10px] text-slate-500 font-mono">User ID: #{s.userId}</div>
+                          </td>
+                          <td className="py-3 px-4">
+                            <span className="font-mono text-cyan-300 bg-cyan-950/60 px-2 py-0.5 rounded border border-cyan-800 text-[11px]">
+                              {s.clientIp}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4">
+                            <span className="font-semibold text-slate-300">
+                              {s.clientOrigin}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 max-w-xs truncate text-slate-400 font-mono text-[11px]" title={s.userAgent}>
+                            {s.userAgent}
+                          </td>
+                          <td className="py-3 px-4 text-slate-400 font-mono text-[11px]">
+                            {s.createdAt}
+                          </td>
+                          <td className="py-3 px-4 text-right">
+                            <div className="flex items-center justify-end gap-2">
+                              <button
+                                type="button"
+                                disabled={revokingSessionId === s.id}
+                                onClick={() => handleRevokeSession(s.id)}
+                                className="px-2.5 py-1 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-rose-300 text-xs font-semibold transition-all cursor-pointer"
+                              >
+                                {revokingSessionId === s.id ? "Terminating..." : "Terminate"}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleRevokeAllUserSessions(s.userId, s.userEmail)}
+                                className="px-2.5 py-1 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-300 text-xs font-semibold transition-all cursor-pointer"
+                                title="Terminate all concurrent sessions for this employee"
+                              >
+                                Kill All
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        ) : adminViewTab === "policy" ? (
+          <div className="space-y-6">
+            {policyFeedback && (
+              <div className={`p-3.5 rounded-2xl text-xs flex items-center justify-between ${
+                policyFeedback.type === "success"
+                  ? "bg-emerald-500/10 border border-emerald-500/30 text-emerald-300"
+                  : "bg-rose-500/10 border border-rose-500/30 text-rose-300"
+              }`}>
+                <span>{policyFeedback.text}</span>
+                <button
+                  type="button"
+                  onClick={() => setPolicyFeedback(null)}
+                  className="text-slate-400 hover:text-white font-bold cursor-pointer"
+                >
+                  CLEAR
+                </button>
+              </div>
+            )}
+
+            <div className="p-6 rounded-2xl bg-black border border-white/10 space-y-6">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-6 border-b border-white/10">
+                <div>
+                  <h3 className="text-lg font-bold text-white tracking-tight">Organization Security &amp; Compliance Policy</h3>
+                  <p className="text-xs text-slate-400 mt-1">
+                    Enforce enterprise-wide zero trust authentication mandates across workspace{" "}
+                    <span className="text-cyan-400 font-mono">@{currentUser?.company || "Organization"}</span>.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className={`text-xs font-bold px-3 py-1 rounded-full border ${
+                    orgPolicy?.mfaEnforced
+                      ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-300"
+                      : "bg-amber-500/10 border-amber-500/30 text-amber-300"
+                  }`}>
+                    {orgPolicy?.mfaEnforced ? "POLICY: MFA ENFORCED" : "POLICY: OPTIONAL MFA"}
+                  </span>
+                </div>
+              </div>
+
+              {/* Mandatory MFA Policy Card */}
+              <div className="p-5 rounded-xl bg-slate-950/80 border border-white/10 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <h4 className="text-sm font-bold text-white">Mandatory Two-Factor Authentication Enforcement</h4>
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-purple-950 text-purple-300 border border-purple-800">
+                      NIST SP 800-63B
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-400 max-w-2xl leading-relaxed">
+                    When active, all employee accounts in this company are strictly required to pair a mobile authenticator device. Users who log in without MFA will be blocked from accessing connected SSO client applications (Acme HR, FinTech Payroll, DevOps Command) and redirected to immediate pairing.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  disabled={policySaving}
+                  onClick={handleTogglePolicyMfa}
+                  className={`px-5 py-2.5 rounded-xl text-xs font-extrabold tracking-wider transition-all cursor-pointer shrink-0 shadow-lg ${
+                    orgPolicy?.mfaEnforced
+                      ? "bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40"
+                      : "bg-emerald-400 hover:bg-emerald-300 text-slate-950 shadow-emerald-500/20"
+                  }`}
+                >
+                  {policySaving
+                    ? "UPDATING POLICY..."
+                    : orgPolicy?.mfaEnforced
+                    ? "DISABLE MANDATORY MFA"
+                    : "ENFORCE MFA COMPANY-WIDE"}
+                </button>
+              </div>
+
+              {/* Session Duration Card */}
+              <div className="p-5 rounded-xl bg-slate-950/80 border border-white/10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <div className="space-y-1">
+                  <h4 className="text-sm font-bold text-white">Maximum SSO Session Lifespan</h4>
+                  <p className="text-xs text-slate-400">
+                    Defines the hard lifetime of authenticated SSO tokens before mandatory re-authentication is required.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-mono font-bold text-cyan-300 bg-cyan-950 px-3 py-1.5 rounded-xl border border-cyan-800">
+                    {orgPolicy?.sessionDurationHours || 24} HOURS
+                  </span>
+                </div>
+              </div>
+
+              {/* Audit Metadata */}
+              {orgPolicy?.updatedAt && (
+                <div className="text-[11px] text-slate-500 font-mono pt-2">
+                  Policy Last Updated: {orgPolicy.updatedAt} {orgPolicy.updatedByAdminId ? `by Administrator #${orgPolicy.updatedByAdminId}` : ""}
+                </div>
+              )}
+            </div>
+          </div>
         ) : (
           <>
             {/* Directory Metrics Overview */}
@@ -660,8 +1186,8 @@ export default function UserManagementPage() {
               className="w-full bg-transparent text-xs text-white placeholder-slate-500 outline-none"
             />
             {searchQuery && (
-              <button type="button" onClick={() => setSearchQuery("")} className="text-slate-500 hover:text-white text-xs">
-                ✕
+              <button type="button" onClick={() => setSearchQuery("")} className="text-slate-500 hover:text-white text-xs font-bold">
+                CLEAR
               </button>
             )}
           </div>
@@ -940,6 +1466,17 @@ export default function UserManagementPage() {
                 }`}
               >
                 Bulk Provisioning
+              </button>
+              <button
+                type="button"
+                onClick={() => setProvisionTab("csv")}
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                  provisionTab === "csv"
+                    ? "bg-cyan-400 text-slate-950 shadow-md shadow-cyan-500/20"
+                    : "text-slate-400 hover:text-white hover:bg-white/5"
+                }`}
+              >
+                CSV Roster Import
               </button>
             </div>
 
@@ -1247,6 +1784,113 @@ export default function UserManagementPage() {
                 </div>
               </div>
             )}
+
+            {/* TAB 3: CSV ROSTER IMPORT */}
+            {provisionTab === "csv" && (
+              <div className="space-y-4">
+                {csvErr && (
+                  <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs">
+                    {csvErr}
+                  </div>
+                )}
+
+                <div className="p-4 rounded-xl bg-slate-950/80 border border-white/10 space-y-3">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                    <div>
+                      <h4 className="text-xs font-bold text-white">Upload CSV Employee Roster</h4>
+                      <p className="text-[11px] text-slate-400 mt-0.5">
+                        Required columns: <span className="font-mono text-cyan-300">Full Name, Email, Role, Initial Password</span>
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleDownloadCsvTemplate}
+                      className="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-white/10 text-cyan-300 hover:text-cyan-200 text-xs font-bold transition-all cursor-pointer shrink-0"
+                    >
+                      DOWNLOAD TEMPLATE
+                    </button>
+                  </div>
+
+                  <input
+                    type="file"
+                    accept=".csv,text/csv"
+                    onChange={handleCsvFileSelect}
+                    className="block w-full text-xs text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-cyan-500/10 file:text-cyan-300 hover:file:bg-cyan-500/20 cursor-pointer"
+                  />
+                  {csvFileName && (
+                    <div className="text-[11px] text-emerald-400 font-mono">
+                      Selected file: {csvFileName}
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs font-semibold text-slate-300">Or Paste Raw CSV Data</label>
+                    <span className="text-[10px] text-slate-500">Comma-separated</span>
+                  </div>
+                  <textarea
+                    rows={4}
+                    value={csvText}
+                    onChange={(e) => {
+                      setCsvText(e.target.value);
+                      setCsvPreviewRows(parseCsvText(e.target.value));
+                    }}
+                    placeholder={"Full Name,Email,Role,Initial Password\nJane Doe,jane.doe@example.com,USER,TempPass@1234\nAlex Smith,alex.smith@example.com,ADMIN,TempPass@5678"}
+                    className="w-full rounded-xl bg-slate-950 border border-white/10 px-3 py-2 text-xs font-mono text-white placeholder-slate-600 focus:border-cyan-400 outline-none"
+                  />
+                </div>
+
+                {csvPreviewRows.length > 0 && (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold text-slate-300">Pre-Flight Roster Preview</span>
+                      <span className="text-[10px] text-cyan-400 font-mono">{csvPreviewRows.length} detected rows</span>
+                    </div>
+                    <div className="max-h-36 overflow-y-auto rounded-xl border border-white/10 bg-black/60">
+                      <table className="w-full text-left text-[11px] border-collapse">
+                        <thead>
+                          <tr className="border-b border-white/10 bg-slate-900/60 text-slate-400 text-[10px] uppercase font-semibold">
+                            <th className="py-2 px-3">Name</th>
+                            <th className="py-2 px-3">Email</th>
+                            <th className="py-2 px-3">Role</th>
+                            <th className="py-2 px-3">Initial Password</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-white/5 font-mono">
+                          {csvPreviewRows.map((r, i) => (
+                            <tr key={i} className="hover:bg-white/[0.02]">
+                              <td className="py-1.5 px-3 text-white font-sans">{r.fullName}</td>
+                              <td className="py-1.5 px-3 text-cyan-300">{r.email}</td>
+                              <td className="py-1.5 px-3 text-purple-300">{r.role}</td>
+                              <td className="py-1.5 px-3 text-amber-300">{r.tempPass}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex items-center justify-end gap-3 pt-3 border-t border-white/10">
+                  <button
+                    type="button"
+                    onClick={() => setProvisionModalOpen(false)}
+                    className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white transition-colors cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    disabled={csvLoading || !csvText.trim()}
+                    onClick={handleExecuteCsvImport}
+                    className="px-5 py-2.5 rounded-xl bg-cyan-400 hover:bg-cyan-300 disabled:opacity-50 text-slate-950 text-xs font-bold transition-all shadow-md shadow-cyan-500/20 cursor-pointer"
+                  >
+                    {csvLoading ? "Importing Roster..." : "Execute Roster Import"}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -1359,7 +2003,9 @@ export default function UserManagementPage() {
                 onClick={() => setProfileModalOpen(false)}
                 className="text-slate-400 hover:text-white cursor-pointer"
               >
-                ✕
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
               </button>
             </div>
 
@@ -1455,7 +2101,9 @@ export default function UserManagementPage() {
                 onClick={() => setAssignModalUser(null)}
                 className="text-slate-400 hover:text-white cursor-pointer"
               >
-                ✕
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
               </button>
             </div>
 
@@ -1524,7 +2172,9 @@ export default function UserManagementPage() {
                 onClick={() => setInviteModalUser(null)}
                 className="text-slate-400 hover:text-white cursor-pointer"
               >
-                ✕
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
               </button>
             </div>
 
