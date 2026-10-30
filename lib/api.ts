@@ -4,6 +4,7 @@ import {
   HealthResponse,
   RegisterPayload,
   LoginPayload,
+  ChangePasswordPayload,
   MfaVerifyLoginPayload,
   MfaVerifySetupPayload,
 } from "@/types/auth";
@@ -869,6 +870,35 @@ export async function revokeUserOtherSessions(
     return await res.json();
   } catch {
     return { success: false, message: "Failed to terminate other sessions." };
+  }
+}
+
+export async function changeUserPassword(
+  payload: ChangePasswordPayload
+): Promise<{ success: boolean; message: string }> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/auth/change-password`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    return await res.json();
+  } catch {
+    return { success: false, message: "Network error connecting to Sentinel Security Gateway." };
+  }
+}
+
+export async function getPersonalAuditLogs(
+  userId: number,
+  limit: number = 15
+): Promise<{ success: boolean; message?: string; data?: SecurityAuditRecord[] }> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/auth/audit-logs?userId=${userId}&limit=${limit}`, {
+      cache: "no-store",
+    });
+    return await res.json();
+  } catch {
+    return { success: false, message: "Failed to load personal security audit feed." };
   }
 }
 

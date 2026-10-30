@@ -17,8 +17,12 @@ import {
   revokeUserSession,
   revokeUserOtherSessions,
   getOrganizationPolicy,
+  changeUserPassword,
+  getPersonalAuditLogs,
 } from "@/lib/api";
 import { SessionDto } from "@/types/admin";
+import { SecurityAuditRecord } from "@/types/audit";
+import { PasswordEntropyMeter } from "@/components/PasswordEntropyMeter";
 import { useInactivityTimeout } from "@/hooks/useInactivityTimeout";
 import { InactivityWarningModal } from "@/components/session/InactivityWarningModal";
 
@@ -193,6 +197,21 @@ export default function DashboardPage() {
   const [revokingUserSessionId, setRevokingUserSessionId] = useState<number | null>(null);
   const [sessionFeedbackMsg, setSessionFeedbackMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
+  // Self-Service Password Change
+  const [changePasswordModalOpen, setChangePasswordModalOpen] = useState(false);
+  const [currentPasswordInput, setCurrentPasswordInput] = useState("");
+  const [newPasswordInput, setNewPasswordInput] = useState("");
+  const [confirmPasswordInput, setConfirmPasswordInput] = useState("");
+  const [revokeOtherSessionsOnPasswordChange, setRevokeOtherSessionsOnPasswordChange] = useState(true);
+  const [changePasswordLoading, setChangePasswordLoading] = useState(false);
+  const [changePasswordError, setChangePasswordError] = useState("");
+  const [changePasswordSuccess, setChangePasswordSuccess] = useState("");
+
+  // Personal Security Activity Audit Feed
+  const [auditFeedModalOpen, setAuditFeedModalOpen] = useState(false);
+  const [personalAuditLogs, setPersonalAuditLogs] = useState<SecurityAuditRecord[]>([]);
+  const [auditLogsLoading, setAuditLogsLoading] = useState(false);
+
   useEffect(() => {
     const session = getStoredSession();
     if (!session || !session.user) {
@@ -258,6 +277,67 @@ export default function DashboardPage() {
       setSessionFeedbackMsg({ type: "success", text: "All other sessions have been logged out." });
     } else {
       setSessionFeedbackMsg({ type: "error", text: res.message || "Failed to terminate other sessions." });
+    }
+  };
+
+  const loadPersonalAudit = useCallback(async () => {
+    if (!user) return;
+    setAuditLogsLoading(true);
+    const res = await getPersonalAuditLogs(user.userId, 25);
+    setAuditLogsLoading(false);
+    if (res.success && res.data) {
+      setPersonalAuditLogs(res.data);
+    }
+  }, [user]);
+
+  const handleChangePasswordSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user) return;
+    setChangePasswordError("");
+    setChangePasswordSuccess("");
+
+    if (!currentPasswordInput) {
+      setChangePasswordError("Please enter your current password.");
+      return;
+    }
+    if (!newPasswordInput) {
+      setChangePasswordError("Please enter your new password.");
+      return;
+    }
+    if (newPasswordInput.length < 8) {
+      setChangePasswordError("New password must be at least 8 characters long.");
+      return;
+    }
+    const hasUpper = /[A-Z]/.test(newPasswordInput);
+    const hasLower = /[a-z]/.test(newPasswordInput);
+    const hasDigit = /[0-9]/.test(newPasswordInput);
+    const hasSpecial = /[!@#$%^&*()_+\-=\[\]{}|;':",./<>?`~]/.test(newPasswordInput);
+    if (!hasUpper || !hasLower || !hasDigit || !hasSpecial) {
+      setChangePasswordError("New password must include uppercase, lowercase, a digit, and a special character.");
+      return;
+    }
+    if (newPasswordInput !== confirmPasswordInput) {
+      setChangePasswordError("New passwords do not match.");
+      return;
+    }
+
+    setChangePasswordLoading(true);
+    const res = await changeUserPassword({
+      userId: user.userId,
+      currentPassword: currentPasswordInput,
+      newPassword: newPasswordInput,
+      revokeOtherSessions: revokeOtherSessionsOnPasswordChange,
+      currentToken: ssoToken || undefined,
+    });
+    setChangePasswordLoading(false);
+
+    if (res.success) {
+      setChangePasswordSuccess(res.message || "Password changed successfully.");
+      setCurrentPasswordInput("");
+      setNewPasswordInput("");
+      setConfirmPasswordInput("");
+    } else {
+      setChangePasswordError(res.message || "Failed to update password.");
     }
   };
 
@@ -892,6 +972,46 @@ export default function DashboardPage() {
                       <span>Active Sessions &amp; Devices</span>
                     </div>
                     <span className="text-[10px] text-slate-400 font-mono">Manage</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setProfileDropdownOpen(false);
+                      setChangePasswordError("");
+                      setChangePasswordSuccess("");
+                      setCurrentPasswordInput("");
+                      setNewPasswordInput("");
+                      setConfirmPasswordInput("");
+                      setChangePasswordModalOpen(true);
+                    }}
+                    className="w-full text-left px-3 py-1.5 rounded-lg text-xs text-slate-300 hover:text-white hover:bg-white/5 transition-colors flex items-center justify-between cursor-pointer mb-1"
+                  >
+                    <div className="flex items-center gap-2">
+                      <svg className="w-3.5 h-3.5 text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+                      </svg>
+                      <span>Change Password</span>
+                    </div>
+                    <span className="text-[10px] text-slate-400 font-mono">Security</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setProfileDropdownOpen(false);
+                      setAuditFeedModalOpen(true);
+                      loadPersonalAudit();
+                    }}
+                    className="w-full text-left px-3 py-1.5 rounded-lg text-xs text-slate-300 hover:text-white hover:bg-white/5 transition-colors flex items-center justify-between cursor-pointer mb-1"
+                  >
+                    <div className="flex items-center gap-2">
+                      <svg className="w-3.5 h-3.5 text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                      <span>Security Activity Log</span>
+                    </div>
+                    <span className="text-[10px] text-slate-400 font-mono">Audit</span>
                   </button>
 
                   {user?.mfaEnabled ? (
@@ -1952,6 +2072,250 @@ export default function DashboardPage() {
               <button
                 type="button"
                 onClick={() => setUserSessionsModalOpen(false)}
+                className="py-1.5 px-4 rounded-xl bg-white/5 hover:bg-white/10 text-white text-xs font-medium transition-colors cursor-pointer"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Self-Service Password Change Modal */}
+      {changePasswordModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+          <div className="w-full max-w-md bg-slate-950 border border-white/10 rounded-2xl shadow-2xl p-6">
+            <div className="flex items-center justify-between pb-4 border-b border-white/10">
+              <div className="flex items-center gap-2">
+                <svg className="w-5 h-5 text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+                </svg>
+                <h3 className="text-base font-bold text-white">Change Password</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setChangePasswordModalOpen(false)}
+                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-white/5 transition-colors cursor-pointer"
+                aria-label="Close modal"
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-400 mt-3 mb-4 leading-relaxed">
+              Verify your current password and establish a new credential meeting enterprise complexity standards.
+            </p>
+
+            {changePasswordError && (
+              <div className="mb-4 p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-300 text-xs">
+                {changePasswordError}
+              </div>
+            )}
+
+            {changePasswordSuccess && (
+              <div className="mb-4 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs">
+                {changePasswordSuccess}
+              </div>
+            )}
+
+            <form onSubmit={handleChangePasswordSubmit} className="space-y-3.5">
+              <div>
+                <label className="block text-xs font-medium text-slate-300 mb-1">
+                  Current Password
+                </label>
+                <input
+                  type="password"
+                  required
+                  value={currentPasswordInput}
+                  onChange={(e) => setCurrentPasswordInput(e.target.value)}
+                  placeholder="Enter current password"
+                  className="w-full px-3 py-2 bg-slate-900 border border-white/10 rounded-xl text-white text-xs placeholder-slate-500 focus:outline-none focus:border-cyan-400"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-300 mb-1">
+                  New Password
+                </label>
+                <input
+                  type="password"
+                  required
+                  value={newPasswordInput}
+                  onChange={(e) => setNewPasswordInput(e.target.value)}
+                  placeholder="Min. 8 characters (mixed case, digit, symbol)"
+                  className="w-full px-3 py-2 bg-slate-900 border border-white/10 rounded-xl text-white text-xs placeholder-slate-500 focus:outline-none focus:border-cyan-400"
+                />
+                <PasswordEntropyMeter password={newPasswordInput} />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-300 mb-1">
+                  Confirm New Password
+                </label>
+                <input
+                  type="password"
+                  required
+                  value={confirmPasswordInput}
+                  onChange={(e) => setConfirmPasswordInput(e.target.value)}
+                  placeholder="Re-type new password"
+                  className="w-full px-3 py-2 bg-slate-900 border border-white/10 rounded-xl text-white text-xs placeholder-slate-500 focus:outline-none focus:border-cyan-400"
+                />
+              </div>
+
+              <div className="pt-1">
+                <label className="flex items-start gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={revokeOtherSessionsOnPasswordChange}
+                    onChange={(e) => setRevokeOtherSessionsOnPasswordChange(e.target.checked)}
+                    className="mt-0.5 rounded border-white/20 bg-slate-900 text-cyan-500 focus:ring-0"
+                  />
+                  <span className="text-[11px] text-slate-300 leading-snug">
+                    Terminate all other active sessions and remote devices upon password update
+                  </span>
+                </label>
+              </div>
+
+              <div className="pt-3 border-t border-white/10 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setChangePasswordModalOpen(false)}
+                  className="py-2 px-3.5 rounded-xl bg-white/5 hover:bg-white/10 text-white text-xs font-medium transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={changePasswordLoading}
+                  className="py-2 px-4 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-xs font-bold transition-colors cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
+                >
+                  {changePasswordLoading ? (
+                    <>
+                      <svg className="animate-spin h-3.5 w-3.5 text-slate-950" viewBox="0 0 24 24" fill="none">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                      </svg>
+                      <span>Updating...</span>
+                    </>
+                  ) : (
+                    <span>Update Password</span>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Personal Security Activity Log Modal */}
+      {auditFeedModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+          <div className="w-full max-w-2xl bg-slate-950 border border-white/10 rounded-2xl shadow-2xl p-6 max-h-[85vh] flex flex-col">
+            <div className="flex items-center justify-between pb-4 border-b border-white/10 shrink-0">
+              <div className="flex items-center gap-2">
+                <svg className="w-5 h-5 text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                <h3 className="text-base font-bold text-white">Security Activity &amp; Audit Trail</h3>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={loadPersonalAudit}
+                  disabled={auditLogsLoading}
+                  className="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white text-xs font-mono transition-colors cursor-pointer flex items-center gap-1 disabled:opacity-50"
+                  title="Refresh activity logs"
+                >
+                  <svg className={`w-3.5 h-3.5 ${auditLogsLoading ? "animate-spin text-cyan-400" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  <span>Refresh</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAuditFeedModalOpen(false)}
+                  className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-white/5 transition-colors cursor-pointer"
+                  aria-label="Close modal"
+                >
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-400 py-3 border-b border-white/5 shrink-0">
+              Detailed audit trail of authentication events, MFA challenges, password updates, and session governance for your account.
+            </p>
+
+            <div className="overflow-y-auto space-y-2 py-3 flex-1">
+              {auditLogsLoading && personalAuditLogs.length === 0 ? (
+                <div className="py-12 text-center text-xs text-slate-400">Loading security audit records...</div>
+              ) : personalAuditLogs.length === 0 ? (
+                <div className="py-12 text-center text-xs text-slate-400">No security audit records logged yet.</div>
+              ) : (
+                personalAuditLogs.map((log) => (
+                  <div
+                    key={log.id}
+                    className="p-3 rounded-xl bg-slate-900/60 border border-white/5 hover:border-white/10 transition-colors text-xs"
+                  >
+                    <div className="flex items-center justify-between gap-2 mb-1 flex-wrap">
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono font-semibold text-white">
+                          {log.actionType}
+                        </span>
+                        <span
+                          className={`px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold uppercase ${
+                            log.severity === "CRITICAL" || log.severity === "SECURITY_ALERT"
+                              ? "bg-red-500/10 text-red-400 border border-red-500/30"
+                              : log.severity === "WARNING" || log.severity === "WARN"
+                              ? "bg-amber-500/10 text-amber-400 border border-amber-500/30"
+                              : "bg-cyan-500/10 text-cyan-400 border border-cyan-500/30"
+                          }`}
+                        >
+                          {log.severity}
+                        </span>
+                      </div>
+                      <span className="text-[10px] text-slate-400 font-mono">
+                        {log.createdAt}
+                      </span>
+                    </div>
+
+                    <p className="text-slate-300 text-[11px] mb-1.5 leading-relaxed">
+                      {log.details || "No additional event details."}
+                    </p>
+
+                    <div className="flex items-center gap-2 text-[10px] text-slate-400 font-mono flex-wrap">
+                      <span>Resource: {log.targetResource || "IAM Portal"}</span>
+                      {log.ipAddress && (
+                        <>
+                          <span>•</span>
+                          <span>IP: {log.ipAddress}</span>
+                        </>
+                      )}
+                      {log.userAgent && (
+                        <>
+                          <span>•</span>
+                          <span className="truncate max-w-[200px]" title={log.userAgent}>
+                            {log.userAgent}
+                          </span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div className="pt-3 border-t border-white/10 shrink-0 flex items-center justify-between">
+              <span className="text-[11px] text-slate-400 font-mono">
+                {personalAuditLogs.length} event record{personalAuditLogs.length === 1 ? "" : "s"} shown
+              </span>
+              <button
+                type="button"
+                onClick={() => setAuditFeedModalOpen(false)}
                 className="py-1.5 px-4 rounded-xl bg-white/5 hover:bg-white/10 text-white text-xs font-medium transition-colors cursor-pointer"
               >
                 Done

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { resetPassword } from "@/lib/api";
 import Footer from "@/app/partials/footer";
+import { PasswordEntropyMeter } from "@/components/PasswordEntropyMeter";
 
 function ResetPasswordContent() {
   const router = useRouter();
@@ -136,6 +137,7 @@ function ResetPasswordContent() {
             placeholder="At least 8 characters"
             className="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-white text-sm placeholder-slate-500 focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400"
           />
+          <PasswordEntropyMeter password={password} />
         </div>
 
         {/* Password Complexity Checklist */}

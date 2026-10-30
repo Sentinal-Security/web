@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import { resendVerification } from "@/lib/api";
 import Footer from "@/app/partials/footer";
+import { PasswordEntropyMeter } from "@/components/PasswordEntropyMeter";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -422,24 +423,27 @@ export default function RegisterPage() {
                   />
                 </div>
                 {password && (
-                  <div className="mt-2 p-2.5 rounded-lg bg-slate-900/60 border border-slate-700/60 text-[11px] space-y-1">
-                    <div className="flex items-center gap-2">
-                      <span className={`w-1.5 h-1.5 rounded-full ${password.length >= 8 ? "bg-emerald-400" : "bg-slate-600"}`}></span>
-                      <span className={password.length >= 8 ? "text-emerald-300 font-medium" : "text-slate-400"}>At least 8 characters</span>
+                  <>
+                    <PasswordEntropyMeter password={password} />
+                    <div className="mt-2 p-2.5 rounded-lg bg-slate-900/60 border border-slate-700/60 text-[11px] space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className={`w-1.5 h-1.5 rounded-full ${password.length >= 8 ? "bg-emerald-400" : "bg-slate-600"}`}></span>
+                        <span className={password.length >= 8 ? "text-emerald-300 font-medium" : "text-slate-400"}>At least 8 characters</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className={`w-1.5 h-1.5 rounded-full ${/[A-Z]/.test(password) && /[a-z]/.test(password) ? "bg-emerald-400" : "bg-slate-600"}`}></span>
+                        <span className={/[A-Z]/.test(password) && /[a-z]/.test(password) ? "text-emerald-300 font-medium" : "text-slate-400"}>Uppercase and lowercase letters</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className={`w-1.5 h-1.5 rounded-full ${/[0-9]/.test(password) ? "bg-emerald-400" : "bg-slate-600"}`}></span>
+                        <span className={/[0-9]/.test(password) ? "text-emerald-300 font-medium" : "text-slate-400"}>At least one numeric digit</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className={`w-1.5 h-1.5 rounded-full ${/[!@#$%^&*()_+\-=\[\]{}|;':",./<>?`~]/.test(password) ? "bg-emerald-400" : "bg-slate-600"}`}></span>
+                        <span className={/[!@#$%^&*()_+\-=\[\]{}|;':",./<>?`~]/.test(password) ? "text-emerald-300 font-medium" : "text-slate-400"}>At least one special symbol (!@#$%...)</span>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span className={`w-1.5 h-1.5 rounded-full ${/[A-Z]/.test(password) && /[a-z]/.test(password) ? "bg-emerald-400" : "bg-slate-600"}`}></span>
-                      <span className={/[A-Z]/.test(password) && /[a-z]/.test(password) ? "text-emerald-300 font-medium" : "text-slate-400"}>Uppercase and lowercase letters</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className={`w-1.5 h-1.5 rounded-full ${/[0-9]/.test(password) ? "bg-emerald-400" : "bg-slate-600"}`}></span>
-                      <span className={/[0-9]/.test(password) ? "text-emerald-300 font-medium" : "text-slate-400"}>At least one numeric digit</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className={`w-1.5 h-1.5 rounded-full ${/[!@#$%^&*()_+\-=\[\]{}|;':",./<>?`~]/.test(password) ? "bg-emerald-400" : "bg-slate-600"}`}></span>
-                      <span className={/[!@#$%^&*()_+\-=\[\]{}|;':",./<>?`~]/.test(password) ? "text-emerald-300 font-medium" : "text-slate-400"}>At least one special symbol (!@#$%...)</span>
-                    </div>
-                  </div>
+                  </>
                 )}
               </div>
 

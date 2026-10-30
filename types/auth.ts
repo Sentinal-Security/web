@@ -27,6 +27,14 @@ export interface LoginPayload {
   password: string;
 }
 
+export interface ChangePasswordPayload {
+  userId: number;
+  currentPassword: string;
+  newPassword: string;
+  revokeOtherSessions?: boolean;
+  currentToken?: string;
+}
+
 export interface MfaVerifyLoginPayload {
   userId?: number;
   email?: string;
