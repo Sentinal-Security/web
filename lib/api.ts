@@ -28,6 +28,7 @@ export * from "@/types/auth";
 export * from "@/types/integration";
 export * from "@/types/admin";
 export * from "@/types/audit";
+export * from "@/types/status";
 
 export const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL || "https://backend-pi68.onrender.com";
@@ -899,6 +900,18 @@ export async function getPersonalAuditLogs(
     return await res.json();
   } catch {
     return { success: false, message: "Failed to load personal security audit feed." };
+  }
+}
+
+export async function getSystemStatus(): Promise<import("@/types/status").SystemTelemetry | null> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/status/system`, {
+      cache: "no-store",
+    });
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
   }
 }
 

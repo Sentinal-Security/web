@@ -17,6 +17,7 @@ export default function Footer() {
       title: "Infrastructure",
       links: [
         { label: "Zero-Trust API Gateway", href: "https://backend-pi68.onrender.com/api/health" },
+        { label: "OIDC Discovery Metadata", href: "https://backend-pi68.onrender.com/.well-known/openid-configuration" },
         { label: "Vercel Edge Platform", href: "/services" },
         { label: "Supabase Identity Vault", href: "/docs" },
         { label: "Android Authenticator", href: "/download" },
@@ -36,7 +37,7 @@ export default function Footer() {
       title: "Company & Legal",
       links: [
         { label: "System Architecture", href: "/features" },
-        { label: "Live System Health", href: "https://backend-pi68.onrender.com/api/health" },
+        { label: "Public Status & Latency", href: "/status" },
         { label: "Terms of Service", href: "/terms" },
         { label: "Privacy Policy", href: "/terms" },
         { label: "Contact & Inquiries", href: "/faq" },
