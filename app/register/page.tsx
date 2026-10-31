@@ -15,7 +15,8 @@ export default function RegisterPage() {
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const role = "ADMIN";
+  const [accountType, setAccountType] = useState<"PERSONAL" | "ENTERPRISE">("ENTERPRISE");
+  const role = accountType === "ENTERPRISE" ? "ADMIN" : "USER";
   const [company, setCompany] = useState("");
   const [companyManual, setCompanyManual] = useState(false);
   const [agreed, setAgreed] = useState(false);
@@ -78,9 +79,13 @@ export default function RegisterPage() {
       return;
     }
 
-    const resolvedCompany = company.trim() || (email.includes("@") ? detectCompany(email) : "");
-    if (!resolvedCompany) {
-      setValidationError("Company workspace name is required for Administrator accounts.");
+    const isPersonal = accountType === "PERSONAL";
+    const resolvedCompany = isPersonal
+      ? (company.trim() || "Personal")
+      : (company.trim() || (email.includes("@") ? detectCompany(email) : ""));
+
+    if (!isPersonal && !resolvedCompany) {
+      setValidationError("Company workspace name is required for Enterprise Workspace accounts.");
       return;
     }
 
@@ -171,9 +176,7 @@ export default function RegisterPage() {
                   Get Started with Us
                 </h1>
                 <p className="text-blue-200/80 text-xs sm:text-sm mt-3 font-normal leading-relaxed max-w-xs mx-auto">
-                  Welcome to Sentinel - Let&apos;s create
-                  <br />
-                  your account.
+                  Welcome to Sentinel - Choose Personal Identity or Enterprise Workspace.
                 </p>
               </div>
 
@@ -304,38 +307,124 @@ export default function RegisterPage() {
               )}
 
 
-              {/* Company Workspace Field */}
-              <div className="mb-4">
-                <div className="flex items-center justify-between mb-2">
-                  <label className="block text-xs font-medium text-slate-300">
-                    Company Workspace <span className="text-purple-400 font-bold">*</span>
-                  </label>
-                  {company && (
-                    <span className="text-[10px] text-purple-300 bg-purple-500/10 px-2 py-0.5 rounded border border-purple-500/20 font-mono">
-                      @{company}
-                    </span>
-                  )}
-                </div>
-                <div className="relative flex items-center bg-[#131926] border border-slate-700/60 rounded-xl px-4 py-3.5 focus-within:border-cyan-400 focus-within:ring-1 focus-within:ring-cyan-400 transition-all">
-                  <svg className="w-5 h-5 text-slate-400 mr-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.6" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                  </svg>
-                  <input
-                    type="text"
-                    value={company}
-                    onChange={(e) => {
-                      setCompany(e.target.value.toLowerCase());
-                      setCompanyManual(true);
+              {/* Account Persona Selector */}
+              <div className="mb-5">
+                <label className="block text-xs font-medium text-slate-300 mb-2">
+                  Account Type
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {/* Enterprise Workspace Option */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAccountType("ENTERPRISE");
                     }}
-                    placeholder="e.g. acme, companynamexx"
-                    className="w-full bg-transparent border-none outline-none text-white text-sm placeholder-slate-500"
-                    required
-                  />
+                    className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
+                      accountType === "ENTERPRISE"
+                        ? "bg-blue-950/50 border-cyan-400 shadow-[0_0_15px_rgba(56,225,255,0.15)] ring-1 ring-cyan-400"
+                        : "bg-[#131926] border-slate-700/60 hover:border-slate-600 text-slate-400"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <span className={`text-xs font-bold ${accountType === "ENTERPRISE" ? "text-cyan-300" : "text-slate-300"}`}>
+                        Enterprise Workspace
+                      </span>
+                      <span className="text-[10px] font-mono uppercase px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-300 border border-blue-500/30 font-semibold">
+                        Admin
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-400 leading-relaxed">
+                      Corporate tenant with workforce compliance, CSV bulk roster onboarding, and SSO governance.
+                    </p>
+                  </button>
+
+                  {/* Individual / Personal Option */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAccountType("PERSONAL");
+                    }}
+                    className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
+                      accountType === "PERSONAL"
+                        ? "bg-purple-950/50 border-purple-400 shadow-[0_0_15px_rgba(192,132,252,0.15)] ring-1 ring-purple-400"
+                        : "bg-[#131926] border-slate-700/60 hover:border-slate-600 text-slate-400"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <span className={`text-xs font-bold ${accountType === "PERSONAL" ? "text-purple-300" : "text-slate-300"}`}>
+                        Individual / Personal
+                      </span>
+                      <span className="text-[10px] font-mono uppercase px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-300 border border-purple-500/30 font-semibold">
+                        User
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-400 leading-relaxed">
+                      Personal identity with hardware 2FA token, biometric push, and personal security activity log.
+                    </p>
+                  </button>
                 </div>
-                <p className="text-[11px] text-slate-400 mt-1.5">
-                  Tenant isolation boundary: you will only manage users within this company workspace.
-                </p>
               </div>
+
+              {/* Company Workspace Field */}
+              {accountType === "ENTERPRISE" ? (
+                <div className="mb-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="block text-xs font-medium text-slate-300">
+                      Company Workspace <span className="text-cyan-400 font-bold">*</span>
+                    </label>
+                    {company && (
+                      <span className="text-[10px] text-cyan-300 bg-cyan-500/10 px-2 py-0.5 rounded border border-cyan-500/20 font-mono">
+                        @{company}
+                      </span>
+                    )}
+                  </div>
+                  <div className="relative flex items-center bg-[#131926] border border-slate-700/60 rounded-xl px-4 py-3.5 focus-within:border-cyan-400 focus-within:ring-1 focus-within:ring-cyan-400 transition-all">
+                    <svg className="w-5 h-5 text-slate-400 mr-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.6" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                    </svg>
+                    <input
+                      type="text"
+                      value={company}
+                      onChange={(e) => {
+                        setCompany(e.target.value.toLowerCase());
+                        setCompanyManual(true);
+                      }}
+                      placeholder="e.g. acme, companynamexx"
+                      className="w-full bg-transparent border-none outline-none text-white text-sm placeholder-slate-500"
+                      required
+                    />
+                  </div>
+                  <p className="text-[11px] text-slate-400 mt-1.5">
+                    Tenant isolation boundary: you will only manage users within this company workspace.
+                  </p>
+                </div>
+              ) : (
+                <div className="mb-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="block text-xs font-medium text-slate-300">
+                      Workspace Tag <span className="text-slate-500">(Optional)</span>
+                    </label>
+                  </div>
+                  <div className="relative flex items-center bg-[#131926] border border-slate-700/60 rounded-xl px-4 py-3.5 focus-within:border-purple-400 focus-within:ring-1 focus-within:ring-purple-400 transition-all">
+                    <svg className="w-5 h-5 text-slate-400 mr-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.6" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                    </svg>
+                    <input
+                      type="text"
+                      value={company}
+                      onChange={(e) => {
+                        setCompany(e.target.value);
+                        setCompanyManual(true);
+                      }}
+                      placeholder="Defaults to Personal"
+                      className="w-full bg-transparent border-none outline-none text-white text-sm placeholder-slate-500"
+                    />
+                  </div>
+                  <p className="text-[11px] text-slate-400 mt-1.5">
+                    Personal workspace tag for client identity profile displays.
+                  </p>
+                </div>
+              )}
 
               {/* Full Name Input Field */}
               <div className="mb-4">
