@@ -11,7 +11,7 @@ export default function DownloadsPage() {
   const downloadUrl = "https://backend-pi68.onrender.com/api/builds/download";
   const fileSize = "52.1 MB";
   const version = "1.0.2";
-  const architecture = "ARM64-v8a (Android 14+)";
+  const architecture = "ARM64-v8a (Android 15+)";
 
   useEffect(() => {
     fetch("https://backend-pi68.onrender.com/api/builds?password=seanisbtter")
@@ -110,7 +110,7 @@ export default function DownloadsPage() {
                 </div>
                 <div className="p-2.5 rounded-xl bg-slate-900/70 border border-slate-800 text-center">
                   <div className="text-[10px] uppercase font-bold text-slate-400">Target OS</div>
-                  <div className="text-xs sm:text-sm font-semibold text-slate-200 mt-0.5">Android 14+</div>
+                  <div className="text-xs sm:text-sm font-semibold text-slate-200 mt-0.5">Android 15+</div>
                 </div>
                 <div className="p-2.5 rounded-xl bg-slate-900/70 border border-slate-800 text-center">
                   <div className="text-[10px] uppercase font-bold text-slate-400">Security</div>
