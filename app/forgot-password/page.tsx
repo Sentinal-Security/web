@@ -58,7 +58,7 @@ export default function ForgotPasswordPage() {
               </div>
               <h2 className="text-xl font-bold text-white mb-2">Check Your Inbox</h2>
               <p className="text-xs sm:text-sm text-slate-300 leading-relaxed mb-4">
-                If an account exists for this email address, a password reset link has been dispatched via Google SMTP:
+                If an account exists for this email address, a password reset link has been sent to:
               </p>
               <div className="py-2.5 px-4 bg-slate-900 border border-slate-700 rounded-xl font-mono text-cyan-300 text-xs font-semibold mb-6 break-all">
                 {email}

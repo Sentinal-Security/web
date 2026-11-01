@@ -25,6 +25,7 @@ export default function RegisterPage() {
   const [activationPending, setActivationPending] = useState<{ email: string } | null>(null);
   const [resending, setResending] = useState(false);
   const [resendStatus, setResendStatus] = useState("");
+  const [resendOk, setResendOk] = useState(true);
 
   const detectCompany = (val: string): string => {
     if (!val.includes("@")) return "";
@@ -232,7 +233,7 @@ export default function RegisterPage() {
                 </div>
                 <h3 className="text-xl font-bold text-white mb-2">Check Your Email</h3>
                 <p className="text-sm text-slate-300 leading-relaxed mb-4">
-                  We have dispatched an activation link via Google SMTP to:
+                  We have sent an activation link to:
                 </p>
                 <div className="py-2.5 px-4 bg-slate-900 border border-slate-700 rounded-xl font-mono text-cyan-300 text-sm font-semibold mb-6 break-all">
                   {activationPending.email}
@@ -242,7 +243,7 @@ export default function RegisterPage() {
                 </p>
 
                 {resendStatus && (
-                  <div className="mb-4 p-3 rounded-xl bg-cyan-950/60 border border-cyan-500/30 text-cyan-300 text-xs text-center">
+                  <div className={`mb-4 p-3 rounded-xl border text-xs text-center ${resendOk ? "bg-emerald-950/60 border-emerald-500/30 text-emerald-300" : "bg-red-500/10 border-red-500/30 text-red-300"}`}>
                     {resendStatus}
                   </div>
                 )}
@@ -262,7 +263,8 @@ export default function RegisterPage() {
                       setResendStatus("");
                       const r = await resendVerification(activationPending.email);
                       setResending(false);
-                      setResendStatus(r.message || "Fresh activation link sent.");
+                      setResendOk(r.success);
+                      setResendStatus(`${r.message || (r.success ? "Activation email sent." : "Activation email could not be sent.")} (${new Date().toLocaleTimeString()})`);
                     }}
                     className="w-full py-3 px-4 bg-slate-800/80 hover:bg-slate-700/80 text-slate-300 hover:text-white text-xs font-semibold rounded-xl border border-slate-700 transition-all cursor-pointer disabled:opacity-50"
                   >

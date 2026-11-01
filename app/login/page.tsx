@@ -90,6 +90,7 @@ function LoginPageContent() {
   const [googleLoading, setGoogleLoading] = useState(false);
   const [resendLoading, setResendLoading] = useState(false);
   const [resendMsg, setResendMsg] = useState("");
+  const [resendOk, setResendOk] = useState(true);
 
   // Initialize Google Identity Services if client ID is configured
   useEffect(() => {
@@ -1005,7 +1006,8 @@ function LoginPageContent() {
                               setResendMsg("");
                               const r = await resendVerification(email.trim());
                               setResendLoading(false);
-                              setResendMsg(r.message || "Fresh activation link sent.");
+                              setResendOk(r.success);
+                              setResendMsg(`${r.message || (r.success ? "Activation email sent." : "Activation email could not be sent.")} (${new Date().toLocaleTimeString()})`);
                             }}
                             className="text-[11px] text-cyan-400 hover:text-cyan-300 font-semibold underline cursor-pointer disabled:opacity-50"
                           >
@@ -1014,7 +1016,7 @@ function LoginPageContent() {
                         </div>
                       )}
                       {resendMsg && (
-                        <p className="mt-1.5 text-[11px] text-cyan-300">{resendMsg}</p>
+                        <p className={`mt-1.5 text-[11px] ${resendOk ? "text-emerald-300" : "text-red-300"}`}>{resendMsg}</p>
                       )}
                     </div>
                   )}

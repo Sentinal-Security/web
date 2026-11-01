@@ -17,6 +17,7 @@ function VerifyEmailContent() {
   const [resendEmail, setResendEmail] = useState("");
   const [resending, setResending] = useState(false);
   const [resendStatus, setResendStatus] = useState("");
+  const [resendOk, setResendOk] = useState(true);
 
   useEffect(() => {
     if (!token) {
@@ -55,7 +56,8 @@ function VerifyEmailContent() {
     setResendStatus("");
     const res = await resendVerification(resendEmail.trim());
     setResending(false);
-    setResendStatus(res.message || "If an account exists, a fresh activation link was sent.");
+    setResendOk(res.success);
+    setResendStatus(`${res.message || (res.success ? "Activation email sent." : "Activation email could not be sent.")} (${new Date().toLocaleTimeString()})`);
   };
 
   return (
@@ -137,7 +139,7 @@ function VerifyEmailContent() {
               </button>
             </form>
             {resendStatus && (
-              <p className="text-[11px] text-cyan-300 mt-2 text-center">{resendStatus}</p>
+              <p className={`text-[11px] mt-2 text-center ${resendOk ? "text-emerald-300" : "text-red-300"}`}>{resendStatus}</p>
             )}
           </div>
 
