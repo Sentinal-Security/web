@@ -19,6 +19,7 @@ import {
   getOrganizationPolicy,
   changeUserPassword,
   getPersonalAuditLogs,
+  validateSsoSession,
 } from "@/lib/api";
 import { SessionDto } from "@/types/admin";
 import { SecurityAuditRecord } from "@/types/audit";
@@ -218,6 +219,15 @@ export default function DashboardPage() {
       router.push("/login");
       return;
     }
+
+    // Active server-side verification: force logout if account was deleted, purged, or session revoked
+    validateSsoSession(session.user.userId, session.token).then((res) => {
+      if (!res.success) {
+        clearSession();
+        router.push("/login?error=session_terminated");
+      }
+    });
+
     setUser(session.user);
     setEditFullName(session.user.fullName || "");
     if (session.token) {

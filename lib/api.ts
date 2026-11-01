@@ -22,6 +22,7 @@ import {
   SessionDto,
   CsvImportReport,
 } from "@/types/admin";
+import { clearSession } from "@/lib/session";
 import { SecurityAuditRecord, ClientTelemetryPayload } from "@/types/audit";
 
 export * from "@/types/auth";
@@ -334,6 +335,13 @@ export async function fetchUserServices(
     const res = await fetch(`${API_BASE_URL}/api/services?userId=${userId}`, {
       cache: "no-store",
     });
+    if (res.status === 401 || res.status === 404) {
+      if (typeof window !== "undefined") {
+        clearSession();
+        window.location.href = "/login?error=account_purged";
+      }
+      return [];
+    }
     if (!res.ok) return [];
     const json = await res.json();
     return json?.data || [];

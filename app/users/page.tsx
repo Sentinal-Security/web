@@ -15,7 +15,8 @@ import {
   importUsersCsv,
   getAdminSessions,
   revokeAdminSession,
-  revokeAdminUserSessions
+  revokeAdminUserSessions,
+  validateSsoSession,
 } from "@/lib/api";
 import { SecurityAuditPanel } from "@/components/SecurityAuditPanel";
 import { useInactivityTimeout } from "@/hooks/useInactivityTimeout";
@@ -81,6 +82,14 @@ export default function UserManagementPage() {
       router.push("/login");
       return;
     }
+
+    validateSsoSession(session.user.userId, session.token).then((res) => {
+      if (!res.success) {
+        clearSession();
+        router.push("/login?error=session_terminated");
+      }
+    });
+
     setCurrentUser(session.user);
     setEditFullName(session.user.fullName || "");
   }, [router]);

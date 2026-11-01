@@ -5,13 +5,14 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Header from "@/app/partials/header";
 import Footer from "@/app/partials/footer";
-import { getStoredSession, updateStoredUser } from "@/lib/session";
+import { getStoredSession, updateStoredUser, clearSession } from "@/lib/session";
 import { User } from "@/types/auth";
 import {
   fetchBillingTier,
   createPaypalOrder,
   capturePaypalOrder,
   recordAuditEvent,
+  validateSsoSession,
 } from "@/lib/api";
 
 type PlanKey = "COMMUNITY" | "PROFESSIONAL" | "ENTERPRISE";
@@ -59,6 +60,13 @@ export default function PricingPage() {
   const loadUserAndTier = useCallback(async () => {
     const session = getStoredSession();
     if (session?.user) {
+      validateSsoSession(session.user.userId, session.token).then((res) => {
+        if (!res.success) {
+          clearSession();
+          setUser(null);
+        }
+      });
+
       setUser(session.user);
       const userComp = session.user.company || "default";
       setCompanyName(userComp);
