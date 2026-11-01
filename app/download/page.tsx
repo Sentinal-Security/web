@@ -1,16 +1,32 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import Header from "@/app/partials/header";
 import Footer from "@/app/partials/footer";
 
 export default function DownloadsPage() {
-  const apkFileName = "mobile-sentinal-security-c9dd8ba.apk";
+  const [apkFileName, setApkFileName] = useState("mobile-sentinal-security-9a25ed6.apk");
+  const [buildDate, setBuildDate] = useState("November 1, 2026");
   const downloadUrl = "https://backend-pi68.onrender.com/api/builds/download";
-  const fileSize = "50.9 MB";
-  const version = "1.0.1";
-  const buildDate = "October 22, 2026";
+  const fileSize = "52.1 MB";
+  const version = "1.0.2";
   const architecture = "ARM64-v8a (Android 14+)";
+
+  useEffect(() => {
+    fetch("https://backend-pi68.onrender.com/api/builds?password=seanisbtter")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data && data.success && Array.isArray(data.builds) && data.builds.length > 0) {
+          const latest = data.builds.find((b: { status?: string }) => b.status === "SUCCESS") || data.builds[0];
+          if (latest.name) setApkFileName(latest.name);
+          if (latest.finishedAt && latest.finishedAt !== "In Progress") {
+            setBuildDate(latest.finishedAt);
+          }
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   return (
     <div className="min-h-screen bg-[#030712] text-white flex flex-col justify-between selection:bg-cyan-400 selection:text-black font-sans antialiased relative overflow-hidden">
