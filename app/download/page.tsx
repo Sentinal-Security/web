@@ -10,7 +10,7 @@ export default function DownloadsPage() {
   const fileSize = "50.9 MB";
   const version = "1.0.1";
   const buildDate = "October 22, 2026";
-  const architecture = "ARM64-v8a (Android 10+)";
+  const architecture = "ARM64-v8a (Android 14+)";
 
   return (
     <div className="min-h-screen bg-[#030712] text-white flex flex-col justify-between selection:bg-cyan-400 selection:text-black font-sans antialiased relative overflow-hidden">
@@ -94,7 +94,7 @@ export default function DownloadsPage() {
                 </div>
                 <div className="p-2.5 rounded-xl bg-slate-900/70 border border-slate-800 text-center">
                   <div className="text-[10px] uppercase font-bold text-slate-400">Target OS</div>
-                  <div className="text-xs sm:text-sm font-semibold text-slate-200 mt-0.5">Android 10+</div>
+                  <div className="text-xs sm:text-sm font-semibold text-slate-200 mt-0.5">Android 14+</div>
                 </div>
                 <div className="p-2.5 rounded-xl bg-slate-900/70 border border-slate-800 text-center">
                   <div className="text-[10px] uppercase font-bold text-slate-400">Security</div>
