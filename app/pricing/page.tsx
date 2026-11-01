@@ -39,7 +39,8 @@ export default function PricingPage() {
   // PayPal Sandbox Checkout State
   const [checkoutModalOpen, setCheckoutModalOpen] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState<PlanTier | null>(null);
-  const [checkoutStep, setCheckoutStep] = useState<"review" | "processing" | "success" | "error">("review");
+  const [checkoutStep, setCheckoutStep] = useState<"review" | "paypal_dialog" | "processing" | "success" | "error">("review");
+  const [selectedFunding, setSelectedFunding] = useState<"paypal_balance" | "visa_card">("paypal_balance");
   const [paypalOrderId, setPaypalOrderId] = useState<string>("");
   const [errorMessage, setErrorMessage] = useState<string>("");
   const [receiptDetails, setReceiptDetails] = useState<{
@@ -685,7 +686,10 @@ export default function PricingPage() {
                 <div className="space-y-2 pt-2">
                   <button
                     type="button"
-                    onClick={handleExecutePaypalSandboxPayment}
+                    onClick={() => {
+                      setSelectedFunding("paypal_balance");
+                      setCheckoutStep("paypal_dialog");
+                    }}
                     className="w-full py-3.5 px-4 rounded-xl bg-[#FFC439] hover:bg-[#F2BA36] text-[#003087] font-extrabold text-sm transition-transform active:scale-[0.99] cursor-pointer shadow-lg shadow-[#FFC439]/10 flex items-center justify-center gap-2"
                   >
                     <span className="font-black italic text-base">PayPal</span>
@@ -694,7 +698,10 @@ export default function PricingPage() {
 
                   <button
                     type="button"
-                    onClick={handleExecutePaypalSandboxPayment}
+                    onClick={() => {
+                      setSelectedFunding("visa_card");
+                      setCheckoutStep("paypal_dialog");
+                    }}
                     className="w-full py-2.5 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-medium text-xs transition-colors cursor-pointer border border-white/10"
                   >
                     Debit or Credit Card (Simulated)
@@ -705,6 +712,129 @@ export default function PricingPage() {
                   <p className="text-[10px] text-slate-500 font-mono">
                     SENTINEL PAYPAL SANDBOX GATEWAY - ZERO TRUST VERIFICATION
                   </p>
+                </div>
+              </div>
+            )}
+
+            {/* Step: Authentic PayPal Simulated Checkout Window */}
+            {checkoutStep === "paypal_dialog" && (
+              <div className="mt-4 p-5 rounded-2xl bg-white text-slate-900 shadow-2xl space-y-4 border border-slate-200 animate-in fade-in zoom-in-95 duration-150">
+                {/* Simulated PayPal Top Header */}
+                <div className="flex items-center justify-between pb-3 border-b border-slate-200">
+                  <div className="flex items-center gap-2">
+                    <span className="font-sans font-black text-xl tracking-tight">
+                      <span className="text-[#003087]">Pay</span>
+                      <span className="text-[#0079C1]">Pal</span>
+                    </span>
+                    <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-amber-100 text-amber-800 border border-amber-300">
+                      Sandbox
+                    </span>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-[10px] text-slate-500 uppercase font-semibold">Total Due</div>
+                    <div className="text-base font-extrabold text-[#003087]">
+                      ${annualBilling
+                        ? selectedPlan.id === "PROFESSIONAL" ? "168.00" : "828.00"
+                        : selectedPlan.id === "PROFESSIONAL" ? "18.00" : "79.00"}{" "}
+                      USD
+                    </div>
+                  </div>
+                </div>
+
+                {/* Buyer Account Banner */}
+                <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between text-xs">
+                  <div>
+                    <div className="font-semibold text-slate-900">sb-buyer@sentinel.security</div>
+                    <div className="text-[11px] text-slate-500">Workspace Tenant: {companyName}</div>
+                  </div>
+                  <span className="text-[11px] font-semibold text-[#0079C1] cursor-pointer">Verified Buyer</span>
+                </div>
+
+                {/* Funding Source Selection */}
+                <div className="space-y-2">
+                  <div className="text-xs font-bold text-slate-700">Payment Method:</div>
+
+                  {/* PayPal Balance Option */}
+                  <div
+                    onClick={() => setSelectedFunding("paypal_balance")}
+                    className={`flex items-center justify-between p-3 rounded-xl border text-xs cursor-pointer transition-colors ${
+                      selectedFunding === "paypal_balance"
+                        ? "border-[#0079C1] bg-[#0079C1]/5 ring-1 ring-[#0079C1]"
+                        : "border-slate-200 bg-white hover:bg-slate-50"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <input
+                        type="radio"
+                        name="funding"
+                        checked={selectedFunding === "paypal_balance"}
+                        onChange={() => setSelectedFunding("paypal_balance")}
+                        className="text-[#0079C1] focus:ring-[#0079C1] cursor-pointer"
+                      />
+                      <div>
+                        <div className="font-bold text-slate-900">PayPal Balance</div>
+                        <div className="text-[11px] text-slate-500">$2,450.00 USD available</div>
+                      </div>
+                    </div>
+                    <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                      Primary
+                    </span>
+                  </div>
+
+                  {/* Visa Card Option */}
+                  <div
+                    onClick={() => setSelectedFunding("visa_card")}
+                    className={`flex items-center justify-between p-3 rounded-xl border text-xs cursor-pointer transition-colors ${
+                      selectedFunding === "visa_card"
+                        ? "border-[#0079C1] bg-[#0079C1]/5 ring-1 ring-[#0079C1]"
+                        : "border-slate-200 bg-white hover:bg-slate-50"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <input
+                        type="radio"
+                        name="funding"
+                        checked={selectedFunding === "visa_card"}
+                        onChange={() => setSelectedFunding("visa_card")}
+                        className="text-[#0079C1] focus:ring-[#0079C1] cursor-pointer"
+                      />
+                      <div>
+                        <div className="font-bold text-slate-900">Visa Debit Card</div>
+                        <div className="text-[11px] text-slate-500">ending in 4242 (Simulated)</div>
+                      </div>
+                    </div>
+                    <span className="text-[11px] font-mono text-slate-400">08/29</span>
+                  </div>
+                </div>
+
+                {/* Purchase Authorization Statement */}
+                <p className="text-[11px] text-slate-500 leading-relaxed">
+                  By clicking <strong>Pay Now</strong>, you authorize this test transaction on the PayPal Sandbox simulation network.
+                </p>
+
+                {/* The PayPal Action Buttons */}
+                <div className="space-y-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={handleExecutePaypalSandboxPayment}
+                    className="w-full py-3 px-4 rounded-full bg-[#0070BA] hover:bg-[#003087] text-white font-bold text-sm transition-colors cursor-pointer shadow-md flex items-center justify-center gap-2"
+                  >
+                    <span>Pay Now</span>
+                    <span className="text-xs font-normal opacity-90">
+                      (${annualBilling
+                        ? selectedPlan.id === "PROFESSIONAL" ? "168.00" : "828.00"
+                        : selectedPlan.id === "PROFESSIONAL" ? "18.00" : "79.00"}{" "}
+                      USD)
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setCheckoutStep("review")}
+                    className="w-full py-1 text-center text-xs text-slate-600 hover:text-slate-900 font-medium cursor-pointer"
+                  >
+                    Cancel and return to Sentinel IAM
+                  </button>
                 </div>
               </div>
             )}
