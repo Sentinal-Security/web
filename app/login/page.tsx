@@ -9,6 +9,7 @@ import { saveSession, getStoredSession, clearSession } from "@/lib/session";
 import { getMfaChallengeStatus, loginWithGoogle, resendVerification } from "@/lib/api";
 import { User } from "@/types/auth";
 import Footer from "@/app/partials/footer";
+import { PasswordToggleAdornment } from "@/components/PasswordToggleAdornment";
 
 export default function LoginPage() {
   return (
@@ -58,6 +59,7 @@ function LoginPageContent() {
     setExistingUser(null);
     setEmail("");
     setPassword("");
+    setShowPassword(false);
     setValidationError("");
     setAuthError(null);
     setMfaChallenge(null);
@@ -66,6 +68,7 @@ function LoginPageContent() {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
   const [validationError, setValidationError] = useState("");
 
@@ -1070,11 +1073,15 @@ function LoginPageContent() {
                         />
                       </svg>
                       <input
-                        type="password"
+                        type={showPassword ? "text" : "password"}
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         placeholder="Enter your password"
-                        className="w-full bg-transparent border-none outline-none text-white text-sm placeholder-slate-400/80"
+                        className="w-full bg-transparent border-none outline-none text-white text-sm placeholder-slate-400/80 pr-2"
+                      />
+                      <PasswordToggleAdornment
+                        show={showPassword}
+                        onToggle={() => setShowPassword((prev) => !prev)}
                       />
                     </div>
                   </div>

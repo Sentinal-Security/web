@@ -24,6 +24,7 @@ import {
 import { SessionDto } from "@/types/admin";
 import { SecurityAuditRecord } from "@/types/audit";
 import { PasswordEntropyMeter } from "@/components/PasswordEntropyMeter";
+import { PasswordToggleAdornment } from "@/components/PasswordToggleAdornment";
 import { useInactivityTimeout } from "@/hooks/useInactivityTimeout";
 import { InactivityWarningModal } from "@/components/session/InactivityWarningModal";
 
@@ -203,6 +204,9 @@ export default function DashboardPage() {
   const [currentPasswordInput, setCurrentPasswordInput] = useState("");
   const [newPasswordInput, setNewPasswordInput] = useState("");
   const [confirmPasswordInput, setConfirmPasswordInput] = useState("");
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [revokeOtherSessionsOnPasswordChange, setRevokeOtherSessionsOnPasswordChange] = useState(true);
   const [changePasswordLoading, setChangePasswordLoading] = useState(false);
   const [changePasswordError, setChangePasswordError] = useState("");
@@ -2135,28 +2139,40 @@ export default function DashboardPage() {
                 <label className="block text-xs font-medium text-slate-300 mb-1">
                   Current Password
                 </label>
-                <input
-                  type="password"
-                  required
-                  value={currentPasswordInput}
-                  onChange={(e) => setCurrentPasswordInput(e.target.value)}
-                  placeholder="Enter current password"
-                  className="w-full px-3 py-2 bg-slate-900 border border-white/10 rounded-xl text-white text-xs placeholder-slate-500 focus:outline-none focus:border-cyan-400"
-                />
+                <div className="relative flex items-center bg-slate-900 border border-white/10 rounded-xl px-3 py-2 focus-within:border-cyan-400 transition-all">
+                  <input
+                    type={showCurrentPassword ? "text" : "password"}
+                    required
+                    value={currentPasswordInput}
+                    onChange={(e) => setCurrentPasswordInput(e.target.value)}
+                    placeholder="Enter current password"
+                    className="w-full bg-transparent border-none outline-none text-white text-xs placeholder-slate-500 pr-2"
+                  />
+                  <PasswordToggleAdornment
+                    show={showCurrentPassword}
+                    onToggle={() => setShowCurrentPassword((prev) => !prev)}
+                  />
+                </div>
               </div>
 
               <div>
                 <label className="block text-xs font-medium text-slate-300 mb-1">
                   New Password
                 </label>
-                <input
-                  type="password"
-                  required
-                  value={newPasswordInput}
-                  onChange={(e) => setNewPasswordInput(e.target.value)}
-                  placeholder="Min. 8 characters (mixed case, digit, symbol)"
-                  className="w-full px-3 py-2 bg-slate-900 border border-white/10 rounded-xl text-white text-xs placeholder-slate-500 focus:outline-none focus:border-cyan-400"
-                />
+                <div className="relative flex items-center bg-slate-900 border border-white/10 rounded-xl px-3 py-2 focus-within:border-cyan-400 transition-all">
+                  <input
+                    type={showNewPassword ? "text" : "password"}
+                    required
+                    value={newPasswordInput}
+                    onChange={(e) => setNewPasswordInput(e.target.value)}
+                    placeholder="Min. 8 characters (mixed case, digit, symbol)"
+                    className="w-full bg-transparent border-none outline-none text-white text-xs placeholder-slate-500 pr-2"
+                  />
+                  <PasswordToggleAdornment
+                    show={showNewPassword}
+                    onToggle={() => setShowNewPassword((prev) => !prev)}
+                  />
+                </div>
                 <PasswordEntropyMeter password={newPasswordInput} />
               </div>
 
@@ -2164,14 +2180,20 @@ export default function DashboardPage() {
                 <label className="block text-xs font-medium text-slate-300 mb-1">
                   Confirm New Password
                 </label>
-                <input
-                  type="password"
-                  required
-                  value={confirmPasswordInput}
-                  onChange={(e) => setConfirmPasswordInput(e.target.value)}
-                  placeholder="Re-type new password"
-                  className="w-full px-3 py-2 bg-slate-900 border border-white/10 rounded-xl text-white text-xs placeholder-slate-500 focus:outline-none focus:border-cyan-400"
-                />
+                <div className="relative flex items-center bg-slate-900 border border-white/10 rounded-xl px-3 py-2 focus-within:border-cyan-400 transition-all">
+                  <input
+                    type={showConfirmPassword ? "text" : "password"}
+                    required
+                    value={confirmPasswordInput}
+                    onChange={(e) => setConfirmPasswordInput(e.target.value)}
+                    placeholder="Re-type new password"
+                    className="w-full bg-transparent border-none outline-none text-white text-xs placeholder-slate-500 pr-2"
+                  />
+                  <PasswordToggleAdornment
+                    show={showConfirmPassword}
+                    onToggle={() => setShowConfirmPassword((prev) => !prev)}
+                  />
+                </div>
               </div>
 
               <div className="pt-1">

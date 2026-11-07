@@ -7,6 +7,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { resendVerification } from "@/lib/api";
 import Footer from "@/app/partials/footer";
 import { PasswordEntropyMeter } from "@/components/PasswordEntropyMeter";
+import { PasswordToggleAdornment } from "@/components/PasswordToggleAdornment";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -15,6 +16,7 @@ export default function RegisterPage() {
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [accountType, setAccountType] = useState<"PERSONAL" | "ENTERPRISE">("ENTERPRISE");
   const role = accountType === "ENTERPRISE" ? "ADMIN" : "USER";
   const [company, setCompany] = useState("");
@@ -506,11 +508,15 @@ export default function RegisterPage() {
                     />
                   </svg>
                   <input
-                    type="password"
+                    type={showPassword ? "text" : "password"}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="Create a strong password (min. 8 characters)"
-                    className="w-full bg-transparent border-none outline-none text-white text-sm placeholder-slate-500"
+                    className="w-full bg-transparent border-none outline-none text-white text-sm placeholder-slate-500 pr-2"
+                  />
+                  <PasswordToggleAdornment
+                    show={showPassword}
+                    onToggle={() => setShowPassword((prev) => !prev)}
                   />
                 </div>
                 {password && (

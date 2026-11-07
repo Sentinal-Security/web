@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { resetPassword } from "@/lib/api";
 import Footer from "@/app/partials/footer";
 import { PasswordEntropyMeter } from "@/components/PasswordEntropyMeter";
+import { PasswordToggleAdornment } from "@/components/PasswordToggleAdornment";
 
 function ResetPasswordContent() {
   const router = useRouter();
@@ -14,6 +15,8 @@ function ResetPasswordContent() {
 
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
@@ -128,15 +131,21 @@ function ResetPasswordContent() {
           <label className="block text-xs font-medium text-slate-300 mb-1.5">
             New Password
           </label>
-          <input
-            type="password"
-            autoComplete="new-password"
-            required
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="At least 8 characters"
-            className="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-white text-sm placeholder-slate-500 focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400"
-          />
+          <div className="relative flex items-center bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 focus-within:border-cyan-400 focus-within:ring-1 focus-within:ring-cyan-400 transition-all">
+            <input
+              type={showPassword ? "text" : "password"}
+              autoComplete="new-password"
+              required
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="At least 8 characters"
+              className="w-full bg-transparent border-none outline-none text-white text-sm placeholder-slate-500 pr-2"
+            />
+            <PasswordToggleAdornment
+              show={showPassword}
+              onToggle={() => setShowPassword((prev) => !prev)}
+            />
+          </div>
           <PasswordEntropyMeter password={password} />
         </div>
 
@@ -168,15 +177,21 @@ function ResetPasswordContent() {
           <label className="block text-xs font-medium text-slate-300 mb-1.5">
             Confirm New Password
           </label>
-          <input
-            type="password"
-            autoComplete="new-password"
-            required
-            value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
-            placeholder="Repeat new password"
-            className="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-white text-sm placeholder-slate-500 focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400"
-          />
+          <div className="relative flex items-center bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 focus-within:border-cyan-400 focus-within:ring-1 focus-within:ring-cyan-400 transition-all">
+            <input
+              type={showConfirmPassword ? "text" : "password"}
+              autoComplete="new-password"
+              required
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              placeholder="Repeat new password"
+              className="w-full bg-transparent border-none outline-none text-white text-sm placeholder-slate-500 pr-2"
+            />
+            <PasswordToggleAdornment
+              show={showConfirmPassword}
+              onToggle={() => setShowConfirmPassword((prev) => !prev)}
+            />
+          </div>
         </div>
 
         <button
