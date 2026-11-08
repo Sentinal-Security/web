@@ -204,8 +204,8 @@ function LoginPageContent() {
     };
   }, [mfaChallenge?.challengeId, mfaMode]);
 
-  const handleLoginSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleLoginSubmit = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     setValidationError("");
     setAuthError(null);
     setNetworkWait(false);
@@ -1037,8 +1037,36 @@ function LoginPageContent() {
                     </div>
                   )}
 
-                  {/* Alert: Validation or Login Error */}
-                  {(validationError || authError) && (
+                  {/* Alert: Backend Gateway Warming Up / Cold Start */}
+                  {authError && (authError.includes("Network issue") || authError.includes("wait a few seconds") || authError.includes("Failed to fetch")) && (
+                    <div className="mb-4 p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-200 text-xs">
+                      <div className="flex items-start gap-2.5">
+                        <span className="relative flex h-2 w-2 mt-1 shrink-0">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                          <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+                        </span>
+                        <div className="flex-1">
+                          <div className="font-semibold text-amber-300">Backend Gateway Initializing</div>
+                          <p className="text-slate-300 text-[11px] mt-0.5 leading-relaxed">
+                            The cloud backend container is waking up from standby (takes ~30-45s on cold start). Database connection is being established.
+                          </p>
+                          <div className="mt-2.5 pt-2 border-t border-amber-500/20 flex items-center justify-between">
+                            <span className="text-[11px] text-slate-400">Database & Enclave connecting...</span>
+                            <button
+                              type="button"
+                              onClick={() => handleLoginSubmit()}
+                              className="text-[11px] text-cyan-400 hover:text-cyan-300 font-semibold underline cursor-pointer"
+                            >
+                              Retry Connection Now
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Alert: Validation or Login Error (Excluding cold start) */}
+                  {(validationError || (authError && !authError.includes("Network issue") && !authError.includes("wait a few seconds") && !authError.includes("Failed to fetch"))) && (
                     <div className="mb-4 p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-300 text-xs">
                       <div className="flex items-center gap-2">
                         <svg className="w-4 h-4 shrink-0 text-red-400" viewBox="0 0 20 20" fill="currentColor">
