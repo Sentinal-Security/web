@@ -304,6 +304,38 @@ export async function respondToMfaChallenge(
   }
 }
 
+export async function sendEmailOtp(
+  userId?: number,
+  email?: string
+): Promise<{ success: boolean; message: string }> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/mfa/send-email-otp`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId, email }),
+    });
+    return await res.json();
+  } catch {
+    return { success: false, message: "Network error dispatching verification code." };
+  }
+}
+
+export async function updateMfaPreference(
+  userId: number,
+  method: "APP" | "EMAIL"
+): Promise<{ success: boolean; message: string; data?: { preferredMfaMethod: string } }> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/mfa/preference`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId, method }),
+    });
+    return await res.json();
+  } catch {
+    return { success: false, message: "Network error updating MFA preference." };
+  }
+}
+
 export async function loginWithGoogle(
   idToken: string
 ): Promise<AuthResponse> {

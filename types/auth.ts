@@ -7,6 +7,7 @@ export interface User {
   subscriptionTier?: "COMMUNITY" | "PROFESSIONAL" | "ENTERPRISE" | string;
   mfaEnabled: boolean;
   passwordResetRequired?: boolean;
+  preferredMfaMethod?: "APP" | "EMAIL" | string;
 }
 
 export interface AuthSession {
@@ -66,6 +67,7 @@ export interface AuthResponse {
   mfaEnrollmentRequired?: boolean;
   mfaEnforced?: boolean;
   passwordResetRequired?: boolean;
+  preferredMfaMethod?: "APP" | "EMAIL" | string;
 }
 
 export interface GenericApiResponse<T = any> {
