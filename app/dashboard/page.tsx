@@ -149,13 +149,17 @@ export default function DashboardPage() {
   const [showConnectedNotice, setShowConnectedNotice] = useState(false);
 
   const probeGateway = useCallback(async () => {
+    if (typeof window !== "undefined" && !navigator.onLine) {
+      setGatewayStatus("offline");
+      return;
+    }
     try {
       const startTime = Date.now();
       const res = await checkBackendHealth();
       const latency = res.databasePingMs ?? (Date.now() - startTime);
       setGatewayLatency(latency);
       setGatewayStatus((prev) => {
-        if (prev === "cold_starting") {
+        if (prev === "cold_starting" || prev === "offline") {
           setShowConnectedNotice(true);
           setTimeout(() => setShowConnectedNotice(false), 5000);
         }
@@ -168,6 +172,28 @@ export default function DashboardPage() {
 
   useEffect(() => {
     probeGateway();
+
+    // 10-second periodic heartbeat to continuously monitor and reflect system/backend status in real-time
+    const heartbeat = setInterval(() => {
+      probeGateway();
+    }, 10000);
+
+    const handleOnline = () => {
+      setGatewayStatus("checking");
+      probeGateway();
+    };
+    const handleOffline = () => {
+      setGatewayStatus("offline");
+    };
+
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+
+    return () => {
+      clearInterval(heartbeat);
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
   }, [probeGateway]);
 
   useEffect(() => {
@@ -274,6 +300,13 @@ export default function DashboardPage() {
 
   const handleLaunchApp = async (app: AppIntegration, e: React.MouseEvent) => {
     e.preventDefault();
+    if (gatewayStatus === "offline") {
+      setForbiddenModal({
+        appName: app.name,
+        reason: "The Sentinel IAM Gateway is currently unreachable or offline. Service launch authorization cannot be verified until the system connection is restored.",
+      });
+      return;
+    }
     if (app.backendId && user?.userId) {
       setLaunchingAppId(String(app.id));
       const res = await launchUserService(Number(app.backendId), { userId: user.userId });
@@ -1358,9 +1391,22 @@ export default function DashboardPage() {
               <h1 className="text-lg font-semibold text-white tracking-tight">
                 {isEnterpriseEmployee ? "Workstation Launchpad" : "Applications"}
               </h1>
-              <span className="px-2 py-0.5 rounded text-[11px] font-mono font-medium bg-white/5 border border-white/10 text-slate-300">
-                {apps.length} active
-              </span>
+              {gatewayStatus === "offline" ? (
+                <span className="px-2 py-0.5 rounded text-[11px] font-mono font-medium bg-red-500/10 border border-red-500/30 text-red-300 flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-red-400" />
+                  <span>System Offline</span>
+                </span>
+              ) : gatewayStatus === "cold_starting" ? (
+                <span className="px-2 py-0.5 rounded text-[11px] font-mono font-medium bg-amber-500/10 border border-amber-500/30 text-amber-300 flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+                  <span>Reconnecting ({coldStartSeconds}s)</span>
+                </span>
+              ) : (
+                <span className="px-2 py-0.5 rounded text-[11px] font-mono font-medium bg-white/5 border border-white/10 text-slate-300 flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-cyan-400" />
+                  <span>{apps.length} active</span>
+                </span>
+              )}
               {isAdmin ? (
                 <span className="text-[10px] px-2 py-0.5 rounded bg-purple-500/10 border border-purple-400/30 text-purple-300 font-semibold uppercase">
                   Admin
@@ -1595,8 +1641,22 @@ export default function DashboardPage() {
 
                     <div className="mt-3 pt-2.5 border-t border-white/5 flex items-center justify-between">
                       <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-medium bg-white/5 border border-white/10 text-slate-300">
-                        <span className={`w-1.5 h-1.5 rounded-full ${app.statusColor || "bg-cyan-400"}`} />
-                        <span>{app.status || "Active"}</span>
+                        {gatewayStatus === "offline" ? (
+                          <>
+                            <span className="w-1.5 h-1.5 rounded-full bg-red-400" />
+                            <span className="text-red-300 font-semibold">Offline</span>
+                          </>
+                        ) : gatewayStatus === "cold_starting" ? (
+                          <>
+                            <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+                            <span className="text-amber-300">Standby</span>
+                          </>
+                        ) : (
+                          <>
+                            <span className={`w-1.5 h-1.5 rounded-full ${app.statusColor || "bg-cyan-400"}`} />
+                            <span>{app.status || "Active"}</span>
+                          </>
+                        )}
                       </div>
                       <span className="text-[10px] text-slate-500 font-mono">
                         Logins: {app.metrics?.totalLogins || 0}
