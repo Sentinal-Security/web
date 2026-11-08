@@ -631,6 +631,8 @@ export interface PaypalCaptureResponse {
     tier: string;
     billingCycle: string;
     orderId: string;
+    invoiceNumber?: string;
+    amount?: number;
     status: string;
     membersUpdated: number;
     updatedAt: string;

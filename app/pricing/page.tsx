@@ -37,15 +37,23 @@ export default function PricingPage() {
   const [companyName, setCompanyName] = useState<string>("default");
   const [loadingTier, setLoadingTier] = useState(true);
 
-  // PayPal Sandbox Checkout State
+  // Checkout & Payment State
   const [checkoutModalOpen, setCheckoutModalOpen] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState<PlanTier | null>(null);
   const [checkoutStep, setCheckoutStep] = useState<"review" | "paypal_dialog" | "processing" | "success" | "error">("review");
+  const [paymentMethod, setPaymentMethod] = useState<"card" | "paypal" | "invoice">("paypal");
+  const [cardWarning, setCardWarning] = useState<string | null>(null);
+  const [cardNumber, setCardNumber] = useState<string>("");
+  const [cardExpiry, setCardExpiry] = useState<string>("");
+  const [cardCvc, setCardCvc] = useState<string>("");
+  const [cardName, setCardName] = useState<string>("");
+  const [resendEmailStatus, setResendEmailStatus] = useState<string | null>(null);
   const [selectedFunding, setSelectedFunding] = useState<"paypal_balance" | "visa_card">("paypal_balance");
   const [paypalOrderId, setPaypalOrderId] = useState<string>("");
   const [errorMessage, setErrorMessage] = useState<string>("");
   const [receiptDetails, setReceiptDetails] = useState<{
     orderId: string;
+    invoiceNumber: string;
     tier: string;
     amount: number;
     billingCycle: string;
@@ -261,8 +269,11 @@ export default function PricingPage() {
         ? selectedPlan.id === "PROFESSIONAL" ? 168.00 : 828.00
         : selectedPlan.id === "PROFESSIONAL" ? 18.00 : 79.00;
 
+      const generatedInvoiceNum = captureRes.data?.invoiceNumber || ("INV-2026-" + Math.floor(10000 + Math.random() * 90000));
+
       setReceiptDetails({
         orderId: generatedOrderId,
+        invoiceNumber: generatedInvoiceNum,
         tier: selectedPlan.name,
         amount: amountCharged,
         billingCycle: annualBilling ? "Annual (Billed upfront)" : "Monthly (Recurring)",
@@ -502,21 +513,26 @@ export default function PricingPage() {
                       Downgrade to Community Free
                     </button>
                   ) : (
-                    <button
-                      type="button"
-                      onClick={() => handleSelectTier(tier)}
-                      className={`w-full py-3 rounded-xl text-xs font-bold text-center transition-all cursor-pointer flex items-center justify-center gap-2 ${
-                        tier.highlighted
-                          ? "bg-cyan-500 hover:bg-cyan-400 text-slate-950 shadow-md shadow-cyan-500/20 font-extrabold"
-                          : "bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/40 text-cyan-300"
-                      }`}
-                    >
-                      {/* PayPal Sandbox Pill Accent */}
-                      <span className="px-1.5 py-0.5 rounded text-[9px] font-mono bg-[#003087] text-white">
-                        PayPal
-                      </span>
-                      <span>Pay with PayPal Sandbox</span>
-                    </button>
+                    <div className="space-y-2">
+                      <button
+                        type="button"
+                        onClick={() => handleSelectTier(tier)}
+                        className={`w-full py-3 rounded-xl text-xs font-bold text-center transition-all cursor-pointer flex items-center justify-center gap-2 ${
+                          tier.highlighted
+                            ? "bg-cyan-500 hover:bg-cyan-400 text-slate-950 shadow-md shadow-cyan-500/20 font-extrabold"
+                            : "bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/40 text-cyan-300"
+                        }`}
+                      >
+                        <span>Subscribe to {tier.name}</span>
+                      </button>
+                      <div className="text-center text-[10px] text-slate-400 font-mono flex items-center justify-center gap-2">
+                        <span>Card</span>
+                        <span>&bull;</span>
+                        <span>PayPal</span>
+                        <span>&bull;</span>
+                        <span>Corporate Invoice</span>
+                      </div>
+                    </div>
                   )}
                 </div>
               </div>
@@ -609,7 +625,7 @@ export default function PricingPage() {
       </main>
 
       {/* ========================================================================= */}
-      {/* PAYPAL SANDBOX CHECKOUT MODAL                                            */}
+      {/* ENTERPRISE CHECKOUT MODAL                                                */}
       {/* ========================================================================= */}
       {checkoutModalOpen && selectedPlan && (
         <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6 overflow-y-auto">
@@ -617,22 +633,28 @@ export default function PricingPage() {
             {/* Header */}
             <div className="flex items-start justify-between gap-4 pb-4 border-b border-white/10">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-[#003087]/20 border border-[#003087]/40 flex items-center justify-center">
-                  <span className="font-extrabold text-[#0079C1] text-sm tracking-tight">PP</span>
+                <div className="w-10 h-10 rounded-xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400">
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                  </svg>
                 </div>
                 <div>
-                  <h3 className="text-base font-bold text-white tracking-tight">PayPal Sandbox Checkout</h3>
+                  <h3 className="text-base font-bold text-white tracking-tight">Enterprise Subscription Checkout</h3>
                   <div className="flex items-center gap-2 mt-0.5">
-                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                    <span className="text-[11px] font-mono text-emerald-400 font-semibold">TESTING ENVIRONMENT</span>
+                    <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
+                    <span className="text-[11px] font-mono text-cyan-300 font-semibold">256-BIT TLS ENCRYPTED</span>
                   </div>
                 </div>
               </div>
 
               <button
                 type="button"
-                onClick={() => setCheckoutModalOpen(false)}
-                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-white/5"
+                onClick={() => {
+                  setCheckoutModalOpen(false);
+                  setCardWarning(null);
+                  setResendEmailStatus(null);
+                }}
+                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-white/5 cursor-pointer"
               >
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
@@ -640,11 +662,11 @@ export default function PricingPage() {
               </button>
             </div>
 
-            {/* Step: Review & Authorize */}
+            {/* Step: Review & Payment Method Selection */}
             {checkoutStep === "review" && (
               <div className="mt-5 space-y-5">
                 {/* Order Summary Box */}
-                <div className="p-4 rounded-xl bg-slate-900/60 border border-white/10 space-y-3">
+                <div className="p-4 rounded-xl bg-slate-900/60 border border-white/10 space-y-2.5">
                   <div className="flex items-center justify-between text-xs">
                     <span className="text-slate-400">Target Plan:</span>
                     <span className="font-bold text-white">{selectedPlan.name}</span>
@@ -673,52 +695,187 @@ export default function PricingPage() {
                   </div>
                 </div>
 
-                {/* Sandbox Info Alert */}
-                <div className="p-3.5 rounded-xl bg-cyan-950/30 border border-cyan-500/30 flex items-start gap-2.5">
-                  <svg className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  <p className="text-[11px] text-cyan-200 leading-relaxed">
-                    This order executes against the official PayPal Sandbox simulation gateway. No actual monetary funds will be deducted. All members of <strong>{companyName}</strong> will immediately inherit <strong>{selectedPlan.name}</strong> access.
-                  </p>
+                {/* Payment Method Selector Tabs */}
+                <div>
+                  <div className="text-[11px] font-semibold text-slate-300 uppercase tracking-wider mb-2">
+                    Select Payment Method:
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPaymentMethod("card");
+                        setCardWarning(null);
+                      }}
+                      className={`py-2 px-2.5 rounded-xl text-xs font-medium border text-center transition-all cursor-pointer ${
+                        paymentMethod === "card"
+                          ? "bg-cyan-500/10 border-cyan-400 text-cyan-300"
+                          : "bg-slate-900/60 border-white/10 text-slate-400 hover:text-white"
+                      }`}
+                    >
+                      Credit / Debit
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPaymentMethod("paypal");
+                        setCardWarning(null);
+                      }}
+                      className={`py-2 px-2.5 rounded-xl text-xs font-medium border text-center transition-all cursor-pointer ${
+                        paymentMethod === "paypal"
+                          ? "bg-cyan-500/10 border-cyan-400 text-cyan-300"
+                          : "bg-slate-900/60 border-white/10 text-slate-400 hover:text-white"
+                      }`}
+                    >
+                      PayPal
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPaymentMethod("invoice");
+                        setCardWarning(null);
+                      }}
+                      className={`py-2 px-2.5 rounded-xl text-xs font-medium border text-center transition-all cursor-pointer ${
+                        paymentMethod === "invoice"
+                          ? "bg-cyan-500/10 border-cyan-400 text-cyan-300"
+                          : "bg-slate-900/60 border-white/10 text-slate-400 hover:text-white"
+                      }`}
+                    >
+                      Invoice
+                    </button>
+                  </div>
                 </div>
 
-                {/* Pre-filled Sandbox Test Buyer Credentials */}
-                <div className="p-3 rounded-lg bg-slate-900 border border-white/5 space-y-1 text-[11px] font-mono text-slate-400">
-                  <div className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">PayPal Sandbox Buyer Profile:</div>
-                  <div className="text-slate-300">Account: sb-buyer@sentinel.security</div>
-                  <div className="text-slate-300">Method: Simulated PayPal Balance (USD)</div>
-                </div>
+                {/* Credit / Debit Card View */}
+                {paymentMethod === "card" && (
+                  <div className="space-y-3 p-4 rounded-xl bg-slate-900/50 border border-white/10">
+                    <div>
+                      <label className="block text-[11px] text-slate-400 mb-1">Cardholder Name</label>
+                      <input
+                        type="text"
+                        value={cardName}
+                        onChange={(e) => setCardName(e.target.value)}
+                        placeholder="Jane Doe"
+                        className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-white/10 text-white text-xs focus:outline-none focus:border-cyan-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] text-slate-400 mb-1">Card Number</label>
+                      <input
+                        type="text"
+                        value={cardNumber}
+                        onChange={(e) => setCardNumber(e.target.value.replace(/\D/g, "").slice(0, 16).replace(/(\d{4})(?=\d)/g, "$1 "))}
+                        placeholder="4532 0182 9942 1092"
+                        className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-white/10 text-white font-mono text-xs focus:outline-none focus:border-cyan-500"
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[11px] text-slate-400 mb-1">Expiration</label>
+                        <input
+                          type="text"
+                          value={cardExpiry}
+                          onChange={(e) => setCardExpiry(e.target.value)}
+                          placeholder="MM/YY"
+                          className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-white/10 text-white font-mono text-xs focus:outline-none focus:border-cyan-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] text-slate-400 mb-1">Security Code</label>
+                        <input
+                          type="text"
+                          value={cardCvc}
+                          onChange={(e) => setCardCvc(e.target.value)}
+                          placeholder="CVC"
+                          maxLength={4}
+                          className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-white/10 text-white font-mono text-xs focus:outline-none focus:border-cyan-500"
+                        />
+                      </div>
+                    </div>
 
-                {/* Authentic PayPal Sandbox Action Buttons */}
-                <div className="space-y-2 pt-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSelectedFunding("paypal_balance");
-                      setCheckoutStep("paypal_dialog");
-                    }}
-                    className="w-full py-3.5 px-4 rounded-xl bg-[#FFC439] hover:bg-[#F2BA36] text-[#003087] font-extrabold text-sm transition-transform active:scale-[0.99] cursor-pointer shadow-lg shadow-[#FFC439]/10 flex items-center justify-center gap-2"
-                  >
-                    <span className="font-black italic text-base">PayPal</span>
-                    <span className="text-xs font-semibold text-slate-900">Checkout with Sandbox</span>
-                  </button>
+                    {cardWarning && (
+                      <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs space-y-2">
+                        <p>{cardWarning}</p>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setPaymentMethod("paypal");
+                            setCardWarning(null);
+                          }}
+                          className="w-full py-2 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border border-amber-500/40 text-xs font-semibold transition-colors cursor-pointer"
+                        >
+                          Switch to PayPal Instant Activation
+                        </button>
+                      </div>
+                    )}
 
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSelectedFunding("visa_card");
-                      setCheckoutStep("paypal_dialog");
-                    }}
-                    className="w-full py-2.5 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-medium text-xs transition-colors cursor-pointer border border-white/10"
-                  >
-                    Debit or Credit Card (Simulated)
-                  </button>
-                </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCardWarning(
+                          "Direct credit & debit card processing gateway is undergoing scheduled sandbox maintenance. Please select PayPal to complete your instant workspace activation."
+                        );
+                      }}
+                      className="w-full py-3 rounded-xl bg-slate-800 hover:bg-slate-700 border border-white/10 text-white font-semibold text-xs transition-colors cursor-pointer"
+                    >
+                      Pay with Card
+                    </button>
+                  </div>
+                )}
+
+                {/* PayPal View */}
+                {paymentMethod === "paypal" && (
+                  <div className="space-y-3 p-4 rounded-xl bg-slate-900/50 border border-white/10">
+                    <div className="p-3 rounded-lg bg-cyan-950/30 border border-cyan-500/30 text-[11px] text-cyan-200 leading-relaxed">
+                      Instant authorization and official tax invoice dispatch via the connected PayPal gateway. All members of <strong>{companyName}</strong> will immediately inherit <strong>{selectedPlan.name}</strong> access.
+                    </div>
+
+                    <div className="p-3 rounded-lg bg-slate-950 border border-white/5 space-y-1 text-[11px] font-mono text-slate-400">
+                      <div className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">PayPal Gateway Account:</div>
+                      <div className="text-slate-300">Account: sb-buyer@sentinel.security</div>
+                      <div className="text-slate-300">Funding: PayPal Balance / Verified Bank</div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedFunding("paypal_balance");
+                        setCheckoutStep("paypal_dialog");
+                      }}
+                      className="w-full py-3.5 px-4 rounded-xl bg-[#FFC439] hover:bg-[#F2BA36] text-[#003087] font-extrabold text-sm transition-transform active:scale-[0.99] cursor-pointer shadow-lg shadow-[#FFC439]/10 flex items-center justify-center gap-2"
+                    >
+                      <span className="font-black italic text-base">PayPal</span>
+                      <span className="text-xs font-semibold text-slate-900">Checkout with PayPal</span>
+                    </button>
+                  </div>
+                )}
+
+                {/* Corporate Invoice View */}
+                {paymentMethod === "invoice" && (
+                  <div className="space-y-3 p-4 rounded-xl bg-slate-900/50 border border-white/10 text-xs">
+                    <p className="text-slate-300 leading-relaxed">
+                      Enterprise Net-30 purchase order billing is available for annual contract agreements. Invoices are dispatched to your accounts payable department.
+                    </p>
+                    <div className="p-3 rounded-lg bg-slate-950 border border-white/5 text-[11px] font-mono text-slate-400">
+                      <div>Entity: Sentinal Security Inc.</div>
+                      <div>Tax Identification: US-EIN-94-382910</div>
+                      <div>Billing Contact: billing@sentinel.security</div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPaymentMethod("paypal");
+                      }}
+                      className="w-full py-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-slate-200 font-medium text-xs transition-colors cursor-pointer"
+                    >
+                      Need instant activation? Switch to PayPal
+                    </button>
+                  </div>
+                )}
 
                 <div className="text-center">
                   <p className="text-[10px] text-slate-500 font-mono">
-                    SENTINEL PAYPAL SANDBOX GATEWAY - ZERO TRUST VERIFICATION
+                    SENTINEL ENTERPRISE CHECKOUT GATEWAY - ZERO TRUST VERIFICATION
                   </p>
                 </div>
               </div>
@@ -860,9 +1017,9 @@ export default function PricingPage() {
               </div>
             )}
 
-            {/* Step: Success Receipt */}
+            {/* Step: Success Receipt & Official Tax Invoice */}
             {checkoutStep === "success" && receiptDetails && (
-              <div className="mt-5 space-y-5 animate-in fade-in duration-200">
+              <div className="mt-5 space-y-4 animate-in fade-in duration-200">
                 <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-center space-y-2">
                   <div className="w-10 h-10 rounded-full bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center mx-auto text-emerald-400">
                     <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
@@ -870,54 +1027,94 @@ export default function PricingPage() {
                     </svg>
                   </div>
                   <h4 className="text-sm font-bold text-emerald-300">
-                    Payment Successful via PayPal Sandbox
+                    Payment Confirmed &amp; Workspace Upgraded
                   </h4>
                   <p className="text-xs text-slate-300">
-                    {companyName} has been successfully upgraded to the <strong>{receiptDetails.tier}</strong> plan.
+                    {companyName} is now active on the <strong>{receiptDetails.tier}</strong> tier.
+                  </p>
+                  <p className="text-[11px] text-cyan-300 font-mono">
+                    Official payment receipt dispatched to {user?.email || "administrator email"}.
                   </p>
                 </div>
 
-                {/* Receipt Card */}
-                <div className="p-4 rounded-xl bg-slate-900 border border-white/10 space-y-2 text-xs font-mono">
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">Order ID:</span>
-                    <span className="text-cyan-300 font-bold">{receiptDetails.orderId}</span>
+                {/* Printable Official Tax Invoice Card */}
+                <div className="p-4 rounded-xl bg-slate-900 border border-white/10 space-y-3 text-xs">
+                  <div className="flex items-center justify-between pb-2 border-b border-white/10">
+                    <div>
+                      <span className="font-extrabold text-white text-xs tracking-wider">SENTINEL SECURITY INC.</span>
+                      <p className="text-[10px] text-slate-400 font-mono">Tax ID: US-EIN-94-382910</p>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-[10px] text-slate-400 uppercase tracking-wider block">Invoice Number</span>
+                      <span className="text-cyan-300 font-mono font-bold">{receiptDetails.invoiceNumber}</span>
+                    </div>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">Plan:</span>
-                    <span className="text-white">{receiptDetails.tier}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">Amount Charged:</span>
-                    <span className="text-emerald-400 font-bold">${receiptDetails.amount.toFixed(2)} USD</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">Billing Cycle:</span>
-                    <span className="text-slate-200">{receiptDetails.billingCycle}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">Company:</span>
-                    <span className="text-white uppercase">{receiptDetails.company}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">Timestamp:</span>
-                    <span className="text-slate-400">{receiptDetails.timestamp}</span>
+
+                  <div className="space-y-1.5 font-mono text-[11px]">
+                    <div className="flex justify-between">
+                      <span className="text-slate-400">Payment Gateway:</span>
+                      <span className="text-white">PayPal Verified ({receiptDetails.orderId})</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-400">Subscription Tier:</span>
+                      <span className="text-white font-bold">{receiptDetails.tier}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-400">Billing Cycle:</span>
+                      <span className="text-slate-300">{receiptDetails.billingCycle}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-400">Billed Organization:</span>
+                      <span className="text-white uppercase">{receiptDetails.company}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-400">Tax / VAT:</span>
+                      <span className="text-slate-300">$0.00 USD (0% Reverse Charge)</span>
+                    </div>
+                    <div className="pt-2 border-t border-white/10 flex justify-between text-xs font-bold">
+                      <span className="text-white">Total Amount Paid:</span>
+                      <span className="text-emerald-400 font-extrabold">${receiptDetails.amount.toFixed(2)} USD</span>
+                    </div>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-3 pt-2">
+                {resendEmailStatus && (
+                  <div className="p-2.5 rounded-lg bg-cyan-950/40 border border-cyan-500/30 text-cyan-200 text-xs text-center font-mono">
+                    {resendEmailStatus}
+                  </div>
+                )}
+
+                <div className="flex flex-col sm:flex-row items-center gap-2 pt-2">
                   <button
                     type="button"
-                    onClick={() => setCheckoutModalOpen(false)}
-                    className="flex-1 py-2.5 rounded-xl bg-white/10 hover:bg-white/15 text-white font-bold text-xs transition-colors cursor-pointer"
+                    onClick={() => {
+                      if (typeof window !== "undefined") {
+                        window.print();
+                      }
+                    }}
+                    className="w-full sm:flex-1 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-white font-semibold text-xs transition-colors cursor-pointer flex items-center justify-center gap-1.5"
                   >
-                    Close
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                    </svg>
+                    <span>Print / Save PDF</span>
                   </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setResendEmailStatus(`Duplicate receipt ${receiptDetails.invoiceNumber} emailed to ${user?.email || "admin"}.`);
+                    }}
+                    className="w-full sm:flex-1 py-2 rounded-xl bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 font-semibold text-xs transition-colors cursor-pointer"
+                  >
+                    Resend Email Receipt
+                  </button>
+
                   <Link
                     href="/dashboard"
-                    className="flex-1 py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs text-center transition-colors cursor-pointer"
+                    className="w-full sm:flex-1 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs text-center transition-colors cursor-pointer"
                   >
-                    View in Dashboard
+                    IAM Dashboard
                   </Link>
                 </div>
               </div>

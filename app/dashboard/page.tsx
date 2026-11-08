@@ -30,12 +30,117 @@ import { WorkstationOnboardingModal } from "@/components/WorkstationOnboardingMo
 import { useInactivityTimeout } from "@/hooks/useInactivityTimeout";
 import { InactivityWarningModal } from "@/components/session/InactivityWarningModal";
 
+export interface SidebarPreferences {
+  applications: boolean;
+  userDirectory: boolean;
+  auditLogs: boolean;
+  apiDocs: boolean;
+  connectService: boolean;
+  mobileMfa: boolean;
+  downloadApp: boolean;
+  planBilling: boolean;
+  termsAgreements: boolean;
+}
+
 export default function DashboardPage() {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
+
+  // Sidebar Collapse & Nav Customization State
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [navCustomizerOpen, setNavCustomizerOpen] = useState(false);
+  const [sidebarPrefs, setSidebarPrefs] = useState<SidebarPreferences>({
+    applications: true,
+    userDirectory: true,
+    auditLogs: true,
+    apiDocs: true,
+    connectService: true,
+    mobileMfa: true,
+    downloadApp: true,
+    planBilling: true,
+    termsAgreements: true,
+  });
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("sentinel_sidebar_collapsed");
+      if (saved !== null) {
+        setSidebarCollapsed(saved === "true");
+      }
+    } catch {}
+  }, []);
+
+  const toggleSidebarCollapsed = () => {
+    setSidebarCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem("sentinel_sidebar_collapsed", String(next));
+      } catch {}
+      return next;
+    });
+  };
+
+  useEffect(() => {
+    if (!user) return;
+    try {
+      const saved = localStorage.getItem(`sentinel_sidebar_prefs_${user.userId}`);
+      if (saved) {
+        setSidebarPrefs(JSON.parse(saved));
+      } else {
+        const isEmp = Boolean(user.company && user.company.toLowerCase() !== "personal" && user.role !== "ADMIN");
+        const isAdm = user.role === "ADMIN";
+        if (isEmp) {
+          setSidebarPrefs({
+            applications: true,
+            userDirectory: false,
+            auditLogs: false,
+            apiDocs: false,
+            connectService: false,
+            mobileMfa: true,
+            downloadApp: true,
+            planBilling: false,
+            termsAgreements: true,
+          });
+        } else if (isAdm) {
+          setSidebarPrefs({
+            applications: true,
+            userDirectory: true,
+            auditLogs: true,
+            apiDocs: true,
+            connectService: true,
+            mobileMfa: true,
+            downloadApp: true,
+            planBilling: true,
+            termsAgreements: true,
+          });
+        } else {
+          setSidebarPrefs({
+            applications: true,
+            userDirectory: false,
+            auditLogs: false,
+            apiDocs: true,
+            connectService: true,
+            mobileMfa: true,
+            downloadApp: true,
+            planBilling: true,
+            termsAgreements: true,
+          });
+        }
+      }
+    } catch {}
+  }, [user]);
+
+  const updateSidebarPrefs = (newPrefs: SidebarPreferences) => {
+    setSidebarPrefs(newPrefs);
+    if (user?.userId) {
+      try {
+        localStorage.setItem(`sentinel_sidebar_prefs_${user.userId}`, JSON.stringify(newPrefs));
+      } catch {}
+    }
+  };
 
   // Gateway Connectivity & Standby Detection
   const [gatewayStatus, setGatewayStatus] = useState<"checking" | "online" | "cold_starting" | "offline">("checking");
@@ -584,187 +689,284 @@ export default function DashboardPage() {
 
       {/* Left Sidebar */}
       <aside
-        className={`fixed md:relative inset-y-0 left-0 z-40 w-64 sm:w-72 md:w-[260px] bg-slate-950 md:bg-[#070b16] self-stretch min-h-screen shrink-0 border-r border-white/10 transition-transform duration-300 ease-in-out md:translate-x-0 ${
-          sidebarOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
-        }`}
+        className={`fixed md:relative inset-y-0 left-0 z-40 bg-slate-950 md:bg-[#070b16] self-stretch min-h-screen shrink-0 border-r border-white/10 transition-all duration-300 ease-in-out ${
+          sidebarCollapsed ? "w-16 md:w-16" : "w-64 sm:w-72 md:w-[260px]"
+        } ${sidebarOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"}`}
       >
-        <div className="sticky top-0 flex flex-col justify-between h-screen pt-7 pb-6 px-4 sm:px-5 w-full">
+        <div className={`sticky top-0 flex flex-col justify-between h-screen pt-6 pb-6 w-full ${sidebarCollapsed ? "px-2" : "px-4 sm:px-5"}`}>
           <div>
-            {/* Brand Logo & Tenant Badge */}
-            <div className="flex items-center gap-3 select-none px-2 mb-6">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src="/logo.png"
-                alt="Sentinel Logo"
-                className="w-8 h-8 rounded-lg object-contain"
-              />
-              <div className="flex flex-col min-w-0">
-                <span className="text-base font-bold tracking-wider text-white truncate font-orbitron">
-                  Sentinel IAM
-                </span>
-                {isAdmin ? (
-                  <span className="text-[9px] px-1.5 py-0.2 rounded bg-purple-500/10 border border-purple-500/20 text-purple-300 font-semibold uppercase tracking-wider w-max mt-0.5">
-                    Administrator
-                  </span>
-                ) : (
-                  <span className="text-[10px] text-slate-400 truncate font-mono">
-                    {user?.company ? `@${user.company}` : "Employee Portal"}
-                  </span>
+            {/* Brand Logo & Collapse Toggle */}
+            <div className={`flex items-center select-none mb-6 ${sidebarCollapsed ? "flex-col gap-3 justify-center" : "justify-between px-2"}`}>
+              <div className="flex items-center gap-3 min-w-0">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src="/logo.png"
+                  alt="Sentinel Logo"
+                  className="w-8 h-8 rounded-lg object-contain shrink-0"
+                />
+                {!sidebarCollapsed && (
+                  <div className="flex flex-col min-w-0">
+                    <span className="text-base font-bold tracking-wider text-white truncate font-orbitron">
+                      Sentinel IAM
+                    </span>
+                    {isAdmin ? (
+                      <span className="text-[9px] px-1.5 py-0.2 rounded bg-purple-500/10 border border-purple-500/20 text-purple-300 font-semibold uppercase tracking-wider w-max mt-0.5">
+                        Administrator
+                      </span>
+                    ) : (
+                      <span className="text-[10px] text-slate-400 truncate font-mono">
+                        {user?.company ? `@${user.company}` : "Employee Portal"}
+                      </span>
+                    )}
+                  </div>
                 )}
               </div>
+
+              {/* Minimize / Expand Toggle Button */}
+              <button
+                type="button"
+                onClick={toggleSidebarCollapsed}
+                title={sidebarCollapsed ? "Expand sidebar navigation" : "Minimize sidebar navigation"}
+                className="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-slate-400 hover:text-white flex items-center justify-center transition-colors cursor-pointer shrink-0"
+              >
+                {sidebarCollapsed ? (
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M13 5l7 7-7 7M5 5l7 7-7 7" />
+                  </svg>
+                ) : (
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
+                  </svg>
+                )}
+              </button>
             </div>
 
             {/* Primary Navigation */}
             <div className="w-full space-y-1">
-              <div className="px-3 pb-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">
-                Workspace
-              </div>
+              {!sidebarCollapsed && (
+                <div className="px-3 pb-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                  Workspace
+                </div>
+              )}
 
-              <button
-                type="button"
-                className="w-full flex items-center gap-3 px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-white font-medium text-xs transition-all cursor-pointer text-left"
-              >
-                <svg
-                  className="w-4 h-4 text-cyan-400 shrink-0"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
+              {/* Applications / Launchpad */}
+              {sidebarPrefs.applications && (
+                <button
+                  type="button"
+                  title="Applications"
+                  className={`w-full flex items-center rounded-xl bg-white/5 border border-white/10 text-white font-medium text-xs transition-all cursor-pointer text-left ${
+                    sidebarCollapsed ? "justify-center p-2.5" : "gap-3 px-3 py-2"
+                  }`}
                 >
-                  <rect x="2" y="3" width="20" height="15" rx="2" />
-                  <path d="M6 14l3.5-4.5 3 3 4-5" />
-                </svg>
-                <span>Applications</span>
-              </button>
-
-              {isAdmin && (
-                <>
-                  <Link
-                    href="/users"
-                    className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition-all text-left border border-transparent hover:border-white/10 text-slate-400 hover:text-white hover:bg-white/5"
+                  <svg
+                    className="w-4 h-4 text-cyan-400 shrink-0"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
                   >
-                    <div className="flex items-center gap-3">
-                      <svg className="w-4 h-4 text-purple-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-                      </svg>
-                      <span>User Directory</span>
-                    </div>
-                  </Link>
+                    <rect x="2" y="3" width="20" height="15" rx="2" />
+                    <path d="M6 14l3.5-4.5 3 3 4-5" />
+                  </svg>
+                  {!sidebarCollapsed && <span>Applications</span>}
+                </button>
+              )}
 
-                  <Link
-                    href="/users?tab=audit"
-                    className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition-all text-left border border-transparent hover:border-white/10 text-slate-400 hover:text-white hover:bg-white/5"
-                  >
-                    <div className="flex items-center gap-3">
-                      <svg className="w-4 h-4 text-cyan-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                      </svg>
-                      <span>Audit Logs</span>
-                    </div>
+              {/* User Directory (Admin only) */}
+              {isAdmin && sidebarPrefs.userDirectory && (
+                <Link
+                  href="/users"
+                  title="User Directory"
+                  className={`w-full flex items-center rounded-xl text-xs font-medium transition-all text-left border border-transparent hover:border-white/10 text-slate-400 hover:text-white hover:bg-white/5 ${
+                    sidebarCollapsed ? "justify-center p-2.5" : "justify-between px-3 py-2"
+                  }`}
+                >
+                  <div className={`flex items-center ${sidebarCollapsed ? "justify-center" : "gap-3"}`}>
+                    <svg className="w-4 h-4 text-purple-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                    </svg>
+                    {!sidebarCollapsed && <span>User Directory</span>}
+                  </div>
+                </Link>
+              )}
+
+              {/* Audit Logs (Admin only) */}
+              {isAdmin && sidebarPrefs.auditLogs && (
+                <Link
+                  href="/users?tab=audit"
+                  title="Audit Logs"
+                  className={`w-full flex items-center rounded-xl text-xs font-medium transition-all text-left border border-transparent hover:border-white/10 text-slate-400 hover:text-white hover:bg-white/5 ${
+                    sidebarCollapsed ? "justify-center p-2.5" : "justify-between px-3 py-2"
+                  }`}
+                >
+                  <div className={`flex items-center ${sidebarCollapsed ? "justify-center" : "gap-3"}`}>
+                    <svg className="w-4 h-4 text-cyan-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    {!sidebarCollapsed && <span>Audit Logs</span>}
+                  </div>
+                  {!sidebarCollapsed && (
                     <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-cyan-950 text-cyan-400 border border-cyan-800">
                       Live
                     </span>
-                  </Link>
-                </>
+                  )}
+                </Link>
               )}
 
-              {/* Developer & Integration */}
-              <div className="pt-4 px-3 pb-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">
-                Developer &amp; SSO
-              </div>
-
-              <Link
-                href="/docs"
-                className="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-white/5 text-slate-400 hover:text-white font-medium text-xs transition-all text-left border border-transparent hover:border-white/10"
-              >
-                <svg className="w-4 h-4 text-cyan-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
-                </svg>
-                <span>API &amp; Docs</span>
-              </Link>
-
-              <button
-                type="button"
-                onClick={() => setAddModalOpen(true)}
-                className="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-white/5 text-slate-400 hover:text-white font-medium text-xs transition-all text-left border border-transparent hover:border-white/10 cursor-pointer"
-              >
-                <svg className="w-4 h-4 text-cyan-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-                </svg>
-                <span>Connect Service</span>
-              </button>
-
-              {/* Security & Device */}
-              <div className="pt-4 px-3 pb-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">
-                Security &amp; MFA
-              </div>
-
-              <button
-                type="button"
-                onClick={handleOpenPairingModal}
-                className="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-white/5 text-slate-400 hover:text-white font-medium text-xs transition-all cursor-pointer text-left border border-transparent hover:border-white/10"
-              >
-                <svg className="w-4 h-4 text-cyan-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                </svg>
-                <span>Pair Mobile 2FA</span>
-              </button>
-
-              <Link
-                href="/download"
-                className="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-white/5 text-slate-300 hover:text-white font-medium text-xs transition-all text-left border border-transparent hover:border-white/10"
-              >
-                <svg className="w-4 h-4 text-cyan-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 1.5H8.25A2.25 2.25 0 006 3.75v16.5a2.25 2.25 0 002.25 2.25h7.5A2.25 2.25 0 0018 20.25V3.75a2.25 2.25 0 00-2.25-2.25H13.5m-3 0V3h3V1.5m-3 0h3m-3 18.75h3" />
-                </svg>
-                <span>Download Sentinel App</span>
-              </Link>
-
-              {/* Billing & Subscription Plan */}
-              <div className="pt-4 px-3 pb-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">
-                Subscription &amp; Tier
-              </div>
-
-              <Link
-                href="/pricing"
-                className="w-full flex items-center justify-between px-3 py-2 rounded-xl hover:bg-white/5 text-slate-400 hover:text-white font-medium text-xs transition-all text-left border border-transparent hover:border-white/10"
-              >
-                <div className="flex items-center gap-3">
-                  <svg className="w-4 h-4 text-emerald-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
-                  </svg>
-                  <span>Plan &amp; Billing</span>
+              {/* Developer & Integration Section */}
+              {!isEnterpriseEmployee && (sidebarPrefs.apiDocs || sidebarPrefs.connectService) && !sidebarCollapsed && (
+                <div className="pt-4 px-3 pb-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                  Developer &amp; SSO
                 </div>
-                <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-emerald-950 text-emerald-400 border border-emerald-800 uppercase font-bold">
-                  {user?.subscriptionTier || "COMMUNITY"}
-                </span>
-              </Link>
+              )}
+
+              {!isEnterpriseEmployee && sidebarPrefs.apiDocs && (
+                <Link
+                  href="/docs"
+                  title="API & Documentation"
+                  className={`w-full flex items-center rounded-xl hover:bg-white/5 text-slate-400 hover:text-white font-medium text-xs transition-all text-left border border-transparent hover:border-white/10 ${
+                    sidebarCollapsed ? "justify-center p-2.5" : "gap-3 px-3 py-2"
+                  }`}
+                >
+                  <svg className="w-4 h-4 text-cyan-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+                  </svg>
+                  {!sidebarCollapsed && <span>API &amp; Docs</span>}
+                </Link>
+              )}
+
+              {!isEnterpriseEmployee && sidebarPrefs.connectService && (
+                <button
+                  type="button"
+                  title="Connect Service"
+                  onClick={() => setAddModalOpen(true)}
+                  className={`w-full flex items-center rounded-xl hover:bg-white/5 text-slate-400 hover:text-white font-medium text-xs transition-all text-left border border-transparent hover:border-white/10 cursor-pointer ${
+                    sidebarCollapsed ? "justify-center p-2.5" : "gap-3 px-3 py-2"
+                  }`}
+                >
+                  <svg className="w-4 h-4 text-cyan-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                  </svg>
+                  {!sidebarCollapsed && <span>Connect Service</span>}
+                </button>
+              )}
+
+              {/* Security & Device Section */}
+              {(sidebarPrefs.mobileMfa || sidebarPrefs.downloadApp) && !sidebarCollapsed && (
+                <div className="pt-4 px-3 pb-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                  Security &amp; MFA
+                </div>
+              )}
+
+              {sidebarPrefs.mobileMfa && (
+                <button
+                  type="button"
+                  title="Pair Mobile 2FA"
+                  onClick={handleOpenPairingModal}
+                  className={`w-full flex items-center rounded-xl hover:bg-white/5 text-slate-400 hover:text-white font-medium text-xs transition-all cursor-pointer text-left border border-transparent hover:border-white/10 ${
+                    sidebarCollapsed ? "justify-center p-2.5" : "gap-3 px-3 py-2"
+                  }`}
+                >
+                  <svg className="w-4 h-4 text-cyan-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                  </svg>
+                  {!sidebarCollapsed && <span>Pair Mobile 2FA</span>}
+                </button>
+              )}
+
+              {sidebarPrefs.downloadApp && (
+                <Link
+                  href="/download"
+                  title="Download Sentinel App"
+                  className={`w-full flex items-center rounded-xl hover:bg-white/5 text-slate-300 hover:text-white font-medium text-xs transition-all text-left border border-transparent hover:border-white/10 ${
+                    sidebarCollapsed ? "justify-center p-2.5" : "gap-3 px-3 py-2"
+                  }`}
+                >
+                  <svg className="w-4 h-4 text-cyan-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 1.5H8.25A2.25 2.25 0 006 3.75v16.5a2.25 2.25 0 002.25 2.25h7.5A2.25 2.25 0 0018 20.25V3.75a2.25 2.25 0 00-2.25-2.25H13.5m-3 0V3h3V1.5m-3 0h3m-3 18.75h3" />
+                  </svg>
+                  {!sidebarCollapsed && <span>Download App</span>}
+                </Link>
+              )}
+
+              {/* Billing & Subscription Plan (Admin only) */}
+              {isAdmin && sidebarPrefs.planBilling && !sidebarCollapsed && (
+                <div className="pt-4 px-3 pb-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                  Subscription &amp; Tier
+                </div>
+              )}
+
+              {isAdmin && sidebarPrefs.planBilling && (
+                <Link
+                  href="/pricing"
+                  title="Plan & Billing"
+                  className={`w-full flex items-center rounded-xl hover:bg-white/5 text-slate-400 hover:text-white font-medium text-xs transition-all text-left border border-transparent hover:border-white/10 ${
+                    sidebarCollapsed ? "justify-center p-2.5" : "justify-between px-3 py-2"
+                  }`}
+                >
+                  <div className={`flex items-center ${sidebarCollapsed ? "justify-center" : "gap-3"}`}>
+                    <svg className="w-4 h-4 text-emerald-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                    </svg>
+                    {!sidebarCollapsed && <span>Plan &amp; Billing</span>}
+                  </div>
+                  {!sidebarCollapsed && (
+                    <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-emerald-950 text-emerald-400 border border-emerald-800 uppercase font-bold">
+                      {user?.subscriptionTier || "COMMUNITY"}
+                    </span>
+                  )}
+                </Link>
+              )}
             </div>
           </div>
 
           {/* Bottom Utility Area */}
           <div className="pt-3 border-t border-white/10 space-y-1">
-            <Link
-              href="/terms"
-              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-slate-400 hover:text-slate-200 transition-colors text-xs font-medium"
+            {/* Customize Navigation Button */}
+            <button
+              type="button"
+              onClick={() => setNavCustomizerOpen(true)}
+              title="Customize Sidebar Navigation"
+              className={`w-full flex items-center rounded-xl text-slate-400 hover:text-slate-200 hover:bg-white/5 transition-colors text-xs font-medium cursor-pointer ${
+                sidebarCollapsed ? "justify-center p-2.5" : "gap-2.5 px-3 py-2"
+              }`}
             >
-              <svg className="w-3.5 h-3.5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              <svg className="w-3.5 h-3.5 text-slate-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
               </svg>
-              <span>Terms &amp; Agreements</span>
-            </Link>
+              {!sidebarCollapsed && <span>Customize View</span>}
+            </button>
+
+            {sidebarPrefs.termsAgreements && (
+              <Link
+                href="/terms"
+                title="Terms & Agreements"
+                className={`w-full flex items-center rounded-xl text-slate-400 hover:text-slate-200 hover:bg-white/5 transition-colors text-xs font-medium ${
+                  sidebarCollapsed ? "justify-center p-2.5" : "gap-2.5 px-3 py-2"
+                }`}
+              >
+                <svg className="w-3.5 h-3.5 text-slate-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                {!sidebarCollapsed && <span>Terms &amp; Agreements</span>}
+              </Link>
+            )}
 
             <button
               type="button"
               onClick={handleLogout}
-              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl hover:bg-rose-500/10 text-slate-400 hover:text-rose-400 transition-colors text-xs font-medium cursor-pointer"
+              title="Sign out"
+              className={`w-full flex items-center rounded-xl hover:bg-rose-500/10 text-slate-400 hover:text-rose-400 transition-colors text-xs font-medium cursor-pointer ${
+                sidebarCollapsed ? "justify-center p-2.5" : "gap-2.5 px-3 py-2"
+              }`}
             >
               <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
               </svg>
-              <span>Sign out</span>
+              {!sidebarCollapsed && <span>Sign out</span>}
             </button>
           </div>
         </div>
@@ -2484,6 +2686,183 @@ export default function DashboardPage() {
                 className="px-4 py-2 rounded-xl bg-red-500/20 hover:bg-red-500/30 text-red-200 border border-red-500/30 text-xs font-medium transition-colors cursor-pointer"
               >
                 Understood
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Sidebar Navigation Customizer Modal */}
+      {navCustomizerOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-150">
+          <div className="relative w-full max-w-lg rounded-2xl bg-slate-950 border border-white/10 p-6 shadow-2xl text-white">
+            <div className="flex items-start justify-between pb-4 border-b border-white/10">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400">
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="text-base font-semibold text-white">Customize Sidebar Navigation</h3>
+                  <p className="text-xs text-slate-400 mt-0.5">Configure personalized workspace navigation view and role presets</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setNavCustomizerOpen(false)}
+                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-white/5 cursor-pointer"
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Account Role Presets */}
+            <div className="mt-4">
+              <label className="text-[11px] font-semibold text-slate-300 uppercase tracking-wider block mb-2">
+                Quick Role Presets:
+              </label>
+              <div className="grid grid-cols-3 gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    updateSidebarPrefs({
+                      applications: true,
+                      userDirectory: isAdmin,
+                      auditLogs: isAdmin,
+                      apiDocs: !isEnterpriseEmployee,
+                      connectService: !isEnterpriseEmployee,
+                      mobileMfa: true,
+                      downloadApp: true,
+                      planBilling: isAdmin,
+                      termsAgreements: true,
+                    });
+                  }}
+                  className="px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-medium text-slate-200 transition-colors cursor-pointer text-center"
+                >
+                  IT Admin View
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    updateSidebarPrefs({
+                      applications: true,
+                      userDirectory: false,
+                      auditLogs: false,
+                      apiDocs: !isEnterpriseEmployee,
+                      connectService: !isEnterpriseEmployee,
+                      mobileMfa: true,
+                      downloadApp: true,
+                      planBilling: false,
+                      termsAgreements: true,
+                    });
+                  }}
+                  className="px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-medium text-slate-200 transition-colors cursor-pointer text-center"
+                >
+                  Collaborator
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    updateSidebarPrefs({
+                      applications: true,
+                      userDirectory: false,
+                      auditLogs: false,
+                      apiDocs: false,
+                      connectService: false,
+                      mobileMfa: true,
+                      downloadApp: true,
+                      planBilling: false,
+                      termsAgreements: true,
+                    });
+                  }}
+                  className="px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-medium text-slate-200 transition-colors cursor-pointer text-center"
+                >
+                  Employee View
+                </button>
+              </div>
+            </div>
+
+            {/* Toggle Checklist */}
+            <div className="mt-5 space-y-2.5 max-h-[48vh] overflow-y-auto pr-1">
+              {[
+                { key: "applications" as const, label: "Applications (Launchpad)", desc: "SSO Application dashboard & assigned services", disabled: false },
+                { key: "userDirectory" as const, label: "User Directory", desc: "Employee directory and identity provisioning", disabled: !isAdmin, restrictionText: "Requires Admin Role" },
+                { key: "auditLogs" as const, label: "Audit Logs", desc: "Real-time compliance activity feed", disabled: !isAdmin, restrictionText: "Requires Admin Role" },
+                { key: "apiDocs" as const, label: "Developer API & Docs", desc: "Identity Gateway protocols and code samples", disabled: isEnterpriseEmployee, restrictionText: "Restricted by Policy" },
+                { key: "connectService" as const, label: "Connect Service", desc: "Integrate custom SaaS and OAuth services", disabled: isEnterpriseEmployee, restrictionText: "Restricted by Policy" },
+                { key: "mobileMfa" as const, label: "Pair Mobile 2FA", desc: "Sentinel Authenticator key pairing", disabled: false },
+                { key: "downloadApp" as const, label: "Download Mobile App", desc: "Mobile Authenticator APK download link", disabled: false },
+                { key: "planBilling" as const, label: "Subscription & Billing", desc: "Enterprise plan upgrade & billing invoices", disabled: !isAdmin, restrictionText: "Requires Admin Role" },
+                { key: "termsAgreements" as const, label: "Terms & Agreements", desc: "Compliance terms and privacy policies", disabled: false },
+              ].map((item) => (
+                <div
+                  key={item.key}
+                  className={`flex items-center justify-between p-3 rounded-xl border transition-colors ${
+                    item.disabled
+                      ? "bg-slate-900/20 border-white/5 opacity-50"
+                      : "bg-slate-900/60 border-white/10 hover:border-cyan-500/30"
+                  }`}
+                >
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-semibold text-white">{item.label}</span>
+                      {item.disabled && item.restrictionText && (
+                        <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-amber-500/10 border border-amber-500/20 text-amber-300">
+                          {item.restrictionText}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-slate-400 mt-0.5">{item.desc}</p>
+                  </div>
+
+                  <input
+                    type="checkbox"
+                    checked={item.disabled ? false : Boolean(sidebarPrefs[item.key])}
+                    disabled={item.disabled}
+                    onChange={(e) => {
+                      updateSidebarPrefs({
+                        ...sidebarPrefs,
+                        [item.key]: e.target.checked,
+                      });
+                    }}
+                    className="w-4 h-4 rounded border-white/20 bg-slate-950 text-cyan-500 focus:ring-0 focus:ring-offset-0 cursor-pointer disabled:cursor-not-allowed"
+                  />
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-5 pt-3 border-t border-white/10 flex items-center justify-between">
+              <button
+                type="button"
+                onClick={() => {
+                  const defaultPrefs: SidebarPreferences = {
+                    applications: true,
+                    userDirectory: isAdmin,
+                    auditLogs: isAdmin,
+                    apiDocs: !isEnterpriseEmployee,
+                    connectService: !isEnterpriseEmployee,
+                    mobileMfa: true,
+                    downloadApp: true,
+                    planBilling: isAdmin,
+                    termsAgreements: true,
+                  };
+                  updateSidebarPrefs(defaultPrefs);
+                }}
+                className="text-xs text-slate-400 hover:text-white transition-colors cursor-pointer"
+              >
+                Reset to Defaults
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setNavCustomizerOpen(false)}
+                className="px-4 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-xs font-bold transition-colors cursor-pointer"
+              >
+                Done
               </button>
             </div>
           </div>
