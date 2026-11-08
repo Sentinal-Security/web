@@ -147,6 +147,7 @@ function LoginPageContent() {
               role: resolvedRole,
               company: resolvedCompany,
               mfaEnabled: true,
+              passwordResetRequired: res.data.passwordResetRequired,
             }, res.data.ssoToken);
             handleSuccessfulHandoff(finalUserId, finalEmail, res.data.ssoToken);
           } else if (res.data.status === "DENIED") {
@@ -204,6 +205,7 @@ function LoginPageContent() {
             role: (res.role as any) || "USER",
             company: res.company || "",
             mfaEnabled: false,
+            passwordResetRequired: res.passwordResetRequired,
           }, res.ssoToken);
           router.push("/dashboard?setup_mfa=required");
           return;
@@ -229,6 +231,7 @@ function LoginPageContent() {
             role: (res.role as any) || "USER",
             company: res.company || "",
             mfaEnabled: false,
+            passwordResetRequired: res.passwordResetRequired,
           }, res.ssoToken);
           handleSuccessfulHandoff(res.userId || 1, res.email || email.trim(), res.ssoToken);
         }
@@ -280,6 +283,7 @@ function LoginPageContent() {
           role: resolvedRole,
           company: resolvedCompany,
           mfaEnabled: true,
+          passwordResetRequired: res.passwordResetRequired,
         }, res.ssoToken);
         handleSuccessfulHandoff(finalUserId, finalEmail, res.ssoToken);
       }
@@ -320,6 +324,7 @@ function LoginPageContent() {
           role: resolvedRole,
           company: resolvedCompany,
           mfaEnabled: true,
+          passwordResetRequired: res.passwordResetRequired,
         }, res.ssoToken);
         handleSuccessfulHandoff(finalUserId, finalEmail, res.ssoToken);
       }

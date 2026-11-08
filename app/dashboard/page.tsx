@@ -20,11 +20,13 @@ import {
   changeUserPassword,
   getPersonalAuditLogs,
   validateSsoSession,
+  launchUserService,
 } from "@/lib/api";
 import { SessionDto } from "@/types/admin";
 import { SecurityAuditRecord } from "@/types/audit";
 import { PasswordEntropyMeter } from "@/components/PasswordEntropyMeter";
 import { PasswordToggleAdornment } from "@/components/PasswordToggleAdornment";
+import { WorkstationOnboardingModal } from "@/components/WorkstationOnboardingModal";
 import { useInactivityTimeout } from "@/hooks/useInactivityTimeout";
 import { InactivityWarningModal } from "@/components/session/InactivityWarningModal";
 
@@ -161,6 +163,52 @@ export default function DashboardPage() {
   } = useIntegrations(user?.userId);
 
   const isAdmin = user?.role === "ADMIN";
+  const isEnterpriseEmployee = Boolean(user?.company && user.company.toLowerCase() !== "personal" && user.role !== "ADMIN");
+  const [forbiddenModal, setForbiddenModal] = useState<{ appName: string; reason: string } | null>(null);
+  const [launchingAppId, setLaunchingAppId] = useState<string | null>(null);
+
+  const handleLaunchApp = async (app: AppIntegration, e: React.MouseEvent) => {
+    e.preventDefault();
+    if (app.backendId && user?.userId) {
+      setLaunchingAppId(String(app.id));
+      const res = await launchUserService(Number(app.backendId), { userId: user.userId });
+      setLaunchingAppId(null);
+      if (!res.success) {
+        setForbiddenModal({
+          appName: app.name,
+          reason: res.message || "Access Denied (403): You do not have permission to access this service.",
+        });
+        return;
+      }
+      const targetUrl = res.data?.redirectUrl || app.loginUrl;
+      const ssoTokenValue = res.data?.ssoToken || ssoToken;
+      const isExternal = Boolean(targetUrl && (targetUrl.startsWith("http://") || targetUrl.startsWith("https://")));
+      const tokenParam = ssoTokenValue ? `&ssoToken=${ssoTokenValue}` : "";
+      const destination = isExternal && targetUrl
+        ? `${targetUrl}${targetUrl.includes("?") ? "&" : "?"}ssoUserId=${user.userId}&ssoEmail=${encodeURIComponent(user.email || "")}${tokenParam}`
+        : (targetUrl || `/apps/${app.id}`);
+
+      if (isExternal) {
+        window.open(destination, "_blank", "noopener,noreferrer");
+      } else {
+        router.push(destination);
+      }
+      return;
+    }
+
+    // Direct fallback if no backend ID
+    const isExternal = Boolean(app.loginUrl && (app.loginUrl.startsWith("http://") || app.loginUrl.startsWith("https://")));
+    const tokenParam = ssoToken ? `&ssoToken=${ssoToken}` : "";
+    const launchHref = isExternal && app.loginUrl && user?.userId
+      ? `${app.loginUrl}${app.loginUrl.includes("?") ? "&" : "?"}ssoUserId=${user.userId}&ssoEmail=${encodeURIComponent(user.email || "")}${tokenParam}`
+      : (app.loginUrl || `/apps/${app.id}`);
+
+    if (isExternal) {
+      window.open(launchHref, "_blank", "noopener,noreferrer");
+    } else {
+      router.push(launchHref);
+    }
+  };
 
   // MFA Pairing Modal State
   const [pairingModalOpen, setPairingModalOpen] = useState(false);
@@ -1105,18 +1153,26 @@ export default function DashboardPage() {
         <div className="mt-6 mb-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-white/5">
           <div>
             <div className="flex items-center gap-2.5">
-              <h1 className="text-lg font-semibold text-white tracking-tight">Applications</h1>
+              <h1 className="text-lg font-semibold text-white tracking-tight">
+                {isEnterpriseEmployee ? "Workstation Launchpad" : "Applications"}
+              </h1>
               <span className="px-2 py-0.5 rounded text-[11px] font-mono font-medium bg-white/5 border border-white/10 text-slate-300">
                 {apps.length} active
               </span>
-              {isAdmin && (
+              {isAdmin ? (
                 <span className="text-[10px] px-2 py-0.5 rounded bg-purple-500/10 border border-purple-400/30 text-purple-300 font-semibold uppercase">
                   Admin
                 </span>
-              )}
+              ) : isEnterpriseEmployee ? (
+                <span className="text-[10px] px-2 py-0.5 rounded bg-cyan-500/10 border border-cyan-400/30 text-cyan-300 font-semibold uppercase font-mono">
+                  Whitelist Policy Enforced
+                </span>
+              ) : null}
             </div>
             <p className="text-xs text-slate-400 mt-0.5">
-              Enterprise single sign-on directory for <span className="text-slate-300 font-mono">{user?.email || "internal tenant"}</span>
+              {isEnterpriseEmployee
+                ? `Whitelisted company applications for ${user?.fullName || user?.email} (${user?.role}) under ${user?.company}`
+                : `Enterprise single sign-on directory for ${user?.email || "internal tenant"}`}
             </p>
           </div>
 
@@ -1146,28 +1202,48 @@ export default function DashboardPage() {
               </button>
             )}
 
-            <Link
-              href="/docs"
-              className="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white text-xs font-medium transition-colors flex items-center gap-1.5"
-            >
-              <svg className="w-3.5 h-3.5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
-              </svg>
-              <span>API Docs</span>
-            </Link>
+            {!isEnterpriseEmployee && (
+              <>
+                <Link
+                  href="/docs"
+                  className="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white text-xs font-medium transition-colors flex items-center gap-1.5"
+                >
+                  <svg className="w-3.5 h-3.5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+                  </svg>
+                  <span>API Docs</span>
+                </Link>
 
-            <button
-              type="button"
-              onClick={() => setAddModalOpen(true)}
-              className="px-3 py-1.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-xs font-semibold transition-colors cursor-pointer flex items-center gap-1.5"
-            >
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-              </svg>
-              <span>Add Application</span>
-            </button>
+                <button
+                  type="button"
+                  onClick={() => setAddModalOpen(true)}
+                  className="px-3 py-1.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-xs font-semibold transition-colors cursor-pointer flex items-center gap-1.5"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                  </svg>
+                  <span>Add Application</span>
+                </button>
+              </>
+            )}
           </div>
         </div>
+
+        {gatewayStatus === "offline" && (
+          <div className="mb-5 p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+              <span>Sentinel Security Gateway is initializing. If services are slow to load, please wait a moment and refresh.</span>
+            </div>
+            <button
+              type="button"
+              onClick={probeGateway}
+              className="px-2.5 py-1 rounded bg-amber-400/20 hover:bg-amber-400/30 text-amber-200 text-xs font-semibold transition-colors cursor-pointer"
+            >
+              Retry Connection
+            </button>
+          </div>
+        )}
 
         {/* Dynamic Content: Loading vs Empty State vs Configured Services Grid */}
         {servicesLoading ? (
@@ -1194,49 +1270,49 @@ export default function DashboardPage() {
             )}
           </div>
         ) : filteredApps.length === 0 ? (
-          /* Clean Empty State (Newly Created Accounts Start Clean) */
+          /* Clean Empty State */
           <div className="flex-1 flex flex-col items-center justify-center p-8 sm:p-12 rounded-xl bg-slate-900/20 border border-dashed border-white/10 text-center min-h-[300px]">
             <div className="w-10 h-10 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-slate-400 mb-3">
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
               </svg>
             </div>
-            <h3 className="text-sm font-semibold text-white tracking-tight">No Applications Configured</h3>
+            <h3 className="text-sm font-semibold text-white tracking-tight">
+              {isEnterpriseEmployee ? "No Workstation Services Assigned" : "No Applications Configured"}
+            </h3>
             <p className="text-xs text-slate-400 max-w-sm mt-1 leading-relaxed">
-              Your account currently has no active integrations. Connect an enterprise template or register a custom application.
+              {isEnterpriseEmployee
+                ? "Your company IT administrator has not assigned any enterprise applications to your profile yet. Please contact IT support to request access."
+                : "Your account currently has no active integrations. Connect an enterprise template or register a custom application."}
             </p>
 
-            {/* Quick 1-Click Template Accelerators */}
-            <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
-              {boilerplateTemplates.slice(0, 3).map((tpl) => (
+            {!isEnterpriseEmployee && (
+              <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
+                {boilerplateTemplates.slice(0, 3).map((tpl) => (
+                  <button
+                    key={tpl.id}
+                    type="button"
+                    disabled={connectingId === tpl.id}
+                    onClick={() => handleConnectTemplate(tpl.id)}
+                    className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-white/10 text-xs font-medium text-slate-200 hover:text-white transition-colors cursor-pointer flex items-center gap-1.5"
+                  >
+                    <span>+ Add {tpl.name}</span>
+                  </button>
+                ))}
                 <button
-                  key={tpl.id}
                   type="button"
-                  disabled={connectingId === tpl.id}
-                  onClick={() => handleConnectTemplate(tpl.id)}
-                  className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-white/10 text-xs font-medium text-slate-200 hover:text-white transition-colors cursor-pointer flex items-center gap-1.5"
+                  onClick={() => setAddModalOpen(true)}
+                  className="px-3 py-1.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-semibold text-xs transition-colors cursor-pointer"
                 >
-                  <span>+ Add {tpl.name}</span>
+                  Browse All Templates
                 </button>
-              ))}
-              <button
-                type="button"
-                onClick={() => setAddModalOpen(true)}
-                className="px-3 py-1.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-semibold text-xs transition-colors cursor-pointer"
-              >
-                Browse All Templates
-              </button>
-            </div>
+              </div>
+            )}
           </div>
         ) : (
           /* Configured Services Grid */
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5 w-full">
             {filteredApps.map((app) => {
-              const isExternal = Boolean(app.loginUrl && (app.loginUrl.startsWith("http://") || app.loginUrl.startsWith("https://")));
-              const tokenParam = ssoToken ? `&ssoToken=${ssoToken}` : "";
-              const launchHref = isExternal && app.loginUrl && user?.userId
-                ? `${app.loginUrl}${app.loginUrl.includes("?") ? "&" : "?"}ssoUserId=${user.userId}&ssoEmail=${encodeURIComponent(user.email || "")}${tokenParam}`
-                : (app.loginUrl || `/apps/${app.id}`);
               return (
                 <div
                   key={app.id}
@@ -1260,52 +1336,57 @@ export default function DashboardPage() {
                     </div>
 
                     <div className="flex items-center gap-1.5">
+                      {!isEnterpriseEmployee && (
+                        <button
+                          type="button"
+                          onClick={() => removeApp(app.id)}
+                          title="Remove integration"
+                          className="w-7 h-7 rounded-md bg-white/5 border border-white/5 hover:border-red-500/30 hover:bg-red-500/10 text-slate-400 hover:text-red-400 flex items-center justify-center transition-colors cursor-pointer"
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                      )}
+
                       <button
                         type="button"
-                        onClick={() => removeApp(app.id)}
-                        title="Remove integration"
-                        className="w-7 h-7 rounded-md bg-white/5 border border-white/5 hover:border-red-500/30 hover:bg-red-500/10 text-slate-400 hover:text-red-400 flex items-center justify-center transition-colors cursor-pointer"
-                      >
-                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
-                      </button>
-
-                      <Link
-                        href={launchHref}
-                        target={isExternal ? "_blank" : undefined}
-                        rel={isExternal ? "noopener noreferrer" : undefined}
+                        onClick={(e) => handleLaunchApp(app, e)}
                         className="w-7 h-7 rounded-md bg-white/5 border border-white/5 hover:border-cyan-500/30 hover:bg-cyan-500/10 text-slate-400 hover:text-cyan-300 flex items-center justify-center transition-colors cursor-pointer"
                         title="Launch service"
                       >
-                        <svg
-                          className="w-3.5 h-3.5"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            d="M7 17L17 7M17 7H9M17 7V15"
-                          />
-                        </svg>
-                      </Link>
+                        {launchingAppId === String(app.id) ? (
+                          <div className="w-3.5 h-3.5 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin" />
+                        ) : (
+                          <svg
+                            className="w-3.5 h-3.5"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              d="M7 17L17 7M17 7H9M17 7V15"
+                            />
+                          </svg>
+                        )}
+                      </button>
                     </div>
                   </div>
 
                   {/* Card Bottom Area: App Name, Category, and Status Pill */}
                   <div className="mt-4">
-                    <Link
-                      href={launchHref}
-                      target={isExternal ? "_blank" : undefined}
-                      rel={isExternal ? "noopener noreferrer" : undefined}
+                    <button
+                      type="button"
+                      onClick={(e) => handleLaunchApp(app, e)}
+                      className="text-left w-full group-hover:text-cyan-300 transition-colors cursor-pointer truncate"
                     >
-                      <h3 className="text-sm font-semibold text-white tracking-tight group-hover:text-cyan-300 transition-colors cursor-pointer truncate">
+                      <h3 className="text-sm font-semibold text-white tracking-tight truncate">
                         {app.name}
                       </h3>
-                    </Link>
+                    </button>
                     <p className="text-xs text-slate-400 truncate mt-0.5">
                       {app.category}
                     </p>
@@ -2351,6 +2432,58 @@ export default function DashboardPage() {
                 className="py-1.5 px-4 rounded-xl bg-white/5 hover:bg-white/10 text-white text-xs font-medium transition-colors cursor-pointer"
               >
                 Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* First-Time Workstation Onboarding Gate Modal */}
+      {user && (user.passwordResetRequired || (mfaMandateActive && !user.mfaEnabled)) && (
+        <WorkstationOnboardingModal
+          user={user}
+          ssoToken={ssoToken}
+          mfaMandated={mfaMandateActive}
+          onComplete={() => {
+            const refreshed = getStoredSession();
+            if (refreshed?.user) {
+              setUser(refreshed.user);
+            }
+          }}
+        />
+      )}
+
+      {/* 403 Whitelist Policy Access Denied Modal */}
+      {forbiddenModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-150">
+          <div className="relative w-full max-w-md rounded-2xl bg-slate-950 border border-red-500/30 p-6 shadow-2xl text-white">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-red-500/10 border border-red-500/20 flex items-center justify-center text-red-400 shrink-0">
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-base font-semibold text-white">Access Denied (403 Forbidden)</h3>
+                <p className="text-xs text-red-300 font-mono mt-0.5">{forbiddenModal.appName || "Service Gateway"}</p>
+              </div>
+            </div>
+
+            <p className="mt-4 text-xs text-slate-300 leading-relaxed">
+              {forbiddenModal.reason}
+            </p>
+
+            <div className="mt-4 p-3 rounded-lg bg-white/5 border border-white/10 text-[11px] text-slate-400 leading-relaxed">
+              Under organization zero-trust policy, employees are restricted to strictly assigned workstation services. Contact your workspace IT administrator to request access assignment.
+            </div>
+
+            <div className="mt-5 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setForbiddenModal(null)}
+                className="px-4 py-2 rounded-xl bg-red-500/20 hover:bg-red-500/30 text-red-200 border border-red-500/30 text-xs font-medium transition-colors cursor-pointer"
+              >
+                Understood
               </button>
             </div>
           </div>

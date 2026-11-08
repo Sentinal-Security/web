@@ -6,6 +6,7 @@ export interface User {
   company?: string;
   subscriptionTier?: "COMMUNITY" | "PROFESSIONAL" | "ENTERPRISE" | string;
   mfaEnabled: boolean;
+  passwordResetRequired?: boolean;
 }
 
 export interface AuthSession {
@@ -64,6 +65,7 @@ export interface AuthResponse {
   recoveryCodes?: string[];
   mfaEnrollmentRequired?: boolean;
   mfaEnforced?: boolean;
+  passwordResetRequired?: boolean;
 }
 
 export interface GenericApiResponse<T = any> {

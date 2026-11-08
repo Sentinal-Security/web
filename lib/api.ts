@@ -239,6 +239,7 @@ export async function getMfaChallengeStatus(challengeId: number): Promise<{
     role?: string;
     company?: string;
     ssoToken?: string;
+    passwordResetRequired?: boolean;
   };
 }> {
   try {
