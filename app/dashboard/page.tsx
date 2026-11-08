@@ -21,6 +21,9 @@ import {
   getPersonalAuditLogs,
   validateSsoSession,
   launchUserService,
+  initiateMfaChallenge,
+  getMfaChallengeStatus,
+  respondToMfaChallenge,
 } from "@/lib/api";
 import { SessionDto } from "@/types/admin";
 import { SecurityAuditRecord } from "@/types/audit";
@@ -298,6 +301,76 @@ export default function DashboardPage() {
   const [forbiddenModal, setForbiddenModal] = useState<{ appName: string; reason: string } | null>(null);
   const [launchingAppId, setLaunchingAppId] = useState<string | null>(null);
 
+  // Step-Up Service Sign-In Approval State
+  const [serviceApprovalModal, setServiceApprovalModal] = useState<{
+    app: AppIntegration;
+    challengeId: number;
+    matchCode: string;
+    destination: string;
+    status: "PENDING" | "APPROVED" | "DENIED" | "EXPIRED";
+    isExternal: boolean;
+  } | null>(null);
+  const [approvalActionLoading, setApprovalActionLoading] = useState(false);
+
+  // Poll for Mobile Push Challenge resolution when service approval is active
+  useEffect(() => {
+    if (!serviceApprovalModal || serviceApprovalModal.status !== "PENDING") return;
+
+    const interval = setInterval(async () => {
+      try {
+        const res = await getMfaChallengeStatus(serviceApprovalModal.challengeId);
+        if (res.success && res.data) {
+          if (res.data.status === "APPROVED") {
+            clearInterval(interval);
+            setServiceApprovalModal((prev) => (prev ? { ...prev, status: "APPROVED" } : null));
+            setTimeout(() => {
+              if (serviceApprovalModal.isExternal) {
+                window.open(serviceApprovalModal.destination, "_blank", "noopener,noreferrer");
+              } else {
+                router.push(serviceApprovalModal.destination);
+              }
+              setServiceApprovalModal(null);
+            }, 800);
+          } else if (res.data.status === "DENIED") {
+            clearInterval(interval);
+            setServiceApprovalModal((prev) => (prev ? { ...prev, status: "DENIED" } : null));
+          } else if (res.data.status === "EXPIRED") {
+            clearInterval(interval);
+            setServiceApprovalModal((prev) => (prev ? { ...prev, status: "EXPIRED" } : null));
+          }
+        }
+      } catch {}
+    }, 1500);
+
+    return () => clearInterval(interval);
+  }, [serviceApprovalModal, router]);
+
+  const handleApproveServiceLogin = async () => {
+    if (!serviceApprovalModal) return;
+    setApprovalActionLoading(true);
+    const res = await respondToMfaChallenge(serviceApprovalModal.challengeId, "APPROVE");
+    setApprovalActionLoading(false);
+    if (res.success) {
+      setServiceApprovalModal((prev) => (prev ? { ...prev, status: "APPROVED" } : null));
+      setTimeout(() => {
+        if (serviceApprovalModal.isExternal) {
+          window.open(serviceApprovalModal.destination, "_blank", "noopener,noreferrer");
+        } else {
+          router.push(serviceApprovalModal.destination);
+        }
+        setServiceApprovalModal(null);
+      }, 700);
+    }
+  };
+
+  const handleDenyServiceLogin = async () => {
+    if (!serviceApprovalModal) return;
+    setApprovalActionLoading(true);
+    await respondToMfaChallenge(serviceApprovalModal.challengeId, "DENY");
+    setApprovalActionLoading(false);
+    setServiceApprovalModal((prev) => (prev ? { ...prev, status: "DENIED" } : null));
+  };
+
   const handleLaunchApp = async (app: AppIntegration, e: React.MouseEvent) => {
     e.preventDefault();
     if (gatewayStatus === "offline") {
@@ -325,6 +398,28 @@ export default function DashboardPage() {
       const destination = isExternal && targetUrl
         ? `${targetUrl}${targetUrl.includes("?") ? "&" : "?"}ssoUserId=${user.userId}&ssoEmail=${encodeURIComponent(user.email || "")}${tokenParam}`
         : (targetUrl || `/apps/${app.id}`);
+
+      // Require step-up sign-in approval if user has 2FA enabled or workstation security policy applies
+      if (user.mfaEnabled || isEnterpriseEmployee) {
+        setLaunchingAppId(String(app.id));
+        const challengeRes = await initiateMfaChallenge(
+          user.userId,
+          user.email,
+          `${app.name} Workstation Login`
+        );
+        setLaunchingAppId(null);
+        if (challengeRes.success && challengeRes.data) {
+          setServiceApprovalModal({
+            app,
+            challengeId: challengeRes.data.challengeId,
+            matchCode: challengeRes.data.matchCode,
+            destination,
+            status: "PENDING",
+            isExternal,
+          });
+          return;
+        }
+      }
 
       if (isExternal) {
         window.open(destination, "_blank", "noopener,noreferrer");
@@ -2748,6 +2843,142 @@ export default function DashboardPage() {
                 Understood
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Step-Up Service Sign-In Authorization Modal */}
+      {serviceApprovalModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-150">
+          <div className="relative w-full max-w-md rounded-2xl bg-slate-950 border border-cyan-500/40 p-6 shadow-2xl text-white">
+            <div className="flex items-center justify-between pb-3 border-b border-white/10">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400 shrink-0">
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white tracking-tight">Authorize Service Sign-In</h3>
+                  <p className="text-xs text-cyan-300 font-mono mt-0.5">{serviceApprovalModal.app.name}</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setServiceApprovalModal(null)}
+                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-white/5 cursor-pointer"
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {serviceApprovalModal.status === "PENDING" && (
+              <div className="mt-4 space-y-4">
+                <div className="p-3.5 rounded-xl bg-slate-900 border border-white/10 text-center space-y-1">
+                  <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Security Match Number</span>
+                  <div className="text-3xl font-extrabold text-cyan-300 font-mono tracking-widest py-1">
+                    {serviceApprovalModal.matchCode}
+                  </div>
+                  <p className="text-[11px] text-slate-400">
+                    Verify this 2-digit number match on your paired <strong>Sentinel Authenticator</strong> app, or approve directly below.
+                  </p>
+                </div>
+
+                <div className="p-3 rounded-lg bg-cyan-950/30 border border-cyan-500/20 text-xs text-slate-300 space-y-1">
+                  <div className="flex justify-between text-[11px]">
+                    <span className="text-slate-400">Service:</span>
+                    <span className="text-white font-medium">{serviceApprovalModal.app.name}</span>
+                  </div>
+                  <div className="flex justify-between text-[11px]">
+                    <span className="text-slate-400">Account:</span>
+                    <span className="text-cyan-200 font-mono">{user?.email}</span>
+                  </div>
+                  <div className="flex justify-between text-[11px]">
+                    <span className="text-slate-400">Origin:</span>
+                    <span className="text-slate-200">Workstation SSO Launchpad</span>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 pt-1 text-[11px] text-cyan-400 justify-center">
+                  <div className="w-3 h-3 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin" />
+                  <span>Waiting for mobile or dashboard confirmation...</span>
+                </div>
+
+                <div className="flex items-center gap-2.5 pt-2">
+                  <button
+                    type="button"
+                    onClick={handleDenyServiceLogin}
+                    disabled={approvalActionLoading}
+                    className="flex-1 py-2.5 rounded-xl bg-white/5 hover:bg-rose-500/10 text-rose-300 border border-rose-500/30 text-xs font-semibold transition-colors cursor-pointer disabled:opacity-50"
+                  >
+                    Deny Access
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleApproveServiceLogin}
+                    disabled={approvalActionLoading}
+                    className="flex-1 py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-xs font-bold transition-all shadow-md shadow-cyan-500/20 cursor-pointer disabled:opacity-50"
+                  >
+                    {approvalActionLoading ? "Authorizing..." : "Approve Access"}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {serviceApprovalModal.status === "APPROVED" && (
+              <div className="mt-4 p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-center space-y-2 animate-in fade-in duration-200">
+                <div className="w-10 h-10 rounded-full bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center mx-auto text-emerald-400">
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                  </svg>
+                </div>
+                <h4 className="text-sm font-bold text-emerald-300">Login Approved</h4>
+                <p className="text-xs text-slate-300">
+                  Redirecting to <strong>{serviceApprovalModal.app.name}</strong> workstation session...
+                </p>
+              </div>
+            )}
+
+            {serviceApprovalModal.status === "DENIED" && (
+              <div className="mt-4 p-4 rounded-xl bg-red-500/10 border border-red-500/30 text-center space-y-3 animate-in fade-in duration-200">
+                <div className="w-10 h-10 rounded-full bg-red-500/20 border border-red-500/40 flex items-center justify-center mx-auto text-red-400">
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </div>
+                <div>
+                  <h4 className="text-sm font-bold text-red-300">Sign-In Request Denied</h4>
+                  <p className="text-xs text-slate-300 mt-1">
+                    Access to {serviceApprovalModal.app.name} was rejected. A security alert was registered.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setServiceApprovalModal(null)}
+                  className="w-full py-2 rounded-xl bg-white/5 hover:bg-white/10 text-white text-xs font-medium transition-colors cursor-pointer"
+                >
+                  Dismiss
+                </button>
+              </div>
+            )}
+
+            {serviceApprovalModal.status === "EXPIRED" && (
+              <div className="mt-4 p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 text-center space-y-3 animate-in fade-in duration-200">
+                <h4 className="text-sm font-bold text-amber-300">Sign-In Challenge Timed Out</h4>
+                <p className="text-xs text-slate-300">
+                  The approval window for {serviceApprovalModal.app.name} expired. Please launch again.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setServiceApprovalModal(null)}
+                  className="w-full py-2 rounded-xl bg-white/5 hover:bg-white/10 text-white text-xs font-medium transition-colors cursor-pointer"
+                >
+                  Close
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}

@@ -26,10 +26,22 @@ function LoginPageContent() {
   const clientId = searchParams.get("client_id") || searchParams.get("clientId");
   const appName = searchParams.get("app_name") || searchParams.get("appName") || (clientId ? clientId.toUpperCase() : "");
   const state = searchParams.get("state");
-  const reason = searchParams.get("reason");
-  const inactivityNotice = reason === "inactivity_timeout"
-    ? "Your IAM session has automatically expired due to 15 minutes of inactivity. Please sign in again to continue."
-    : null;
+  const [inactivityNotice, setInactivityNotice] = useState<string | null>(null);
+
+  useEffect(() => {
+    const reason = searchParams.get("reason");
+    if (reason === "inactivity_timeout") {
+      setInactivityNotice(
+        "Your IAM session has automatically expired due to 15 minutes of inactivity. Please sign in again to continue."
+      );
+      // Clean query parameter from browser address bar so page refreshes don't re-trigger the notice
+      if (typeof window !== "undefined" && window.history?.replaceState) {
+        const url = new URL(window.location.href);
+        url.searchParams.delete("reason");
+        window.history.replaceState({}, document.title, url.pathname + (url.search ? url.search : ""));
+      }
+    }
+  }, [searchParams]);
 
   const { login, loading: authLoading, error: authError, setError: setAuthError } = useAuth();
   const { verifyLogin, verifyRecovery, loading: mfaLoading, error: mfaError, setError: setMfaError } = useMfa();
@@ -44,6 +56,16 @@ function LoginPageContent() {
   }, []);
 
   const handleSuccessfulHandoff = (userId: number, userEmail: string, ssoToken?: string) => {
+    if (rememberMe && userEmail) {
+      try {
+        localStorage.setItem("sentinel_remembered_email", userEmail.trim());
+      } catch {}
+    } else {
+      try {
+        localStorage.removeItem("sentinel_remembered_email");
+      } catch {}
+    }
+
     if (redirectUri) {
       const sep = redirectUri.includes("?") ? "&" : "?";
       const token = ssoToken || ("sso_" + Math.random().toString(36).substring(2) + Date.now().toString(36));
@@ -71,6 +93,17 @@ function LoginPageContent() {
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
   const [validationError, setValidationError] = useState("");
+
+  // Restore remembered email on mount if previously saved
+  useEffect(() => {
+    try {
+      const savedEmail = localStorage.getItem("sentinel_remembered_email");
+      if (savedEmail) {
+        setEmail(savedEmail);
+        setRememberMe(true);
+      }
+    } catch {}
+  }, []);
 
   // MFA Challenge State
   const [mfaChallenge, setMfaChallenge] = useState<{
@@ -984,13 +1017,23 @@ function LoginPageContent() {
                 <form onSubmit={handleLoginSubmit} noValidate>
                   {/* Alert: Session Inactivity Timeout */}
                   {inactivityNotice && (
-                    <div className="mb-4 p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs">
+                    <div className="mb-4 p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs flex items-center justify-between gap-2">
                       <div className="flex items-center gap-2">
                         <svg className="w-4 h-4 shrink-0 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                           <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                         </svg>
                         <span>{inactivityNotice}</span>
                       </div>
+                      <button
+                        type="button"
+                        onClick={() => setInactivityNotice(null)}
+                        className="text-amber-400 hover:text-amber-200 p-0.5 rounded cursor-pointer transition-colors"
+                        title="Dismiss warning"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
                     </div>
                   )}
 
@@ -1098,7 +1141,14 @@ function LoginPageContent() {
                         type="checkbox"
                         id="rememberMe"
                         checked={rememberMe}
-                        onChange={(e) => setRememberMe(e.target.checked)}
+                        onChange={(e) => {
+                          setRememberMe(e.target.checked);
+                          if (!e.target.checked) {
+                            try {
+                              localStorage.removeItem("sentinel_remembered_email");
+                            } catch {}
+                          }
+                        }}
                         className="w-4 h-4 rounded border-slate-600 bg-[#18293d] text-cyan-400 accent-cyan-400 cursor-pointer"
                       />
                       <label

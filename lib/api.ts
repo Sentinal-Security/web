@@ -278,6 +278,32 @@ export async function initiateMfaChallenge(
   }
 }
 
+export async function respondToMfaChallenge(
+  challengeId: number,
+  action: "APPROVE" | "DENY",
+  selectedCode?: string
+): Promise<{
+  success: boolean;
+  message?: string;
+  data?: {
+    status: "APPROVED" | "DENIED";
+    ssoToken?: string;
+    userId?: number;
+    email?: string;
+  };
+}> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/mfa/challenge/respond`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ challengeId, action, selectedCode }),
+    });
+    return await res.json();
+  } catch {
+    return { success: false, message: "Network error responding to challenge." };
+  }
+}
+
 export async function loginWithGoogle(
   idToken: string
 ): Promise<AuthResponse> {
