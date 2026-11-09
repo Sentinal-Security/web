@@ -24,14 +24,14 @@ export function useIntegrations(userId?: number) {
   const [testingPing, setTestingPing] = useState(false);
   const [pingResult, setPingResult] = useState<{ success: boolean; latencyMs: number; message: string } | null>(null);
 
-  const loadServices = useCallback(async () => {
+  const loadServices = useCallback(async (silent = false) => {
     if (!userId) {
       setApps(getStoredIntegrations());
       setIsHydrated(true);
       return;
     }
 
-    setLoading(true);
+    if (!silent) setLoading(true);
     try {
       const backendServices = await fetchUserServices(userId);
       if (Array.isArray(backendServices)) {
@@ -46,14 +46,44 @@ export function useIntegrations(userId?: number) {
       const stored = getStoredIntegrations(userId);
       setApps(stored);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
       setIsHydrated(true);
     }
   }, [userId]);
 
   useEffect(() => {
     loadServices();
-  }, [loadServices]);
+
+    if (!userId) return;
+
+    // 1. Refetch on tab/window focus
+    const handleFocus = () => {
+      loadServices(true);
+    };
+
+    // 2. Refetch when tab visibility changes (switching between admin and employee tabs)
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        loadServices(true);
+      }
+    };
+
+    // 3. Periodic background poll every 6s so assigned apps appear live without reload
+    const pollTimer = setInterval(() => {
+      if (document.visibilityState === "visible") {
+        loadServices(true);
+      }
+    }, 6000);
+
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      clearInterval(pollTimer);
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [loadServices, userId]);
 
   const connectBoilerplate = useCallback(
     async (templateId: string): Promise<boolean> => {

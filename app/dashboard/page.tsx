@@ -337,6 +337,7 @@ export default function DashboardPage() {
     connectBoilerplate,
     addCustomApp,
     removeApp,
+    loadServices,
   } = useIntegrations(user?.userId);
 
   const isAdmin = user?.role === "ADMIN";
@@ -1637,6 +1638,21 @@ export default function DashboardPage() {
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
+            {isEnterpriseEmployee && (
+              <button
+                type="button"
+                onClick={() => loadServices()}
+                disabled={servicesLoading}
+                title="Sync assigned workstation services from organization IT directory"
+                className="px-3 py-1.5 rounded-lg bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/30 text-cyan-300 text-xs font-medium transition-colors cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+              >
+                <svg className={`w-3.5 h-3.5 ${servicesLoading ? "animate-spin" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                <span>{servicesLoading ? "Syncing..." : "Sync Services"}</span>
+              </button>
+            )}
+
             {user?.mfaEnabled ? (
               <button
                 type="button"
@@ -1745,6 +1761,22 @@ export default function DashboardPage() {
                 ? "Your company IT administrator has not assigned any enterprise applications to your profile yet. Please contact IT support to request access."
                 : "Your account currently has no active integrations. Connect an enterprise template or register a custom application."}
             </p>
+
+            {isEnterpriseEmployee && (
+              <div className="mt-4">
+                <button
+                  type="button"
+                  onClick={() => loadServices()}
+                  disabled={servicesLoading}
+                  className="px-4 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs transition-all shadow-md shadow-cyan-500/20 cursor-pointer disabled:opacity-50 flex items-center gap-2 mx-auto"
+                >
+                  <svg className={`w-3.5 h-3.5 ${servicesLoading ? "animate-spin" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  <span>{servicesLoading ? "Checking Access..." : "Check Assigned Services"}</span>
+                </button>
+              </div>
+            )}
 
             {!isEnterpriseEmployee && (
               <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
