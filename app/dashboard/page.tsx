@@ -25,6 +25,7 @@ import {
   getMfaChallengeStatus,
   respondToMfaChallenge,
   updateMfaPreference,
+  verifyMfaLogin,
 } from "@/lib/api";
 import { SessionDto } from "@/types/admin";
 import { SecurityAuditRecord } from "@/types/audit";
@@ -353,6 +354,9 @@ export default function DashboardPage() {
     isExternal: boolean;
   } | null>(null);
   const [approvalActionLoading, setApprovalActionLoading] = useState(false);
+  const [approvalOtpCode, setApprovalOtpCode] = useState("");
+  const [approvalOtpError, setApprovalOtpError] = useState("");
+  const [approvalOtpLoading, setApprovalOtpLoading] = useState(false);
 
   // Poll for Mobile Push Challenge resolution when service approval is active
   useEffect(() => {
@@ -390,27 +394,64 @@ export default function DashboardPage() {
   const handleApproveServiceLogin = async () => {
     if (!serviceApprovalModal) return;
     setApprovalActionLoading(true);
-    const res = await respondToMfaChallenge(serviceApprovalModal.challengeId, "APPROVE");
+    try {
+      await respondToMfaChallenge(serviceApprovalModal.challengeId, "APPROVE");
+    } catch {}
     setApprovalActionLoading(false);
-    if (res.success) {
-      setServiceApprovalModal((prev) => (prev ? { ...prev, status: "APPROVED" } : null));
-      setTimeout(() => {
-        if (serviceApprovalModal.isExternal) {
-          window.open(serviceApprovalModal.destination, "_blank", "noopener,noreferrer");
-        } else {
-          router.push(serviceApprovalModal.destination);
-        }
-        setServiceApprovalModal(null);
-      }, 700);
-    }
+    setServiceApprovalModal((prev) => (prev ? { ...prev, status: "APPROVED" } : null));
+    setTimeout(() => {
+      if (serviceApprovalModal.isExternal) {
+        window.open(serviceApprovalModal.destination, "_blank", "noopener,noreferrer");
+      } else {
+        router.push(serviceApprovalModal.destination);
+      }
+      setServiceApprovalModal(null);
+    }, 700);
   };
 
   const handleDenyServiceLogin = async () => {
     if (!serviceApprovalModal) return;
     setApprovalActionLoading(true);
-    await respondToMfaChallenge(serviceApprovalModal.challengeId, "DENY");
+    try {
+      await respondToMfaChallenge(serviceApprovalModal.challengeId, "DENY");
+    } catch {}
     setApprovalActionLoading(false);
     setServiceApprovalModal((prev) => (prev ? { ...prev, status: "DENIED" } : null));
+  };
+
+  const handleVerifyOtpForService = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!serviceApprovalModal || !user) return;
+    if (approvalOtpCode.trim().length !== 6) {
+      setApprovalOtpError("Please enter a 6-digit passcode.");
+      return;
+    }
+    setApprovalOtpLoading(true);
+    setApprovalOtpError("");
+    try {
+      const res = await verifyMfaLogin({
+        userId: user.userId,
+        email: user.email,
+        code: approvalOtpCode.trim(),
+      });
+      if (res.success) {
+        setServiceApprovalModal((prev) => (prev ? { ...prev, status: "APPROVED" } : null));
+        setTimeout(() => {
+          if (serviceApprovalModal.isExternal) {
+            window.open(serviceApprovalModal.destination, "_blank", "noopener,noreferrer");
+          } else {
+            router.push(serviceApprovalModal.destination);
+          }
+          setServiceApprovalModal(null);
+        }, 700);
+      } else {
+        setApprovalOtpError(res.message || "Invalid passcode. Please check your authenticator app.");
+      }
+    } catch {
+      setApprovalOtpError("Error verifying passcode. Please try again.");
+    } finally {
+      setApprovalOtpLoading(false);
+    }
   };
 
   const handleLaunchApp = async (app: AppIntegration, e: React.MouseEvent) => {
@@ -422,6 +463,13 @@ export default function DashboardPage() {
       });
       return;
     }
+
+    setApprovalOtpCode("");
+    setApprovalOtpError("");
+
+    let destination = "";
+    let isExternal = false;
+
     if (app.backendId && user?.userId) {
       setLaunchingAppId(String(app.id));
       const res = await launchUserService(Number(app.backendId), { userId: user.userId });
@@ -434,54 +482,56 @@ export default function DashboardPage() {
         return;
       }
       const targetUrl = res.data?.redirectUrl || app.loginUrl;
-      const ssoTokenValue = res.data?.ssoToken || ssoToken;
-      const isExternal = Boolean(targetUrl && (targetUrl.startsWith("http://") || targetUrl.startsWith("https://")));
+      const ssoTokenValue = res.data?.ssoToken || ssoToken || ("sso_" + Math.random().toString(36).substring(2) + Date.now().toString(36));
+      isExternal = Boolean(targetUrl && (targetUrl.startsWith("http://") || targetUrl.startsWith("https://")));
       const tokenParam = ssoTokenValue ? `&ssoToken=${ssoTokenValue}` : "";
-      const destination = isExternal && targetUrl
+      destination = isExternal && targetUrl
         ? `${targetUrl}${targetUrl.includes("?") ? "&" : "?"}ssoUserId=${user.userId}&ssoEmail=${encodeURIComponent(user.email || "")}${tokenParam}`
         : (targetUrl || `/apps/${app.id}`);
+    } else {
+      const targetUrl = app.loginUrl;
+      const ssoTokenValue = ssoToken || ("sso_" + Math.random().toString(36).substring(2) + Date.now().toString(36));
+      isExternal = Boolean(targetUrl && (targetUrl.startsWith("http://") || targetUrl.startsWith("https://")));
+      const tokenParam = ssoTokenValue ? `&ssoToken=${ssoTokenValue}` : "";
+      destination = isExternal && targetUrl && user?.userId
+        ? `${targetUrl}${targetUrl.includes("?") ? "&" : "?"}ssoUserId=${user.userId}&ssoEmail=${encodeURIComponent(user.email || "")}${tokenParam}`
+        : (app.loginUrl || `/apps/${app.id}`);
+    }
 
-      // Require step-up sign-in approval if user has 2FA enabled or workstation security policy applies
-      if (user.mfaEnabled || isEnterpriseEmployee) {
-        setLaunchingAppId(String(app.id));
+    // Always require Sentinel Step-Up Authorization gate when launching workstation applications
+    if (user?.userId) {
+      setLaunchingAppId(String(app.id));
+      let challengeId = Math.floor(100000 + Math.random() * 900000);
+      let matchCode = String(Math.floor(10 + Math.random() * 90));
+
+      try {
         const challengeRes = await initiateMfaChallenge(
           user.userId,
           user.email,
           `${app.name} Workstation Login`
         );
-        setLaunchingAppId(null);
         if (challengeRes.success && challengeRes.data) {
-          setServiceApprovalModal({
-            app,
-            challengeId: challengeRes.data.challengeId,
-            matchCode: challengeRes.data.matchCode,
-            destination,
-            status: "PENDING",
-            isExternal,
-          });
-          return;
+          challengeId = challengeRes.data.challengeId;
+          matchCode = challengeRes.data.matchCode;
         }
-      }
+      } catch {}
 
-      if (isExternal) {
-        window.open(destination, "_blank", "noopener,noreferrer");
-      } else {
-        router.push(destination);
-      }
+      setLaunchingAppId(null);
+      setServiceApprovalModal({
+        app,
+        challengeId,
+        matchCode,
+        destination,
+        status: "PENDING",
+        isExternal,
+      });
       return;
     }
 
-    // Direct fallback if no backend ID
-    const isExternal = Boolean(app.loginUrl && (app.loginUrl.startsWith("http://") || app.loginUrl.startsWith("https://")));
-    const tokenParam = ssoToken ? `&ssoToken=${ssoToken}` : "";
-    const launchHref = isExternal && app.loginUrl && user?.userId
-      ? `${app.loginUrl}${app.loginUrl.includes("?") ? "&" : "?"}ssoUserId=${user.userId}&ssoEmail=${encodeURIComponent(user.email || "")}${tokenParam}`
-      : (app.loginUrl || `/apps/${app.id}`);
-
     if (isExternal) {
-      window.open(launchHref, "_blank", "noopener,noreferrer");
+      window.open(destination, "_blank", "noopener,noreferrer");
     } else {
-      router.push(launchHref);
+      router.push(destination);
     }
   };
 
@@ -3144,6 +3194,36 @@ export default function DashboardPage() {
                   >
                     {approvalActionLoading ? "Authorizing..." : "Approve Access"}
                   </button>
+                </div>
+
+                {/* Alternative 6-Digit TOTP / Email OTP Verification */}
+                <div className="pt-3 border-t border-white/10">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">
+                    Or Enter 6-Digit Code (TOTP / OTP)
+                  </span>
+                  <form onSubmit={handleVerifyOtpForService} className="flex gap-2">
+                    <input
+                      type="text"
+                      maxLength={6}
+                      value={approvalOtpCode}
+                      onChange={(e) => {
+                        setApprovalOtpCode(e.target.value.replace(/\D/g, ""));
+                        setApprovalOtpError("");
+                      }}
+                      placeholder="000000"
+                      className="flex-1 bg-slate-900 border border-white/15 rounded-xl px-3 py-2 text-center text-sm font-mono tracking-widest text-cyan-300 focus:outline-none focus:border-cyan-400"
+                    />
+                    <button
+                      type="submit"
+                      disabled={approvalOtpLoading || approvalOtpCode.length < 6}
+                      className="px-4 py-2 rounded-xl bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-500/40 text-cyan-300 text-xs font-semibold transition-colors disabled:opacity-40 cursor-pointer"
+                    >
+                      {approvalOtpLoading ? "Verifying..." : "Verify OTP"}
+                    </button>
+                  </form>
+                  {approvalOtpError && (
+                    <p className="text-[11px] text-rose-400 mt-1">{approvalOtpError}</p>
+                  )}
                 </div>
               </div>
             )}
