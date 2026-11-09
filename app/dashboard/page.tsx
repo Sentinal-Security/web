@@ -1299,16 +1299,18 @@ export default function DashboardPage() {
               </span>
             </div>
 
-            <button
-              type="button"
-              onClick={() => setAddModalOpen(true)}
-              className="hidden sm:inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-slate-300 hover:text-white text-xs font-medium transition-colors cursor-pointer"
-            >
-              <svg className="w-3.5 h-3.5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-              </svg>
-              <span>Configure Apps</span>
-            </button>
+            {!isEnterpriseEmployee && (
+              <button
+                type="button"
+                onClick={() => setAddModalOpen(true)}
+                className="hidden sm:inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-slate-300 hover:text-white text-xs font-medium transition-colors cursor-pointer"
+              >
+                <svg className="w-3.5 h-3.5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                </svg>
+                <span>Configure Apps</span>
+              </button>
+            )}
 
             {/* Profile Dropdown */}
             <div className="relative">
@@ -1362,19 +1364,21 @@ export default function DashboardPage() {
                     </span>
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setProfileDropdownOpen(false);
-                      setAddModalOpen(true);
-                    }}
-                    className="w-full text-left px-3 py-1.5 rounded-lg text-xs text-slate-300 hover:text-white hover:bg-white/5 transition-colors flex items-center gap-2 cursor-pointer mb-1"
-                  >
-                    <svg className="w-3.5 h-3.5 text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-                    </svg>
-                    <span>Configure Applications</span>
-                  </button>
+                  {!isEnterpriseEmployee && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setProfileDropdownOpen(false);
+                        setAddModalOpen(true);
+                      }}
+                      className="w-full text-left px-3 py-1.5 rounded-lg text-xs text-slate-300 hover:text-white hover:bg-white/5 transition-colors flex items-center gap-2 cursor-pointer mb-1"
+                    >
+                      <svg className="w-3.5 h-3.5 text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                      </svg>
+                      <span>Configure Applications</span>
+                    </button>
+                  )}
 
                   <button
                     type="button"
@@ -1829,7 +1833,7 @@ export default function DashboardPage() {
       </main>
 
       {/* Configure / Add Application Modal */}
-      {addModalOpen && (
+      {addModalOpen && !isEnterpriseEmployee && (
         <div className="fixed inset-0 z-50 flex items-center justify-center px-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="relative w-full max-w-2xl rounded-xl bg-slate-950 border border-white/10 p-5 sm:p-6 shadow-2xl text-white max-h-[90vh] overflow-y-auto">
             <button
