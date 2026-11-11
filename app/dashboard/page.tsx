@@ -719,6 +719,49 @@ export default function DashboardPage() {
   const [personalAuditLogs, setPersonalAuditLogs] = useState<SecurityAuditRecord[]>([]);
   const [auditLogsLoading, setAuditLogsLoading] = useState(false);
 
+  // Root Super Admin Impersonation Moderator Banner
+  const [impersonationNotice, setImpersonationNotice] = useState<{
+    active: boolean;
+    targetEmail: string;
+  } | null>(null);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("sentinel_impersonated_session");
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed?.impersonated) {
+          setImpersonationNotice({
+            active: true,
+            targetEmail: parsed.targetEmail || user?.email || "User",
+          });
+          return;
+        }
+      }
+      if (typeof window !== "undefined") {
+        const params = new URLSearchParams(window.location.search);
+        if (params.get("impersonated") === "true") {
+          setImpersonationNotice({
+            active: true,
+            targetEmail: user?.email || "User",
+          });
+        }
+      }
+    } catch {}
+  }, [user]);
+
+  const handleExitImpersonation = () => {
+    try {
+      localStorage.removeItem("sentinel_impersonated_session");
+    } catch {}
+    clearSession();
+    const controlUrl =
+      typeof window !== "undefined" && window.location.hostname === "localhost"
+        ? "http://localhost:3004"
+        : "https://sentinel-control-green.vercel.app";
+    window.location.href = controlUrl;
+  };
+
   useEffect(() => {
     const session = getStoredSession();
     if (!session || !session.user) {
@@ -899,6 +942,9 @@ export default function DashboardPage() {
   };
 
   const handleLogout = () => {
+    try {
+      localStorage.removeItem("sentinel_impersonated_session");
+    } catch {}
     clearSession();
     router.push("/login");
   };
@@ -1461,6 +1507,45 @@ export default function DashboardPage() {
 
       {/* Main Content Area */}
       <main className="flex-1 flex flex-col min-w-0 px-4 sm:px-6 lg:px-8 pt-6 pb-8">
+        {/* Root Super Admin Impersonation Moderator Banner */}
+        {impersonationNotice?.active && (
+          <div className="mb-4 px-4 py-3 rounded-xl bg-cyan-950/70 border border-cyan-500/40 text-cyan-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-lg">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-8 h-8 rounded-lg bg-cyan-500/20 border border-cyan-500/40 flex items-center justify-center text-cyan-400 shrink-0">
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                </svg>
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold uppercase tracking-wider text-cyan-300">
+                    Root Impersonation Active
+                  </span>
+                  <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-cyan-900/60 border border-cyan-700/60 text-cyan-200">
+                    MODERATOR MODE
+                  </span>
+                </div>
+                <p className="text-xs text-slate-300 truncate">
+                  You are viewing the workstation space of <span className="font-semibold text-white font-mono">{impersonationNotice.targetEmail}</span>. All actions are logged.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={handleExitImpersonation}
+                className="px-3 py-1.5 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold rounded-lg text-xs transition-colors cursor-pointer flex items-center gap-1.5 shadow"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                </svg>
+                <span>Exit Session &amp; Return to Control</span>
+              </button>
+            </div>
+          </div>
+        )}
         {/* Backend Cold Start / Gateway Status Banner */}
         {gatewayStatus === "cold_starting" && (
           <div className="mb-4 px-3.5 py-2.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-200 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">

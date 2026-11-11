@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import { useMfa } from "@/hooks/useMfa";
 import { saveSession, getStoredSession, clearSession } from "@/lib/session";
-import { getMfaChallengeStatus, loginWithGoogle, resendVerification, sendEmailOtp } from "@/lib/api";
+import { getMfaChallengeStatus, loginWithGoogle, resendVerification, sendEmailOtp, validateSsoSession } from "@/lib/api";
 import { User } from "@/types/auth";
 import Footer from "@/app/partials/footer";
 import { PasswordToggleAdornment } from "@/components/PasswordToggleAdornment";
@@ -73,6 +73,67 @@ function LoginPageContent() {
   const { verifyLogin, verifyRecovery, loading: mfaLoading, error: mfaError, setError: setMfaError } = useMfa();
 
   const [existingUser, setExistingUser] = useState<User | null>(null);
+
+  const impersonateToken = searchParams.get("impersonate_token");
+  const [impersonating, setImpersonating] = useState(false);
+  const [impersonateError, setImpersonateError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!impersonateToken) return;
+
+    let cancelled = false;
+    const runImpersonation = async () => {
+      setImpersonating(true);
+      setImpersonateError(null);
+      try {
+        const res = await validateSsoSession(undefined, impersonateToken);
+        if (cancelled) return;
+        if (res.success && res.userId && res.email) {
+          const u: User = {
+            userId: res.userId,
+            email: res.email,
+            fullName: res.fullName || res.email.split("@")[0],
+            role: (res.role as any) || "USER",
+            company: res.company || "",
+            subscriptionTier: res.subscriptionTier,
+            mfaEnabled: Boolean(res.mfaEnabled),
+          };
+          saveSession(u, impersonateToken);
+          try {
+            localStorage.setItem(
+              "sentinel_impersonated_session",
+              JSON.stringify({
+                impersonated: true,
+                targetEmail: res.email,
+                targetUserId: res.userId,
+                timestamp: Date.now(),
+              })
+            );
+          } catch {}
+
+          if (redirectUri) {
+            const sep = redirectUri.includes("?") ? "&" : "?";
+            const targetUrl = `${redirectUri}${sep}ssoUserId=${res.userId}&ssoUserEmail=${encodeURIComponent(res.email)}&ssoToken=${impersonateToken}${state ? `&state=${encodeURIComponent(state)}` : ""}`;
+            window.location.href = targetUrl;
+          } else {
+            router.push("/dashboard?impersonated=true");
+          }
+        } else {
+          setImpersonateError(res.message || "Failed to validate root impersonation token.");
+          setImpersonating(false);
+        }
+      } catch (err: any) {
+        if (cancelled) return;
+        setImpersonateError(err?.message || "Network error validating impersonation token.");
+        setImpersonating(false);
+      }
+    };
+
+    runImpersonation();
+    return () => {
+      cancelled = true;
+    };
+  }, [impersonateToken, redirectUri, state, router]);
 
   useEffect(() => {
     const session = getStoredSession();
@@ -514,6 +575,27 @@ function LoginPageContent() {
       `sso_${provider.toLowerCase()}_token_demo`
     );
   };
+
+  if (impersonating) {
+    return (
+      <div className="min-h-screen bg-[#030712] text-white flex flex-col items-center justify-center p-4">
+        <div className="w-full max-w-md bg-zinc-900/80 border border-cyan-500/40 rounded-2xl p-8 text-center shadow-2xl backdrop-blur space-y-4">
+          <div className="w-12 h-12 mx-auto rounded-xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400">
+            <svg className="w-6 h-6 animate-spin" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+          </div>
+          <div>
+            <h2 className="text-lg font-bold text-white">Root Super Admin Impersonation</h2>
+            <p className="text-xs text-zinc-400 font-mono mt-1">
+              Establishing authenticated workstation session...
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#030712] text-white flex flex-col justify-between selection:bg-cyan-400 selection:text-black font-sans antialiased relative overflow-hidden">
@@ -1284,6 +1366,18 @@ function LoginPageContent() {
                             </button>
                           </div>
                         </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Alert: Impersonation Error */}
+                  {impersonateError && (
+                    <div className="mb-4 p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-300 text-xs">
+                      <div className="flex items-center gap-2">
+                        <svg className="w-4 h-4 shrink-0 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                        </svg>
+                        <span>{impersonateError}</span>
                       </div>
                     </div>
                   )}
