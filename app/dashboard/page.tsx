@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { User, MfaSetupResponse } from "@/types/auth";
@@ -23,7 +23,6 @@ import {
   launchUserService,
   initiateMfaChallenge,
   getMfaChallengeStatus,
-  respondToMfaChallenge,
   updateMfaPreference,
   verifyMfaLogin,
 } from "@/lib/api";
@@ -342,42 +341,95 @@ export default function DashboardPage() {
 
   const isAdmin = user?.role === "ADMIN";
   const isEnterpriseEmployee = Boolean(user?.company && user.company.toLowerCase() !== "personal" && user.role !== "ADMIN");
-  const [forbiddenModal, setForbiddenModal] = useState<{ appName: string; reason: string } | null>(null);
+  const [forbiddenModal, setForbiddenModal] = useState<{ appName: string; reason: string; title?: string } | null>(null);
   const [launchingAppId, setLaunchingAppId] = useState<string | null>(null);
 
-  // Step-Up Service Sign-In Approval State
+  // Step-Up Service Sign-In Approval State (approval is mobile-only; web can never self-approve)
   const [serviceApprovalModal, setServiceApprovalModal] = useState<{
     app: AppIntegration;
     challengeId: number;
     matchCode: string;
-    destination: string;
     status: "PENDING" | "APPROVED" | "DENIED" | "EXPIRED";
-    isExternal: boolean;
   } | null>(null);
-  const [approvalActionLoading, setApprovalActionLoading] = useState(false);
   const [approvalOtpCode, setApprovalOtpCode] = useState("");
   const [approvalOtpError, setApprovalOtpError] = useState("");
   const [approvalOtpLoading, setApprovalOtpLoading] = useState(false);
+  const finalizingLaunchRef = useRef(false);
 
-  // Poll for Mobile Push Challenge resolution when service approval is active
+  // Resolve the final destination URL (and whether it opens externally) for a launched app
+  const buildLaunchTarget = (
+    app: AppIntegration,
+    data?: { redirectUrl?: string; ssoToken?: string }
+  ): { destination: string; isExternal: boolean } => {
+    const targetUrl = data?.redirectUrl || app.loginUrl;
+    const ssoTokenValue =
+      data?.ssoToken || ssoToken || ("sso_" + Math.random().toString(36).substring(2) + Date.now().toString(36));
+    const isExternal = Boolean(targetUrl && (targetUrl.startsWith("http://") || targetUrl.startsWith("https://")));
+    const tokenParam = ssoTokenValue ? `&ssoToken=${ssoTokenValue}` : "";
+    const destination =
+      isExternal && targetUrl && user?.userId
+        ? `${targetUrl}${targetUrl.includes("?") ? "&" : "?"}ssoUserId=${user.userId}&ssoEmail=${encodeURIComponent(user.email || "")}${tokenParam}`
+        : (targetUrl || `/apps/${app.id}`);
+    return { destination, isExternal };
+  };
+
+  const openLaunchTarget = (destination: string, isExternal: boolean) => {
+    if (isExternal) {
+      window.open(destination, "_blank", "noopener,noreferrer");
+    } else {
+      router.push(destination);
+    }
+  };
+
+  // Complete a launch after the user proved MFA (mobile approval challengeId or TOTP code).
+  // The backend validates the proof; this returns an error message on failure.
+  const finalizeServiceLaunch = async (
+    app: AppIntegration,
+    proof: { challengeId?: number; code?: string }
+  ): Promise<{ ok: true } | { ok: false; message: string }> => {
+    let launchData: { redirectUrl?: string; ssoToken?: string } | undefined;
+    if (app.backendId && user?.userId) {
+      const res = await launchUserService(Number(app.backendId), { userId: user.userId, ...proof });
+      if (!res.success) {
+        return { ok: false, message: res.message || "Service launch could not be authorized." };
+      }
+      launchData = res.data;
+    }
+    const { destination, isExternal } = buildLaunchTarget(app, launchData);
+    setServiceApprovalModal((prev) => (prev ? { ...prev, status: "APPROVED" } : null));
+    setTimeout(() => {
+      openLaunchTarget(destination, isExternal);
+      setServiceApprovalModal(null);
+    }, 700);
+    return { ok: true };
+  };
+
+  // Poll for the Mobile Push Challenge result while the approval modal is active
   useEffect(() => {
     if (!serviceApprovalModal || serviceApprovalModal.status !== "PENDING") return;
 
+    const modal = serviceApprovalModal;
     const interval = setInterval(async () => {
       try {
-        const res = await getMfaChallengeStatus(serviceApprovalModal.challengeId);
+        const res = await getMfaChallengeStatus(modal.challengeId);
         if (res.success && res.data) {
           if (res.data.status === "APPROVED") {
             clearInterval(interval);
-            setServiceApprovalModal((prev) => (prev ? { ...prev, status: "APPROVED" } : null));
-            setTimeout(() => {
-              if (serviceApprovalModal.isExternal) {
-                window.open(serviceApprovalModal.destination, "_blank", "noopener,noreferrer");
-              } else {
-                router.push(serviceApprovalModal.destination);
+            if (finalizingLaunchRef.current) return;
+            finalizingLaunchRef.current = true;
+            try {
+              const result = await finalizeServiceLaunch(modal.app, { challengeId: modal.challengeId });
+              if (!result.ok) {
+                setServiceApprovalModal(null);
+                setForbiddenModal({
+                  appName: modal.app.name,
+                  title: "Authentication Required",
+                  reason: result.message,
+                });
               }
-              setServiceApprovalModal(null);
-            }, 800);
+            } finally {
+              finalizingLaunchRef.current = false;
+            }
           } else if (res.data.status === "DENIED") {
             clearInterval(interval);
             setServiceApprovalModal((prev) => (prev ? { ...prev, status: "DENIED" } : null));
@@ -390,35 +442,8 @@ export default function DashboardPage() {
     }, 1500);
 
     return () => clearInterval(interval);
-  }, [serviceApprovalModal, router]);
-
-  const handleApproveServiceLogin = async () => {
-    if (!serviceApprovalModal) return;
-    setApprovalActionLoading(true);
-    try {
-      await respondToMfaChallenge(serviceApprovalModal.challengeId, "APPROVE");
-    } catch {}
-    setApprovalActionLoading(false);
-    setServiceApprovalModal((prev) => (prev ? { ...prev, status: "APPROVED" } : null));
-    setTimeout(() => {
-      if (serviceApprovalModal.isExternal) {
-        window.open(serviceApprovalModal.destination, "_blank", "noopener,noreferrer");
-      } else {
-        router.push(serviceApprovalModal.destination);
-      }
-      setServiceApprovalModal(null);
-    }, 700);
-  };
-
-  const handleDenyServiceLogin = async () => {
-    if (!serviceApprovalModal) return;
-    setApprovalActionLoading(true);
-    try {
-      await respondToMfaChallenge(serviceApprovalModal.challengeId, "DENY");
-    } catch {}
-    setApprovalActionLoading(false);
-    setServiceApprovalModal((prev) => (prev ? { ...prev, status: "DENIED" } : null));
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [serviceApprovalModal]);
 
   const handleVerifyOtpForService = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -430,29 +455,56 @@ export default function DashboardPage() {
     setApprovalOtpLoading(true);
     setApprovalOtpError("");
     try {
-      const res = await verifyMfaLogin({
-        userId: user.userId,
-        email: user.email,
-        code: approvalOtpCode.trim(),
-      });
-      if (res.success) {
-        setServiceApprovalModal((prev) => (prev ? { ...prev, status: "APPROVED" } : null));
-        setTimeout(() => {
-          if (serviceApprovalModal.isExternal) {
-            window.open(serviceApprovalModal.destination, "_blank", "noopener,noreferrer");
-          } else {
-            router.push(serviceApprovalModal.destination);
-          }
-          setServiceApprovalModal(null);
-        }, 700);
-      } else {
-        setApprovalOtpError(res.message || "Invalid passcode. Please check your authenticator app.");
+      const app = serviceApprovalModal.app;
+      const code = approvalOtpCode.trim();
+      if (!app.backendId) {
+        // Local (non-managed) integration: verify identity directly
+        const res = await verifyMfaLogin({ userId: user.userId, email: user.email, code });
+        if (!res.success) {
+          setApprovalOtpError(res.message || "Invalid passcode. Please check your authenticator app.");
+          return;
+        }
+      }
+      const result = await finalizeServiceLaunch(app, { code });
+      if (!result.ok) {
+        setApprovalOtpError(result.message);
       }
     } catch {
       setApprovalOtpError("Error verifying passcode. Please try again.");
     } finally {
       setApprovalOtpLoading(false);
     }
+  };
+
+  // Start the mobile step-up flow: push a number-match challenge to the paired authenticator
+  const startServiceStepUp = async (app: AppIntegration) => {
+    if (!user?.userId) return;
+    setLaunchingAppId(String(app.id));
+    let challengeRes;
+    try {
+      challengeRes = await initiateMfaChallenge(user.userId, user.email, `${app.name} Workstation Login`);
+    } catch {
+      challengeRes = undefined;
+    }
+    setLaunchingAppId(null);
+
+    if (!challengeRes || !challengeRes.success || !challengeRes.data) {
+      setForbiddenModal({
+        appName: app.name,
+        title: "Approval Request Failed",
+        reason: challengeRes?.message || "Could not send the sign-in approval request to your mobile authenticator. Please try again.",
+      });
+      return;
+    }
+
+    setApprovalOtpCode("");
+    setApprovalOtpError("");
+    setServiceApprovalModal({
+      app,
+      challengeId: challengeRes.data.challengeId,
+      matchCode: challengeRes.data.matchCode,
+      status: "PENDING",
+    });
   };
 
   const handleLaunchApp = async (app: AppIntegration, e: React.MouseEvent) => {
@@ -465,75 +517,36 @@ export default function DashboardPage() {
       return;
     }
 
-    setApprovalOtpCode("");
-    setApprovalOtpError("");
+    // 2FA enabled -> mobile step-up approval is mandatory before the service is opened
+    if (user?.mfaEnabled) {
+      await startServiceStepUp(app);
+      return;
+    }
 
-    let destination = "";
-    let isExternal = false;
-
+    // 2FA disabled -> authenticate on web only and open the service directly
     if (app.backendId && user?.userId) {
       setLaunchingAppId(String(app.id));
       const res = await launchUserService(Number(app.backendId), { userId: user.userId });
       setLaunchingAppId(null);
       if (!res.success) {
+        // Stored session may be stale (MFA enabled elsewhere): fall back to mobile step-up
+        if (/MFA approval is required/i.test(res.message || "")) {
+          await startServiceStepUp(app);
+          return;
+        }
         setForbiddenModal({
           appName: app.name,
           reason: res.message || "Access Denied (403): You do not have permission to access this service.",
         });
         return;
       }
-      const targetUrl = res.data?.redirectUrl || app.loginUrl;
-      const ssoTokenValue = res.data?.ssoToken || ssoToken || ("sso_" + Math.random().toString(36).substring(2) + Date.now().toString(36));
-      isExternal = Boolean(targetUrl && (targetUrl.startsWith("http://") || targetUrl.startsWith("https://")));
-      const tokenParam = ssoTokenValue ? `&ssoToken=${ssoTokenValue}` : "";
-      destination = isExternal && targetUrl
-        ? `${targetUrl}${targetUrl.includes("?") ? "&" : "?"}ssoUserId=${user.userId}&ssoEmail=${encodeURIComponent(user.email || "")}${tokenParam}`
-        : (targetUrl || `/apps/${app.id}`);
-    } else {
-      const targetUrl = app.loginUrl;
-      const ssoTokenValue = ssoToken || ("sso_" + Math.random().toString(36).substring(2) + Date.now().toString(36));
-      isExternal = Boolean(targetUrl && (targetUrl.startsWith("http://") || targetUrl.startsWith("https://")));
-      const tokenParam = ssoTokenValue ? `&ssoToken=${ssoTokenValue}` : "";
-      destination = isExternal && targetUrl && user?.userId
-        ? `${targetUrl}${targetUrl.includes("?") ? "&" : "?"}ssoUserId=${user.userId}&ssoEmail=${encodeURIComponent(user.email || "")}${tokenParam}`
-        : (app.loginUrl || `/apps/${app.id}`);
-    }
-
-    // Always require Sentinel Step-Up Authorization gate when launching workstation applications
-    if (user?.userId) {
-      setLaunchingAppId(String(app.id));
-      let challengeId = Math.floor(100000 + Math.random() * 900000);
-      let matchCode = String(Math.floor(10 + Math.random() * 90));
-
-      try {
-        const challengeRes = await initiateMfaChallenge(
-          user.userId,
-          user.email,
-          `${app.name} Workstation Login`
-        );
-        if (challengeRes.success && challengeRes.data) {
-          challengeId = challengeRes.data.challengeId;
-          matchCode = challengeRes.data.matchCode;
-        }
-      } catch {}
-
-      setLaunchingAppId(null);
-      setServiceApprovalModal({
-        app,
-        challengeId,
-        matchCode,
-        destination,
-        status: "PENDING",
-        isExternal,
-      });
+      const { destination, isExternal } = buildLaunchTarget(app, res.data);
+      openLaunchTarget(destination, isExternal);
       return;
     }
 
-    if (isExternal) {
-      window.open(destination, "_blank", "noopener,noreferrer");
-    } else {
-      router.push(destination);
-    }
+    const { destination, isExternal } = buildLaunchTarget(app);
+    openLaunchTarget(destination, isExternal);
   };
 
   // MFA Pairing Modal State
@@ -1205,7 +1218,7 @@ export default function DashboardPage() {
               </span>
               <div>
                 <span className="font-semibold text-amber-300">Backend API Gateway Cold Start</span>
-                <span className="text-slate-400 mx-2 hidden sm:inline">•</span>
+                <span className="text-slate-400 mx-2 hidden sm:inline">â€¢</span>
                 <span className="text-slate-300 text-[11px]">
                   Free Render instance is resuming from inactivity standby ({coldStartSeconds}s elapsed). Services and MFA challenges may take up to 60s to respond.
                 </span>
@@ -1227,7 +1240,7 @@ export default function DashboardPage() {
               <span className="h-2 w-2 rounded-full bg-red-500 shrink-0" />
               <div>
                 <span className="font-semibold text-red-300">Backend API Gateway Unreachable</span>
-                <span className="text-slate-400 mx-2 hidden sm:inline">•</span>
+                <span className="text-slate-400 mx-2 hidden sm:inline">â€¢</span>
                 <span className="text-slate-300 text-[11px]">
                   Unable to connect to the central authentication service. Retrying in background...
                 </span>
@@ -1248,7 +1261,7 @@ export default function DashboardPage() {
             <div className="flex items-center gap-2">
               <span className="h-2 w-2 rounded-full bg-emerald-400 shrink-0" />
               <span className="font-semibold text-emerald-300">Backend Gateway Connected</span>
-              <span className="text-slate-400 hidden sm:inline">•</span>
+              <span className="text-slate-400 hidden sm:inline">â€¢</span>
               <span className="text-slate-300 text-[11px]">
                 Central API and Supabase PostgreSQL operational {gatewayLatency ? `(${gatewayLatency}ms)` : ""}.
               </span>
@@ -2796,7 +2809,7 @@ export default function DashboardPage() {
                         </div>
                         <div className="flex items-center gap-2 mt-1 text-[11px] text-slate-400 font-mono flex-wrap">
                           <span>IP: {s.clientIp || "Direct Gateway"}</span>
-                          <span>•</span>
+                          <span>â€¢</span>
                           <span>Origin: {s.clientOrigin || "Sentinel Portal"}</span>
                         </div>
                         <p className="text-[10px] text-slate-400 mt-0.5">
@@ -3064,13 +3077,13 @@ export default function DashboardPage() {
                       <span>Resource: {log.targetResource || "IAM Portal"}</span>
                       {log.ipAddress && (
                         <>
-                          <span>•</span>
+                          <span>â€¢</span>
                           <span>IP: {log.ipAddress}</span>
                         </>
                       )}
                       {log.userAgent && (
                         <>
-                          <span>•</span>
+                          <span>â€¢</span>
                           <span className="truncate max-w-[200px]" title={log.userAgent}>
                             {log.userAgent}
                           </span>
@@ -3124,7 +3137,7 @@ export default function DashboardPage() {
                 </svg>
               </div>
               <div>
-                <h3 className="text-base font-semibold text-white">Access Denied (403 Forbidden)</h3>
+                <h3 className="text-base font-semibold text-white">{forbiddenModal.title || "Access Denied (403 Forbidden)"}</h3>
                 <p className="text-xs text-red-300 font-mono mt-0.5">{forbiddenModal.appName || "Service Gateway"}</p>
               </div>
             </div>
@@ -3133,9 +3146,11 @@ export default function DashboardPage() {
               {forbiddenModal.reason}
             </p>
 
-            <div className="mt-4 p-3 rounded-lg bg-white/5 border border-white/10 text-[11px] text-slate-400 leading-relaxed">
-              Under organization zero-trust policy, employees are restricted to strictly assigned workstation services. Contact your workspace IT administrator to request access assignment.
-            </div>
+            {!forbiddenModal.title && (
+              <div className="mt-4 p-3 rounded-lg bg-white/5 border border-white/10 text-[11px] text-slate-400 leading-relaxed">
+                Under organization zero-trust policy, employees are restricted to strictly assigned workstation services. Contact your workspace IT administrator to request access assignment.
+              </div>
+            )}
 
             <div className="mt-5 flex justify-end">
               <button
@@ -3185,7 +3200,7 @@ export default function DashboardPage() {
                     {serviceApprovalModal.matchCode}
                   </div>
                   <p className="text-[11px] text-slate-400">
-                    Verify this 2-digit number match on your paired <strong>Sentinel Authenticator</strong> app, or approve directly below.
+                    Open your paired <strong>Sentinel Authenticator</strong> mobile app and approve this request by selecting <strong className="text-cyan-300">{serviceApprovalModal.matchCode}</strong>. Approval is only possible from your mobile device.
                   </p>
                 </div>
 
@@ -3206,25 +3221,16 @@ export default function DashboardPage() {
 
                 <div className="flex items-center gap-2 pt-1 text-[11px] text-cyan-400 justify-center">
                   <div className="w-3 h-3 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin" />
-                  <span>Waiting for mobile or dashboard confirmation...</span>
+                  <span>Waiting for mobile approval...</span>
                 </div>
 
                 <div className="flex items-center gap-2.5 pt-2">
                   <button
                     type="button"
-                    onClick={handleDenyServiceLogin}
-                    disabled={approvalActionLoading}
-                    className="flex-1 py-2.5 rounded-xl bg-white/5 hover:bg-rose-500/10 text-rose-300 border border-rose-500/30 text-xs font-semibold transition-colors cursor-pointer disabled:opacity-50"
+                    onClick={() => setServiceApprovalModal(null)}
+                    className="flex-1 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 border border-white/15 text-xs font-semibold transition-colors cursor-pointer"
                   >
-                    Deny Access
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleApproveServiceLogin}
-                    disabled={approvalActionLoading}
-                    className="flex-1 py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-xs font-bold transition-all shadow-md shadow-cyan-500/20 cursor-pointer disabled:opacity-50"
-                  >
-                    {approvalActionLoading ? "Authorizing..." : "Approve Access"}
+                    Cancel
                   </button>
                 </div>
 

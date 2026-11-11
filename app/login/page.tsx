@@ -639,7 +639,7 @@ function LoginPageContent() {
                       <>
                         <button
                           type="button"
-                          onClick={() => handleSuccessfulHandoff(existingUser.userId, existingUser.email)}
+                          onClick={() => handleSuccessfulHandoff(existingUser.userId, existingUser.email, getStoredSession()?.token)}
                           className="w-full py-3.5 px-4 bg-[#38e1ff] hover:bg-[#2bc4e0] active:scale-[0.99] text-slate-950 font-bold text-xs sm:text-sm tracking-wider uppercase rounded-xl transition-all duration-200 shadow-[0_0_20px_rgba(56,225,255,0.3)] cursor-pointer flex items-center justify-center gap-2"
                         >
                           <span>Authorize & Enter {appName || "App"}</span>

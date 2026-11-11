@@ -82,6 +82,7 @@ export interface CreateServicePayload {
 export interface LaunchServicePayload {
   userId: number;
   code?: string;
+  challengeId?: number;
 }
 
 export interface LaunchServiceResponse {
