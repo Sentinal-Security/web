@@ -368,7 +368,14 @@ export default function DashboardPage() {
   const [isExtensionInstalled, setIsExtensionInstalled] = useState<boolean>(false);
   const [extensionChecking, setExtensionChecking] = useState<boolean>(false);
   const [showExtensionGuideModal, setShowExtensionGuideModal] = useState<boolean>(false);
+  const [guideBrowserTab, setGuideBrowserTab] = useState<"chromium" | "firefox">("chromium");
   const [extensionWarningDismissed, setExtensionWarningDismissed] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && navigator.userAgent.toLowerCase().includes("firefox")) {
+      setGuideBrowserTab("firefox");
+    }
+  }, []);
 
   // Live active ping to detect Sentinel Autofill Bridge extension
   const checkExtensionPresence = useCallback((): Promise<boolean> => {
@@ -1761,7 +1768,30 @@ export default function DashboardPage() {
                     <span className="text-[10px] text-slate-400 font-mono">Audit</span>
                   </button>
 
-                  {user?.mfaEnabled ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setProfileDropdownOpen(false);
+                      setShowExtensionGuideModal(true);
+                    }}
+                    className="w-full px-3 py-2 text-left text-xs text-slate-300 hover:text-white hover:bg-white/5 rounded-lg flex items-center justify-between transition-colors cursor-pointer"
+                  >
+                    <div className="flex items-center gap-2">
+                      <svg className="w-3.5 h-3.5 text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                      </svg>
+                      <span>Autofill Extension</span>
+                    </div>
+                    <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${
+                      isExtensionInstalled
+                        ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/30"
+                        : "bg-amber-500/10 text-amber-400 border border-amber-500/30"
+                    }`}>
+                      {isExtensionInstalled ? "Active" : "Install"}
+                    </span>
+                  </button>
+
+            {user?.mfaEnabled ? (
                     <>
                       <button
                         type="button"
@@ -1910,6 +1940,36 @@ export default function DashboardPage() {
                 <span>{servicesLoading ? "Syncing..." : "Sync Services"}</span>
               </button>
             )}
+
+            {/* Browser Autofill Extension Status / Setup Gate */}
+            <button
+              type="button"
+              onClick={() => setShowExtensionGuideModal(true)}
+              title={
+                isExtensionInstalled
+                  ? "Sentinel Autofill Bridge Extension is active and connected"
+                  : "Install Sentinel Autofill Bridge Extension for Chrome or Firefox"
+              }
+              className={`px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors cursor-pointer flex items-center gap-1.5 ${
+                isExtensionInstalled
+                  ? "bg-emerald-500/10 hover:bg-emerald-500/20 border-emerald-500/30 text-emerald-300"
+                  : "bg-amber-500/10 hover:bg-amber-500/20 border-amber-500/30 text-amber-300"
+              }`}
+            >
+              {isExtensionInstalled ? (
+                <>
+                  <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+                  <span>Extension Active</span>
+                </>
+              ) : (
+                <>
+                  <svg className="w-3.5 h-3.5 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                  </svg>
+                  <span>Install Extension</span>
+                </>
+              )}
+            </button>
 
             {user?.mfaEnabled ? (
               <button
@@ -4000,7 +4060,7 @@ export default function DashboardPage() {
       {/* Extension Installation & Setup Guide Modal */}
       {showExtensionGuideModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-150">
-          <div className="relative w-full max-w-lg rounded-2xl bg-slate-950 border border-cyan-500/40 p-6 shadow-2xl text-white max-h-[90vh] overflow-y-auto">
+          <div className="relative w-full max-w-xl rounded-2xl bg-slate-950 border border-cyan-500/40 p-6 shadow-2xl text-white max-h-[92vh] overflow-y-auto">
             <div className="flex items-center justify-between pb-3 border-b border-white/10">
               <div className="flex items-center gap-2.5">
                 <div className="w-9 h-9 rounded-xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400 shrink-0">
@@ -4010,7 +4070,7 @@ export default function DashboardPage() {
                 </div>
                 <div>
                   <h3 className="text-sm font-bold text-white">Sentinel Autofill Bridge</h3>
-                  <p className="text-[11px] text-slate-400">Cross-Browser Middleman Middleware (Chromium & Firefox)</p>
+                  <p className="text-[11px] text-slate-400">Cross-Browser Secure In-Page Credential Injector (v1.1.0)</p>
                 </div>
               </div>
               <button
@@ -4030,12 +4090,12 @@ export default function DashboardPage() {
                 <span className={`w-2.5 h-2.5 rounded-full ${isExtensionInstalled ? "bg-emerald-400 animate-pulse" : "bg-rose-400"}`} />
                 <div>
                   <div className="text-xs font-semibold text-white">
-                    {isExtensionInstalled ? "Extension Detected & Active" : "Extension Not Detected"}
+                    {isExtensionInstalled ? "Extension Active & Connected" : "Extension Not Detected"}
                   </div>
                   <div className="text-[10px] text-slate-400">
                     {isExtensionInstalled
-                      ? "Cross-browser bridge ready for in-page form injection"
-                      : "Unpacked extension needs to be loaded in browser"}
+                      ? "In-page credential injection is ready. Launches will autofill automatically."
+                      : "Load the unpacked extension below to activate automatic autofill."}
                   </div>
                 </div>
               </div>
@@ -4045,56 +4105,178 @@ export default function DashboardPage() {
                 disabled={extensionChecking}
                 className="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/15 text-xs font-medium text-slate-200 transition-colors cursor-pointer disabled:opacity-50"
               >
-                {extensionChecking ? "Checking..." : "Re-Check"}
+                {extensionChecking ? "Checking..." : "Check Status"}
               </button>
             </div>
 
-            {/* Step-by-Step Loading Instructions */}
-            <div className="mt-4 space-y-3 text-xs text-slate-300">
-              <div className="p-3 rounded-lg bg-slate-900/60 border border-white/10 space-y-1.5">
-                <div className="text-xs font-bold text-cyan-300">Chromium Browsers (Chrome, Brave, Edge, Opera)</div>
-                <ol className="list-decimal list-inside space-y-1 text-[11px] text-slate-300">
-                  <li>Navigate to <code className="px-1 py-0.5 rounded bg-slate-950 font-mono text-cyan-200">chrome://extensions</code></li>
-                  <li>Toggle on <strong>Developer mode</strong> in the top-right corner</li>
-                  <li>Click <strong>Load unpacked</strong> in the top-left menu</li>
-                  <li>Select the <code className="px-1 py-0.5 rounded bg-slate-950 font-mono text-cyan-200">extension/</code> folder in this project</li>
-                </ol>
-              </div>
-
-              <div className="p-3 rounded-lg bg-slate-900/60 border border-white/10 space-y-1.5">
-                <div className="text-xs font-bold text-amber-300">Mozilla Firefox</div>
-                <ol className="list-decimal list-inside space-y-1 text-[11px] text-slate-300">
-                  <li>Navigate to <code className="px-1 py-0.5 rounded bg-slate-950 font-mono text-amber-200">about:debugging#/runtime/this-firefox</code></li>
-                  <li>Click <strong>Load Temporary Add-on...</strong></li>
-                  <li>Select <code className="px-1 py-0.5 rounded bg-slate-950 font-mono text-amber-200">manifest.json</code> inside the <code className="px-1 py-0.5 rounded bg-slate-950 font-mono text-amber-200">extension/</code> folder</li>
-                </ol>
-              </div>
-
-              <div className="p-3 rounded-lg bg-cyan-950/20 border border-cyan-500/20 text-[11px] text-slate-400 space-y-1">
-                <div className="font-semibold text-cyan-300">Zero Edge Cases Protocol</div>
-                <p>
-                  The extension acts strictly as a middleman. It creates no UI or floating badges on target sites. Credentials are only decrypted following your 2-digit Sentinel Mobile authenticator number match and purged from memory within 60 seconds.
-                </p>
-              </div>
+            {/* Browser Selector Tabs */}
+            <div className="mt-4 grid grid-cols-2 gap-2 p-1 rounded-xl bg-slate-900 border border-white/10">
+              <button
+                type="button"
+                onClick={() => setGuideBrowserTab("chromium")}
+                className={`py-2 px-3 rounded-lg text-xs font-medium transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                  guideBrowserTab === "chromium"
+                    ? "bg-cyan-500 text-slate-950 font-bold shadow-sm"
+                    : "text-slate-300 hover:text-white hover:bg-white/5"
+                }`}
+              >
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-1-13h2v6h-2zm0 8h2v2h-2z" />
+                </svg>
+                <span>Chromium (Chrome / Brave / Edge)</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setGuideBrowserTab("firefox")}
+                className={`py-2 px-3 rounded-lg text-xs font-medium transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                  guideBrowserTab === "firefox"
+                    ? "bg-amber-500 text-slate-950 font-bold shadow-sm"
+                    : "text-slate-300 hover:text-white hover:bg-white/5"
+                }`}
+              >
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 2A10 10 0 0 0 2 12a10 10 0 0 0 10 10 10 10 0 0 0 10-10A10 10 0 0 0 12 2zm0 18a8 8 0 1 1 8-8 8 8 0 0 1-8 8z" />
+                </svg>
+                <span>Mozilla Firefox</span>
+              </button>
             </div>
 
+            {/* Dynamic Browser Guide Content */}
+            {guideBrowserTab === "chromium" ? (
+              <div className="mt-4 space-y-3.5 text-xs">
+                {/* Download Card */}
+                <div className="p-3.5 rounded-xl bg-cyan-950/20 border border-cyan-500/30 flex items-center justify-between gap-3">
+                  <div>
+                    <div className="font-semibold text-cyan-300 text-xs">Chromium Package (Manifest V3)</div>
+                    <div className="text-[11px] text-slate-400 mt-0.5">Compatible with Google Chrome, Brave, Microsoft Edge, and Opera</div>
+                  </div>
+                  <a
+                    href="/sentinel-extension-chrome.zip"
+                    download="sentinel-extension-chrome.zip"
+                    className="px-3.5 py-2 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-xs font-bold transition-all shadow-md shadow-cyan-500/20 flex items-center gap-1.5 shrink-0"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                    </svg>
+                    <span>Download (.zip)</span>
+                  </a>
+                </div>
+
+                {/* Installation Steps */}
+                <div className="p-4 rounded-xl bg-slate-900 border border-white/10 space-y-3">
+                  <div className="text-xs font-bold text-slate-200">Installation Steps for Chrome / Brave / Edge:</div>
+                  <div className="space-y-2 text-[11px] text-slate-300">
+                    <div className="flex items-start gap-2.5">
+                      <span className="w-5 h-5 rounded-full bg-cyan-500/10 text-cyan-300 font-mono text-[10px] font-bold flex items-center justify-center shrink-0 border border-cyan-500/30">1</span>
+                      <p className="pt-0.5">
+                        Download <strong className="text-white">sentinel-extension-chrome.zip</strong> above and extract the folder to your computer.
+                      </p>
+                    </div>
+                    <div className="flex items-start gap-2.5">
+                      <span className="w-5 h-5 rounded-full bg-cyan-500/10 text-cyan-300 font-mono text-[10px] font-bold flex items-center justify-center shrink-0 border border-cyan-500/30">2</span>
+                      <p className="pt-0.5">
+                        Open a new browser tab and navigate to <code className="px-1.5 py-0.5 rounded bg-slate-950 font-mono text-cyan-200 border border-white/10">chrome://extensions</code> (or <code className="px-1.5 py-0.5 rounded bg-slate-950 font-mono text-cyan-200 border border-white/10">brave://extensions</code> / <code className="px-1.5 py-0.5 rounded bg-slate-950 font-mono text-cyan-200 border border-white/10">edge://extensions</code>).
+                      </p>
+                    </div>
+                    <div className="flex items-start gap-2.5">
+                      <span className="w-5 h-5 rounded-full bg-cyan-500/10 text-cyan-300 font-mono text-[10px] font-bold flex items-center justify-center shrink-0 border border-cyan-500/30">3</span>
+                      <p className="pt-0.5">
+                        In the top-right corner, switch the <strong className="text-white">Developer mode</strong> toggle to <strong className="text-cyan-300">ON</strong>.
+                      </p>
+                    </div>
+                    <div className="flex items-start gap-2.5">
+                      <span className="w-5 h-5 rounded-full bg-cyan-500/10 text-cyan-300 font-mono text-[10px] font-bold flex items-center justify-center shrink-0 border border-cyan-500/30">4</span>
+                      <p className="pt-0.5">
+                        Click the <strong className="text-white">Load unpacked</strong> button that appears in the top-left subheader.
+                      </p>
+                    </div>
+                    <div className="flex items-start gap-2.5">
+                      <span className="w-5 h-5 rounded-full bg-cyan-500/10 text-cyan-300 font-mono text-[10px] font-bold flex items-center justify-center shrink-0 border border-cyan-500/30">5</span>
+                      <p className="pt-0.5">
+                        Select the unzipped folder. <strong className="text-white">Sentinel Autofill Bridge (v1.1.0)</strong> will load immediately.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="mt-4 space-y-3.5 text-xs">
+                {/* Download Card */}
+                <div className="p-3.5 rounded-xl bg-amber-950/20 border border-amber-500/30 flex items-center justify-between gap-3">
+                  <div>
+                    <div className="font-semibold text-amber-300 text-xs">Firefox Add-on Package (Gecko MV3)</div>
+                    <div className="text-[11px] text-slate-400 mt-0.5">Native Gecko manifest with strict background script specifications</div>
+                  </div>
+                  <a
+                    href="/sentinel-extension-firefox.zip"
+                    download="sentinel-extension-firefox.zip"
+                    className="px-3.5 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold transition-all shadow-md shadow-amber-500/20 flex items-center gap-1.5 shrink-0"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                    </svg>
+                    <span>Download (.zip)</span>
+                  </a>
+                </div>
+
+                {/* Installation Steps */}
+                <div className="p-4 rounded-xl bg-slate-900 border border-white/10 space-y-3">
+                  <div className="text-xs font-bold text-slate-200">Installation Steps for Mozilla Firefox:</div>
+                  <div className="space-y-2 text-[11px] text-slate-300">
+                    <div className="flex items-start gap-2.5">
+                      <span className="w-5 h-5 rounded-full bg-amber-500/10 text-amber-300 font-mono text-[10px] font-bold flex items-center justify-center shrink-0 border border-amber-500/30">1</span>
+                      <p className="pt-0.5">
+                        Download <strong className="text-white">sentinel-extension-firefox.zip</strong> above.
+                      </p>
+                    </div>
+                    <div className="flex items-start gap-2.5">
+                      <span className="w-5 h-5 rounded-full bg-amber-500/10 text-amber-300 font-mono text-[10px] font-bold flex items-center justify-center shrink-0 border border-amber-500/30">2</span>
+                      <p className="pt-0.5">
+                        Open a new tab in Firefox and navigate to <code className="px-1.5 py-0.5 rounded bg-slate-950 font-mono text-amber-200 border border-white/10">about:debugging#/runtime/this-firefox</code>.
+                      </p>
+                    </div>
+                    <div className="flex items-start gap-2.5">
+                      <span className="w-5 h-5 rounded-full bg-amber-500/10 text-amber-300 font-mono text-[10px] font-bold flex items-center justify-center shrink-0 border border-amber-500/30">3</span>
+                      <p className="pt-0.5">
+                        Under the <strong className="text-white">Temporary Extensions</strong> section, click <strong className="text-amber-300">Load Temporary Add-on...</strong>.
+                      </p>
+                    </div>
+                    <div className="flex items-start gap-2.5">
+                      <span className="w-5 h-5 rounded-full bg-amber-500/10 text-amber-300 font-mono text-[10px] font-bold flex items-center justify-center shrink-0 border border-amber-500/30">4</span>
+                      <p className="pt-0.5">
+                        Select the downloaded <code className="text-white font-mono">sentinel-extension-firefox.zip</code> file (or unzip and select its <code className="text-white font-mono">manifest.json</code>).
+                      </p>
+                    </div>
+                    <div className="flex items-start gap-2.5">
+                      <span className="w-5 h-5 rounded-full bg-amber-500/10 text-amber-300 font-mono text-[10px] font-bold flex items-center justify-center shrink-0 border border-amber-500/30">5</span>
+                      <p className="pt-0.5">
+                        Sentinel Autofill Bridge will appear under active add-ons with ID <code className="text-amber-200 font-mono">sentinel-autofill@sentinel.security</code>.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Zero-Trust Security Guarantee Banner */}
+            <div className="mt-4 p-3 rounded-xl bg-slate-900/60 border border-white/10 text-[11px] text-slate-400 space-y-1">
+              <div className="font-semibold text-slate-200">Zero-Trust Memory Quarantine</div>
+              <p>
+                The extension does not store passwords in local storage or cookies. It holds credentials ephemerally in RAM only after your mobile push 2-digit number match is verified, and immediately zeroes memory upon field injection or within 60 seconds.
+              </p>
+            </div>
+
+            {/* Footer Buttons */}
             <div className="mt-5 pt-3 border-t border-white/10 flex items-center justify-between">
-              <a
-                href="/extension/sentinel-autofill-extension.zip"
-                download="sentinel-autofill-extension.zip"
-                className="px-3.5 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/15 text-slate-300 hover:text-white text-xs font-semibold transition-colors flex items-center gap-2"
-              >
-                <svg className="w-4 h-4 text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                </svg>
-                <span>Download Extension (.zip)</span>
-              </a>
+              <div className="text-[11px] text-slate-400">
+                Need source code? Check <code className="text-cyan-300 font-mono">sentinel-extension/</code> in the repo.
+              </div>
               <button
                 type="button"
                 onClick={() => setShowExtensionGuideModal(false)}
-                className="px-4 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-xs font-bold transition-colors cursor-pointer"
+                className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-white text-xs font-semibold transition-colors cursor-pointer"
               >
-                Close Guide
+                Done
               </button>
             </div>
           </div>
