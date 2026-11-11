@@ -391,15 +391,18 @@ export default function DashboardPage() {
       window.addEventListener("SENTINEL_EXTENSION_PONG", handlePong);
       window.dispatchEvent(new CustomEvent("SENTINEL_EXTENSION_PING"));
 
-      // Check current DOM attribute as an immediate signal
-      const attrActive = document.documentElement.getAttribute("data-sentinel-extension") === "active";
+      // Check current DOM attribute and verify heartbeat timestamp freshness (< 4500ms)
+      const lastHeartbeat = Number(document.documentElement.getAttribute("data-sentinel-heartbeat") || 0);
+      const isFresh =
+        document.documentElement.getAttribute("data-sentinel-extension") === "active" &&
+        Date.now() - lastHeartbeat < 4500;
 
       setTimeout(() => {
         window.removeEventListener("SENTINEL_EXTENSION_PONG", handlePong);
         setExtensionChecking(false);
         if (!responded) {
-          setIsExtensionInstalled(attrActive);
-          resolve(attrActive);
+          setIsExtensionInstalled(isFresh);
+          resolve(isFresh);
         }
       }, 300);
     });
@@ -764,7 +767,10 @@ export default function DashboardPage() {
     // Dynamic heartbeat every 3.5s to detect if user disabled or removed extension mid-session
     const extCheckInterval = setInterval(() => {
       const attr = document.documentElement.getAttribute("data-sentinel-extension");
-      if (!attr) {
+      const lastHeartbeat = Number(document.documentElement.getAttribute("data-sentinel-heartbeat") || 0);
+      const isFresh = attr === "active" && (Date.now() - lastHeartbeat < 4500);
+
+      if (!isFresh) {
         setIsExtensionInstalled(false);
       } else {
         window.dispatchEvent(new CustomEvent("SENTINEL_EXTENSION_PING"));
