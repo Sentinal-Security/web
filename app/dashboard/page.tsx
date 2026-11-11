@@ -604,8 +604,9 @@ export default function DashboardPage() {
     }
 
     // 2FA enabled, Vault app, or service enforces MFA -> mobile step-up approval is mandatory
-    if (user?.mfaEnabled || app.isVault || app.type === "vault" || app.mfaRequired) {
-      if (!user?.mfaEnabled && app.mfaRequired && !app.isVault && app.type !== "vault") {
+    const serviceEnforcesMfa = Boolean(app.mfaRequired || app.metrics?.mfaRequired);
+    if (user?.mfaEnabled || app.isVault || app.type === "vault" || serviceEnforcesMfa) {
+      if (!user?.mfaEnabled && serviceEnforcesMfa && !app.isVault && app.type !== "vault") {
         setForbiddenModal({
           appName: app.name,
           title: "Multi-Factor Authentication Required",

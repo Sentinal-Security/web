@@ -27,6 +27,7 @@ export interface AppIntegration {
   clientId?: string;
   isVault?: boolean;
   vaultUsername?: string;
+  mfaRequired?: boolean;
   metrics: AppMetrics;
 }
 
