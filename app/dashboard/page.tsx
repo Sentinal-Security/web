@@ -362,6 +362,48 @@ export default function DashboardPage() {
   const finalizingLaunchRef = useRef(false);
   const [vaultPasswordVisible, setVaultPasswordVisible] = useState(false);
   const [copiedVaultField, setCopiedVaultField] = useState<"user" | "pass" | null>(null);
+  const [vaultAutofillDispatched, setVaultAutofillDispatched] = useState(false);
+
+  // Browser Extension Presence & Middleware Gate State
+  const [isExtensionInstalled, setIsExtensionInstalled] = useState<boolean>(false);
+  const [extensionChecking, setExtensionChecking] = useState<boolean>(false);
+  const [showExtensionGuideModal, setShowExtensionGuideModal] = useState<boolean>(false);
+  const [extensionWarningDismissed, setExtensionWarningDismissed] = useState<boolean>(false);
+
+  // Live active ping to detect Sentinel Autofill Bridge extension
+  const checkExtensionPresence = useCallback((): Promise<boolean> => {
+    return new Promise((resolve) => {
+      if (typeof window === "undefined") {
+        resolve(false);
+        return;
+      }
+      setExtensionChecking(true);
+      let responded = false;
+
+      const handlePong = () => {
+        responded = true;
+        window.removeEventListener("SENTINEL_EXTENSION_PONG", handlePong);
+        setIsExtensionInstalled(true);
+        setExtensionChecking(false);
+        resolve(true);
+      };
+
+      window.addEventListener("SENTINEL_EXTENSION_PONG", handlePong);
+      window.dispatchEvent(new CustomEvent("SENTINEL_EXTENSION_PING"));
+
+      // Check current DOM attribute as an immediate signal
+      const attrActive = document.documentElement.getAttribute("data-sentinel-extension") === "active";
+
+      setTimeout(() => {
+        window.removeEventListener("SENTINEL_EXTENSION_PONG", handlePong);
+        setExtensionChecking(false);
+        if (!responded) {
+          setIsExtensionInstalled(attrActive);
+          resolve(attrActive);
+        }
+      }, 300);
+    });
+  }, []);
 
   // Resolve the final destination URL (and whether it opens externally) for a launched app
   const buildLaunchTarget = (
@@ -693,6 +735,25 @@ export default function DashboardPage() {
     };
     window.addEventListener("SENTINEL_GET_SESSION", handleGetSession);
 
+    // Listen for extension presence responses
+    const handleExtensionPong = () => {
+      setIsExtensionInstalled(true);
+    };
+    window.addEventListener("SENTINEL_EXTENSION_PONG", handleExtensionPong);
+
+    // Initial on-load presence probe
+    checkExtensionPresence();
+
+    // Dynamic heartbeat every 3.5s to detect if user disabled or removed extension mid-session
+    const extCheckInterval = setInterval(() => {
+      const attr = document.documentElement.getAttribute("data-sentinel-extension");
+      if (!attr) {
+        setIsExtensionInstalled(false);
+      } else {
+        window.dispatchEvent(new CustomEvent("SENTINEL_EXTENSION_PING"));
+      }
+    }, 3500);
+
     if (session.user.company) {
       getOrganizationPolicy(session.user.userId, session.user.company).then((res) => {
         if (res.success && res.data?.mfaEnforced) {
@@ -703,6 +764,8 @@ export default function DashboardPage() {
 
     return () => {
       window.removeEventListener("SENTINEL_GET_SESSION", handleGetSession);
+      window.removeEventListener("SENTINEL_EXTENSION_PONG", handleExtensionPong);
+      clearInterval(extCheckInterval);
     };
   }, [router]);
 
@@ -941,6 +1004,14 @@ export default function DashboardPage() {
       return;
     }
 
+    // Force live check of extension presence
+    const active = await checkExtensionPresence();
+    if (!active && !extensionWarningDismissed) {
+      setExtensionWarningDismissed(true);
+      setModalErr("Extension Not Detected: Sentinel Autofill Bridge is offline or uninstalled. In-browser form autofill will not work automatically. Click 'Add Integration' again to proceed with manual copy/paste mode, or open the setup guide below.");
+      return;
+    }
+
     const ok = await addCustomApp({
       name: customName.trim(),
       category: customCategory.trim() || "Custom Service",
@@ -951,7 +1022,12 @@ export default function DashboardPage() {
     });
 
     if (ok) {
-      setModalSuccess("Custom application registered successfully.");
+      setExtensionWarningDismissed(false);
+      setModalSuccess(
+        active
+          ? "Application registered. Sentinel Autofill Bridge is active for this service."
+          : "Application registered. Note: Manual fallback mode active (extension offline)."
+      );
       setCustomName("");
       setCustomCategory("");
       setCustomLoginUrl("");
@@ -959,7 +1035,7 @@ export default function DashboardPage() {
       setTimeout(() => {
         setAddModalOpen(false);
         setModalSuccess("");
-      }, 1200);
+      }, 1400);
     } else {
       setModalErr("Failed to register custom application.");
     }
@@ -1009,6 +1085,14 @@ export default function DashboardPage() {
       return;
     }
 
+    // Force live check of extension presence
+    const active = await checkExtensionPresence();
+    if (!active && !extensionWarningDismissed) {
+      setExtensionWarningDismissed(true);
+      setModalErr("Extension Not Detected: Sentinel Autofill Bridge is offline or was removed. Credentials will still be stored in your encrypted vault, but automatic in-page injection cannot run. Click 'Save to Secure Vault' again to confirm manual copy mode, or load the extension.");
+      return;
+    }
+
     setVaultSaving(true);
     const iconType = vaultPreset !== "custom" ? vaultPreset : "key";
     const ok = await addCustomApp({
@@ -1024,13 +1108,18 @@ export default function DashboardPage() {
     setVaultSaving(false);
 
     if (ok) {
-      setModalSuccess(`Credentials for ${vaultName} securely saved to vault.`);
+      setExtensionWarningDismissed(false);
+      setModalSuccess(
+        active
+          ? `Credentials for ${vaultName} securely vaulted. Autofill bridge active.`
+          : `Credentials for ${vaultName} vaulted. Manual copy mode active (extension offline).`
+      );
       setVaultUsername("");
       setVaultPassword("");
       setTimeout(() => {
         setAddModalOpen(false);
         setModalSuccess("");
-      }, 1200);
+      }, 1400);
     } else {
       setModalErr("Failed to save credentials to vault.");
     }
@@ -2223,6 +2312,40 @@ export default function DashboardPage() {
               </div>
             ) : activeModalTab === "vault" ? (
               <form onSubmit={handleAddVaultApp} className="space-y-4">
+                {/* Live Extension Presence Banner */}
+                {isExtensionInstalled ? (
+                  <div className="p-2.5 rounded-lg bg-emerald-950/20 border border-emerald-500/30 flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-2 text-emerald-400 font-medium">
+                      <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+                      <span>Sentinel Autofill Bridge: Connected</span>
+                    </div>
+                    <span className="text-[10px] text-emerald-300 font-mono px-1.5 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20">
+                      In-Page Autofill Active
+                    </span>
+                  </div>
+                ) : (
+                  <div className="p-3 rounded-lg bg-amber-950/20 border border-amber-500/30 text-xs space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2 text-amber-300 font-semibold">
+                        <svg className="w-4 h-4 shrink-0 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
+                        <span>Autofill Bridge Extension Not Detected</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setShowExtensionGuideModal(true)}
+                        className="text-[11px] text-cyan-400 hover:text-cyan-300 underline font-medium cursor-pointer"
+                      >
+                        Setup Guide
+                      </button>
+                    </div>
+                    <p className="text-[11px] text-slate-300 leading-relaxed">
+                      If the extension was uninstalled or disabled in your browser, automatic in-page credential injection is disabled. Saved credentials will operate via manual copy/paste mode upon push approval.
+                    </p>
+                  </div>
+                )}
+
                 <div className="p-3 rounded-lg bg-cyan-950/20 border border-cyan-500/30 text-xs text-slate-300 space-y-1">
                   <div className="flex items-center gap-2 text-cyan-300 font-semibold text-xs">
                     <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
@@ -2385,6 +2508,39 @@ export default function DashboardPage() {
               </form>
             ) : (
               <form onSubmit={handleAddCustom} className="space-y-3.5">
+                {/* Live Extension Presence Banner for Custom App */}
+                {isExtensionInstalled ? (
+                  <div className="p-2.5 rounded-lg bg-emerald-950/20 border border-emerald-500/30 flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-2 text-emerald-400 font-medium">
+                      <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+                      <span>Sentinel Autofill Bridge: Connected</span>
+                    </div>
+                    <span className="text-[10px] text-emerald-300 font-mono px-1.5 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20">
+                      Autofill Available
+                    </span>
+                  </div>
+                ) : (
+                  <div className="p-3 rounded-lg bg-amber-950/20 border border-amber-500/30 text-xs space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2 text-amber-300 font-semibold">
+                        <svg className="w-4 h-4 shrink-0 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
+                        <span>Autofill Bridge Extension Not Detected</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setShowExtensionGuideModal(true)}
+                        className="text-[11px] text-cyan-400 hover:text-cyan-300 underline font-medium cursor-pointer"
+                      >
+                        Setup Guide
+                      </button>
+                    </div>
+                    <p className="text-[11px] text-slate-300 leading-relaxed">
+                      If you uninstalled or disabled the extension, automatic login form injection cannot run for this custom application. You will be able to launch via manual copy/paste fallback.
+                    </p>
+                  </div>
+                )}
                 <div>
                   <label className="block text-xs font-medium text-slate-300 mb-1">Application Name *</label>
                   <input
@@ -3685,34 +3841,70 @@ export default function DashboardPage() {
                   </div>
 
                   <div className="pt-2 flex flex-col gap-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (serviceApprovalModal.vaultPassword) {
-                          navigator.clipboard.writeText(serviceApprovalModal.vaultPassword);
-                          setCopiedVaultField("pass");
-                        }
-                        if (typeof window !== "undefined") {
-                          window.dispatchEvent(
-                            new CustomEvent("SENTINEL_VAULT_LAUNCH", {
-                              detail: {
-                                destination: serviceApprovalModal.destination,
-                                username: serviceApprovalModal.vaultUsername || user?.email || "",
-                                password: serviceApprovalModal.vaultPassword || "",
-                                appName: serviceApprovalModal.app.name,
-                              },
-                            })
-                          );
-                        }
-                        window.open(serviceApprovalModal.destination, "_blank", "noopener,noreferrer");
-                      }}
-                      className="w-full py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-xs font-bold transition-all shadow-md shadow-cyan-500/20 cursor-pointer flex items-center justify-center gap-2"
-                    >
-                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                      </svg>
-                      <span>Copy Password & Launch {serviceApprovalModal.app.name}</span>
-                    </button>
+                    {isExtensionInstalled ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (typeof window !== "undefined") {
+                              window.dispatchEvent(
+                                new CustomEvent("SENTINEL_VAULT_LAUNCH", {
+                                  detail: {
+                                    destination: serviceApprovalModal.destination,
+                                    username: serviceApprovalModal.vaultUsername || user?.email || "",
+                                    password: serviceApprovalModal.vaultPassword || "",
+                                    appName: serviceApprovalModal.app.name,
+                                  },
+                                })
+                              );
+                            }
+                            setVaultAutofillDispatched(true);
+                            setTimeout(() => setVaultAutofillDispatched(false), 3500);
+                          }}
+                          className="w-full py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-xs font-bold transition-all shadow-md shadow-cyan-500/20 cursor-pointer flex items-center justify-center gap-2"
+                        >
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                          </svg>
+                          <span>Launch & Autofill {serviceApprovalModal.app.name}</span>
+                        </button>
+                        <p className="text-[11px] text-center text-slate-400">
+                          {vaultAutofillDispatched
+                            ? "Dispatched to Sentinel Autofill Bridge. Form injection in progress..."
+                            : "Sentinel Autofill Bridge will open the login page and inject your credentials automatically."}
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (serviceApprovalModal.vaultPassword) {
+                              navigator.clipboard.writeText(serviceApprovalModal.vaultPassword);
+                              setCopiedVaultField("pass");
+                              setTimeout(() => setCopiedVaultField(null), 2500);
+                            }
+                            window.open(serviceApprovalModal.destination, "_blank", "noopener,noreferrer");
+                          }}
+                          className="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold transition-all shadow-md shadow-amber-500/20 cursor-pointer flex items-center justify-center gap-2"
+                        >
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                          </svg>
+                          <span>Copy Password & Open {serviceApprovalModal.app.name}</span>
+                        </button>
+                        <div className="flex items-center justify-between text-[11px] text-slate-400 px-1">
+                          <span>Extension offline: Manual paste mode</span>
+                          <button
+                            type="button"
+                            onClick={() => setShowExtensionGuideModal(true)}
+                            className="text-cyan-400 hover:text-cyan-300 underline font-medium cursor-pointer"
+                          >
+                            Setup Guide
+                          </button>
+                        </div>
+                      </>
+                    )}
                     <button
                       type="button"
                       onClick={() => {
@@ -3778,6 +3970,110 @@ export default function DashboardPage() {
                 </button>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Extension Installation & Setup Guide Modal */}
+      {showExtensionGuideModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-150">
+          <div className="relative w-full max-w-lg rounded-2xl bg-slate-950 border border-cyan-500/40 p-6 shadow-2xl text-white max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-3 border-b border-white/10">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400 shrink-0">
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white">Sentinel Autofill Bridge</h3>
+                  <p className="text-[11px] text-slate-400">Cross-Browser Middleman Middleware (Chromium & Firefox)</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowExtensionGuideModal(false)}
+                className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-colors cursor-pointer"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Current Real-Time Live Status Card */}
+            <div className="mt-4 p-3 rounded-xl bg-slate-900 border border-white/10 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <span className={`w-2.5 h-2.5 rounded-full ${isExtensionInstalled ? "bg-emerald-400 animate-pulse" : "bg-rose-400"}`} />
+                <div>
+                  <div className="text-xs font-semibold text-white">
+                    {isExtensionInstalled ? "Extension Detected & Active" : "Extension Not Detected"}
+                  </div>
+                  <div className="text-[10px] text-slate-400">
+                    {isExtensionInstalled
+                      ? "Cross-browser bridge ready for in-page form injection"
+                      : "Unpacked extension needs to be loaded in browser"}
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => checkExtensionPresence()}
+                disabled={extensionChecking}
+                className="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/15 text-xs font-medium text-slate-200 transition-colors cursor-pointer disabled:opacity-50"
+              >
+                {extensionChecking ? "Checking..." : "Re-Check"}
+              </button>
+            </div>
+
+            {/* Step-by-Step Loading Instructions */}
+            <div className="mt-4 space-y-3 text-xs text-slate-300">
+              <div className="p-3 rounded-lg bg-slate-900/60 border border-white/10 space-y-1.5">
+                <div className="text-xs font-bold text-cyan-300">Chromium Browsers (Chrome, Brave, Edge, Opera)</div>
+                <ol className="list-decimal list-inside space-y-1 text-[11px] text-slate-300">
+                  <li>Navigate to <code className="px-1 py-0.5 rounded bg-slate-950 font-mono text-cyan-200">chrome://extensions</code></li>
+                  <li>Toggle on <strong>Developer mode</strong> in the top-right corner</li>
+                  <li>Click <strong>Load unpacked</strong> in the top-left menu</li>
+                  <li>Select the <code className="px-1 py-0.5 rounded bg-slate-950 font-mono text-cyan-200">extension/</code> folder in this project</li>
+                </ol>
+              </div>
+
+              <div className="p-3 rounded-lg bg-slate-900/60 border border-white/10 space-y-1.5">
+                <div className="text-xs font-bold text-amber-300">Mozilla Firefox</div>
+                <ol className="list-decimal list-inside space-y-1 text-[11px] text-slate-300">
+                  <li>Navigate to <code className="px-1 py-0.5 rounded bg-slate-950 font-mono text-amber-200">about:debugging#/runtime/this-firefox</code></li>
+                  <li>Click <strong>Load Temporary Add-on...</strong></li>
+                  <li>Select <code className="px-1 py-0.5 rounded bg-slate-950 font-mono text-amber-200">manifest.json</code> inside the <code className="px-1 py-0.5 rounded bg-slate-950 font-mono text-amber-200">extension/</code> folder</li>
+                </ol>
+              </div>
+
+              <div className="p-3 rounded-lg bg-cyan-950/20 border border-cyan-500/20 text-[11px] text-slate-400 space-y-1">
+                <div className="font-semibold text-cyan-300">Zero Edge Cases Protocol</div>
+                <p>
+                  The extension acts strictly as a middleman. It creates no UI or floating badges on target sites. Credentials are only decrypted following your 2-digit Sentinel Mobile authenticator number match and purged from memory within 60 seconds.
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-5 pt-3 border-t border-white/10 flex items-center justify-between">
+              <a
+                href="/extension/sentinel-autofill-extension.zip"
+                download="sentinel-autofill-extension.zip"
+                className="px-3.5 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/15 text-slate-300 hover:text-white text-xs font-semibold transition-colors flex items-center gap-2"
+              >
+                <svg className="w-4 h-4 text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                </svg>
+                <span>Download Extension (.zip)</span>
+              </a>
+              <button
+                type="button"
+                onClick={() => setShowExtensionGuideModal(false)}
+                className="px-4 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-xs font-bold transition-colors cursor-pointer"
+              >
+                Close Guide
+              </button>
+            </div>
           </div>
         </div>
       )}
