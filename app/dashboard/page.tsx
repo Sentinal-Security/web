@@ -350,18 +350,29 @@ export default function DashboardPage() {
     challengeId: number;
     matchCode: string;
     status: "PENDING" | "APPROVED" | "DENIED" | "EXPIRED";
+    destination?: string;
+    isExternal?: boolean;
+    isVault?: boolean;
+    vaultUsername?: string;
+    vaultPassword?: string;
   } | null>(null);
   const [approvalOtpCode, setApprovalOtpCode] = useState("");
   const [approvalOtpError, setApprovalOtpError] = useState("");
   const [approvalOtpLoading, setApprovalOtpLoading] = useState(false);
   const finalizingLaunchRef = useRef(false);
+  const [vaultPasswordVisible, setVaultPasswordVisible] = useState(false);
+  const [copiedVaultField, setCopiedVaultField] = useState<"user" | "pass" | null>(null);
 
   // Resolve the final destination URL (and whether it opens externally) for a launched app
   const buildLaunchTarget = (
     app: AppIntegration,
     data?: { redirectUrl?: string; ssoToken?: string }
   ): { destination: string; isExternal: boolean } => {
+    const isVault = Boolean(app.isVault || app.type === "vault");
     const targetUrl = data?.redirectUrl || app.loginUrl;
+    if (isVault) {
+      return { destination: targetUrl || "https://", isExternal: true };
+    }
     const ssoTokenValue =
       data?.ssoToken || ssoToken || ("sso_" + Math.random().toString(36).substring(2) + Date.now().toString(36));
     const isExternal = Boolean(targetUrl && (targetUrl.startsWith("http://") || targetUrl.startsWith("https://")));
@@ -387,7 +398,14 @@ export default function DashboardPage() {
     app: AppIntegration,
     proof: { challengeId?: number; code?: string }
   ): Promise<{ ok: true } | { ok: false; message: string }> => {
-    let launchData: { redirectUrl?: string; ssoToken?: string } | undefined;
+    let launchData: {
+      redirectUrl?: string;
+      ssoToken?: string;
+      isVault?: boolean;
+      vaultUsername?: string;
+      vaultPassword?: string;
+    } | undefined;
+
     if (app.backendId && user?.userId) {
       const res = await launchUserService(Number(app.backendId), { userId: user.userId, ...proof });
       if (!res.success) {
@@ -395,12 +413,28 @@ export default function DashboardPage() {
       }
       launchData = res.data;
     }
+
+    const isVault = Boolean(launchData?.isVault || app.isVault || app.type === "vault");
+    const vaultUsername = launchData?.vaultUsername || app.vaultUsername || "";
+    const vaultPassword = launchData?.vaultPassword || "";
     const { destination, isExternal } = buildLaunchTarget(app, launchData);
-    setServiceApprovalModal((prev) => (prev ? { ...prev, status: "APPROVED" } : null));
-    setTimeout(() => {
-      openLaunchTarget(destination, isExternal);
-      setServiceApprovalModal(null);
-    }, 700);
+
+    setServiceApprovalModal((prev) => (prev ? {
+      ...prev,
+      status: "APPROVED",
+      destination,
+      isExternal,
+      isVault,
+      vaultUsername,
+      vaultPassword,
+    } : null));
+
+    if (!isVault) {
+      setTimeout(() => {
+        openLaunchTarget(destination, isExternal);
+        setServiceApprovalModal(null);
+      }, 700);
+    }
     return { ok: true };
   };
 
@@ -517,8 +551,8 @@ export default function DashboardPage() {
       return;
     }
 
-    // 2FA enabled -> mobile step-up approval is mandatory before the service is opened
-    if (user?.mfaEnabled) {
+    // 2FA enabled or Vault app -> mobile step-up approval is mandatory before credentials or service are opened
+    if (user?.mfaEnabled || app.isVault || app.type === "vault") {
       await startServiceStepUp(app);
       return;
     }
@@ -559,7 +593,7 @@ export default function DashboardPage() {
 
   // Add / Configure Service Modal State
   const [addModalOpen, setAddModalOpen] = useState(false);
-  const [activeModalTab, setActiveModalTab] = useState<"templates" | "custom">("templates");
+  const [activeModalTab, setActiveModalTab] = useState<"templates" | "custom" | "vault">("templates");
   const [connectingId, setConnectingId] = useState<string | null>(null);
   const [customName, setCustomName] = useState("");
   const [customCategory, setCustomCategory] = useState("");
@@ -569,6 +603,17 @@ export default function DashboardPage() {
   const [customMfaRequired, setCustomMfaRequired] = useState(true);
   const [modalErr, setModalErr] = useState("");
   const [modalSuccess, setModalSuccess] = useState("");
+
+  // Vault form state
+  const [vaultPreset, setVaultPreset] = useState<"facebook" | "github" | "google" | "custom">("facebook");
+  const [vaultName, setVaultName] = useState("Facebook");
+  const [vaultCategory, setVaultCategory] = useState("Social Network");
+  const [vaultLoginUrl, setVaultLoginUrl] = useState("https://www.facebook.com/login");
+  const [vaultUsername, setVaultUsername] = useState("");
+  const [vaultPassword, setVaultPassword] = useState("");
+  const [vaultShowPassword, setVaultShowPassword] = useState(false);
+  const [vaultMfaRequired, setVaultMfaRequired] = useState(true);
+  const [vaultSaving, setVaultSaving] = useState(false);
 
   // Profile Modal State (Self-Service Name Edit with Locked Credentials)
   const [profileModalOpen, setProfileModalOpen] = useState(false);
@@ -900,6 +945,77 @@ export default function DashboardPage() {
       }, 1200);
     } else {
       setModalErr("Failed to register custom application.");
+    }
+  };
+
+  const handleSelectVaultPreset = (preset: "facebook" | "github" | "google" | "custom") => {
+    setVaultPreset(preset);
+    setModalErr("");
+    if (preset === "facebook") {
+      setVaultName("Facebook");
+      setVaultCategory("Social Network");
+      setVaultLoginUrl("https://www.facebook.com/login");
+    } else if (preset === "github") {
+      setVaultName("GitHub");
+      setVaultCategory("Developer Platform");
+      setVaultLoginUrl("https://github.com/login");
+    } else if (preset === "google") {
+      setVaultName("Gmail / Google");
+      setVaultCategory("Email & Workspace");
+      setVaultLoginUrl("https://accounts.google.com/signin");
+    } else {
+      setVaultName("");
+      setVaultCategory("Personal Account");
+      setVaultLoginUrl("https://");
+    }
+  };
+
+  const handleAddVaultApp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setModalErr("");
+    setModalSuccess("");
+
+    if (!vaultName.trim()) {
+      setModalErr("Application or service name is required.");
+      return;
+    }
+    if (!vaultLoginUrl.trim()) {
+      setModalErr("Login URL is required.");
+      return;
+    }
+    if (!vaultUsername.trim()) {
+      setModalErr("Username or email is required.");
+      return;
+    }
+    if (!vaultPassword.trim()) {
+      setModalErr("Password is required.");
+      return;
+    }
+
+    setVaultSaving(true);
+    const iconType = vaultPreset !== "custom" ? vaultPreset : "key";
+    const ok = await addCustomApp({
+      name: vaultName.trim(),
+      category: vaultCategory.trim() || "Credential Vault",
+      type: "vault",
+      iconType,
+      loginUrl: vaultLoginUrl.trim(),
+      mfaRequired: vaultMfaRequired,
+      vaultUsername: vaultUsername.trim(),
+      vaultPassword: vaultPassword.trim(),
+    });
+    setVaultSaving(false);
+
+    if (ok) {
+      setModalSuccess(`Credentials for ${vaultName} securely saved to vault.`);
+      setVaultUsername("");
+      setVaultPassword("");
+      setTimeout(() => {
+        setAddModalOpen(false);
+        setModalSuccess("");
+      }, 1200);
+    } else {
+      setModalErr("Failed to save credentials to vault.");
     }
   };
 
@@ -1888,13 +2004,25 @@ export default function DashboardPage() {
                       onClick={(e) => handleLaunchApp(app, e)}
                       className="text-left w-full group-hover:text-cyan-300 transition-colors cursor-pointer truncate"
                     >
-                      <h3 className="text-sm font-semibold text-white tracking-tight truncate">
-                        {app.name}
-                      </h3>
+                      <div className="flex items-center gap-1.5 truncate">
+                        <h3 className="text-sm font-semibold text-white tracking-tight truncate">
+                          {app.name}
+                        </h3>
+                        {(app.isVault || app.type === "vault") && (
+                          <span className="px-1.5 py-0.2 rounded text-[9px] font-mono bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 shrink-0">
+                            Vault
+                          </span>
+                        )}
+                      </div>
                     </button>
                     <p className="text-xs text-slate-400 truncate mt-0.5">
                       {app.category}
                     </p>
+                    {app.vaultUsername && (
+                      <p className="text-[11px] text-slate-500 font-mono truncate mt-0.5">
+                        {app.vaultUsername}
+                      </p>
+                    )}
 
                     <div className="mt-3 pt-2.5 border-t border-white/5 flex items-center justify-between">
                       <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-medium bg-white/5 border border-white/10 text-slate-300">
@@ -1949,11 +2077,15 @@ export default function DashboardPage() {
             </div>
 
             {/* Modal Tabs */}
-            <div className="flex items-center gap-2 border-b border-white/10 pb-3 mb-5">
+            <div className="flex items-center gap-2 border-b border-white/10 pb-3 mb-5 overflow-x-auto">
               <button
                 type="button"
-                onClick={() => setActiveModalTab("templates")}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
+                onClick={() => {
+                  setActiveModalTab("templates");
+                  setModalErr("");
+                  setModalSuccess("");
+                }}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer shrink-0 ${
                   activeModalTab === "templates"
                     ? "bg-cyan-500 text-slate-950 font-semibold"
                     : "text-slate-400 hover:text-white hover:bg-white/5"
@@ -1963,14 +2095,33 @@ export default function DashboardPage() {
               </button>
               <button
                 type="button"
-                onClick={() => setActiveModalTab("custom")}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
+                onClick={() => {
+                  setActiveModalTab("custom");
+                  setModalErr("");
+                  setModalSuccess("");
+                }}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer shrink-0 ${
                   activeModalTab === "custom"
                     ? "bg-cyan-500 text-slate-950 font-semibold"
                     : "text-slate-400 hover:text-white hover:bg-white/5"
                 }`}
               >
                 Custom Integration
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveModalTab("vault");
+                  setModalErr("");
+                  setModalSuccess("");
+                }}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer shrink-0 ${
+                  activeModalTab === "vault"
+                    ? "bg-cyan-500 text-slate-950 font-semibold"
+                    : "text-slate-400 hover:text-white hover:bg-white/5"
+                }`}
+              >
+                Credential Vault (Password Manager)
               </button>
             </div>
 
@@ -2053,6 +2204,168 @@ export default function DashboardPage() {
                   );
                 })}
               </div>
+            ) : activeModalTab === "vault" ? (
+              <form onSubmit={handleAddVaultApp} className="space-y-4">
+                <div className="p-3 rounded-lg bg-cyan-950/20 border border-cyan-500/30 text-xs text-slate-300 space-y-1">
+                  <div className="flex items-center gap-2 text-cyan-300 font-semibold text-xs">
+                    <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                    </svg>
+                    <span>Secure Password Vault & Out-of-Band Push Gate</span>
+                  </div>
+                  <p className="text-[11px] text-slate-400 leading-relaxed">
+                    Store account credentials for external platforms like Facebook, GitHub, or Gmail. Credentials are encrypted at rest with AES-256 and will remain locked until verified with a 2-digit Sentinel Mobile number match challenge.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-slate-300 mb-1.5">Quick Service Presets</label>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    {[
+                      { id: "facebook", name: "Facebook", icon: "facebook" },
+                      { id: "github", name: "GitHub", icon: "github" },
+                      { id: "google", name: "Gmail", icon: "google" },
+                      { id: "custom", name: "Custom Site", icon: "key" },
+                    ].map((item) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => handleSelectVaultPreset(item.id as any)}
+                        className={`p-2.5 rounded-lg border flex items-center gap-2 transition-all cursor-pointer ${
+                          vaultPreset === item.id
+                            ? "bg-cyan-500/10 border-cyan-500 text-cyan-300 font-semibold"
+                            : "bg-slate-900/50 border-white/10 hover:border-white/20 text-slate-300"
+                        }`}
+                      >
+                        <div className="w-5 h-5 flex items-center justify-center shrink-0">
+                          <AppIcon iconType={item.icon} />
+                        </div>
+                        <span className="text-xs truncate">{item.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-300 mb-1">Service Name *</label>
+                    <input
+                      type="text"
+                      value={vaultName}
+                      onChange={(e) => setVaultName(e.target.value)}
+                      placeholder="e.g. Facebook, GitHub, Gmail"
+                      className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-white/10 text-xs text-white outline-none focus:border-cyan-500/60"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-300 mb-1">Category</label>
+                    <input
+                      type="text"
+                      value={vaultCategory}
+                      onChange={(e) => setVaultCategory(e.target.value)}
+                      placeholder="e.g. Social Network, Developer"
+                      className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-white/10 text-xs text-white outline-none focus:border-cyan-500/60"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-slate-300 mb-1">Launch / Login URL *</label>
+                  <input
+                    type="url"
+                    value={vaultLoginUrl}
+                    onChange={(e) => setVaultLoginUrl(e.target.value)}
+                    placeholder="https://www.facebook.com/login"
+                    className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-white/10 text-xs text-white outline-none focus:border-cyan-500/60 font-mono"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-slate-300 mb-1">Username / Email *</label>
+                  <input
+                    type="text"
+                    value={vaultUsername}
+                    onChange={(e) => setVaultUsername(e.target.value)}
+                    placeholder={
+                      vaultPreset === "facebook"
+                        ? "name@example.com or mobile number"
+                        : vaultPreset === "github"
+                        ? "username or email"
+                        : vaultPreset === "google"
+                        ? "username@gmail.com"
+                        : "user@example.com"
+                    }
+                    className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-white/10 text-xs text-white outline-none focus:border-cyan-500/60 font-mono"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-slate-300 mb-1">Account Password *</label>
+                  <div className="relative">
+                    <input
+                      type={vaultShowPassword ? "text" : "password"}
+                      value={vaultPassword}
+                      onChange={(e) => setVaultPassword(e.target.value)}
+                      placeholder="Enter account password to vault"
+                      className="w-full px-3 py-2 pr-10 rounded-lg bg-slate-900 border border-white/10 text-xs text-white outline-none focus:border-cyan-500/60 font-mono"
+                      required
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setVaultShowPassword(!vaultShowPassword)}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white cursor-pointer"
+                      title={vaultShowPassword ? "Hide password" : "Show password"}
+                    >
+                      {vaultShowPassword ? (
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l18 18" />
+                        </svg>
+                      ) : (
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                        </svg>
+                      )}
+                    </button>
+                  </div>
+                  <div className="mt-1.5">
+                    <PasswordEntropyMeter password={vaultPassword} />
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 pt-1">
+                  <input
+                    type="checkbox"
+                    id="vaultEnforceMfa"
+                    checked={vaultMfaRequired}
+                    onChange={(e) => setVaultMfaRequired(e.target.checked)}
+                    className="w-4 h-4 rounded border-slate-700 bg-slate-900 text-cyan-400 accent-cyan-500 cursor-pointer"
+                  />
+                  <label htmlFor="vaultEnforceMfa" className="text-xs text-slate-300 cursor-pointer select-none">
+                    Require Sentinel Push Verification (Number Match) before unlocking credentials
+                  </label>
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-3 border-t border-white/10">
+                  <button
+                    type="button"
+                    onClick={() => setAddModalOpen(false)}
+                    className="px-3.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-slate-300 text-xs font-medium transition-colors cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={vaultSaving}
+                    className="px-4 py-1.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-xs font-semibold transition-colors cursor-pointer disabled:opacity-50"
+                  >
+                    {vaultSaving ? "Saving to Vault..." : "Save to Secure Vault"}
+                  </button>
+                </div>
+              </form>
             ) : (
               <form onSubmit={handleAddCustom} className="space-y-3.5">
                 <div>
@@ -3267,17 +3580,135 @@ export default function DashboardPage() {
             )}
 
             {serviceApprovalModal.status === "APPROVED" && (
-              <div className="mt-4 p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-center space-y-2 animate-in fade-in duration-200">
-                <div className="w-10 h-10 rounded-full bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center mx-auto text-emerald-400">
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                  </svg>
+              serviceApprovalModal.isVault ? (
+                <div className="mt-4 p-4 rounded-xl bg-slate-900 border border-emerald-500/40 text-left space-y-4 animate-in fade-in duration-200">
+                  <div className="flex items-center gap-3 pb-3 border-b border-white/10">
+                    <div className="w-8 h-8 rounded-full bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 shrink-0">
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                      </svg>
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold text-emerald-300">Credentials Unlocked</h4>
+                      <p className="text-[11px] text-slate-400">Authorized by Sentinel Mobile Authenticator</p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    <div>
+                      <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block mb-1">
+                        Username / Email
+                      </label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          readOnly
+                          value={serviceApprovalModal.vaultUsername || user?.email || ""}
+                          className="flex-1 bg-slate-950 border border-white/10 rounded-lg px-3 py-2 text-xs font-mono text-cyan-200 outline-none select-all"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            navigator.clipboard.writeText(serviceApprovalModal.vaultUsername || user?.email || "");
+                            setCopiedVaultField("user");
+                            setTimeout(() => setCopiedVaultField(null), 2000);
+                          }}
+                          className="px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-medium text-slate-200 cursor-pointer transition-colors"
+                        >
+                          {copiedVaultField === "user" ? "Copied" : "Copy"}
+                        </button>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block mb-1">
+                        Password
+                      </label>
+                      <div className="flex items-center gap-2">
+                        <div className="relative flex-1">
+                          <input
+                            type={vaultPasswordVisible ? "text" : "password"}
+                            readOnly
+                            value={serviceApprovalModal.vaultPassword || "••••••••"}
+                            className="w-full bg-slate-950 border border-white/10 rounded-lg px-3 py-2 pr-10 text-xs font-mono text-amber-200 outline-none select-all"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setVaultPasswordVisible(!vaultPasswordVisible)}
+                            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white cursor-pointer"
+                            title={vaultPasswordVisible ? "Hide password" : "Show password"}
+                          >
+                            {vaultPasswordVisible ? (
+                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l18 18" />
+                              </svg>
+                            ) : (
+                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                              </svg>
+                            )}
+                          </button>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (serviceApprovalModal.vaultPassword) {
+                              navigator.clipboard.writeText(serviceApprovalModal.vaultPassword);
+                              setCopiedVaultField("pass");
+                              setTimeout(() => setCopiedVaultField(null), 2000);
+                            }
+                          }}
+                          className="px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-medium text-slate-200 cursor-pointer transition-colors"
+                        >
+                          {copiedVaultField === "pass" ? "Copied" : "Copy"}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="pt-2 flex flex-col gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (serviceApprovalModal.vaultPassword) {
+                          navigator.clipboard.writeText(serviceApprovalModal.vaultPassword);
+                          setCopiedVaultField("pass");
+                        }
+                        window.open(serviceApprovalModal.destination, "_blank", "noopener,noreferrer");
+                      }}
+                      className="w-full py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-xs font-bold transition-all shadow-md shadow-cyan-500/20 cursor-pointer flex items-center justify-center gap-2"
+                    >
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                      </svg>
+                      <span>Copy Password & Launch {serviceApprovalModal.app.name}</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setServiceApprovalModal(null);
+                        setVaultPasswordVisible(false);
+                      }}
+                      className="w-full py-2 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white text-xs font-medium transition-colors cursor-pointer"
+                    >
+                      Done / Lock Vault
+                    </button>
+                  </div>
                 </div>
-                <h4 className="text-sm font-bold text-emerald-300">Login Approved</h4>
-                <p className="text-xs text-slate-300">
-                  Redirecting to <strong>{serviceApprovalModal.app.name}</strong> workstation session...
-                </p>
-              </div>
+              ) : (
+                <div className="mt-4 p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-center space-y-2 animate-in fade-in duration-200">
+                  <div className="w-10 h-10 rounded-full bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center mx-auto text-emerald-400">
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                    </svg>
+                  </div>
+                  <h4 className="text-sm font-bold text-emerald-300">Login Approved</h4>
+                  <p className="text-xs text-slate-300">
+                    Redirecting to <strong>{serviceApprovalModal.app.name}</strong> workstation session...
+                  </p>
+                </div>
+              )
             )}
 
             {serviceApprovalModal.status === "DENIED" && (

@@ -110,6 +110,46 @@ export const BOILERPLATE_TEMPLATES: BoilerplateTemplate[] = [
   },
 ];
 
+export interface VaultPreset {
+  id: string;
+  name: string;
+  category: string;
+  iconType: "facebook" | "github" | "google" | "custom";
+  loginUrl: string;
+  description: string;
+  placeholderUser: string;
+}
+
+export const VAULT_PRESETS: VaultPreset[] = [
+  {
+    id: "facebook",
+    name: "Facebook",
+    category: "Social Network",
+    iconType: "facebook",
+    loginUrl: "https://www.facebook.com/login",
+    description: "Store personal or business Facebook credentials. Unlocked upon Sentinel Mobile number match approval.",
+    placeholderUser: "name@example.com or phone number",
+  },
+  {
+    id: "github",
+    name: "GitHub",
+    category: "Developer Platform",
+    iconType: "github",
+    loginUrl: "https://github.com/login",
+    description: "Store GitHub personal credentials with Sentinel out-of-band push verification.",
+    placeholderUser: "username or email",
+  },
+  {
+    id: "google",
+    name: "Gmail / Google",
+    category: "Email & Workspace",
+    iconType: "google",
+    loginUrl: "https://accounts.google.com/signin",
+    description: "Store Google / Gmail credentials secured by Sentinel biometric / push confirmation.",
+    placeholderUser: "username@gmail.com",
+  },
+];
+
 // Defaults removed - newly registered users start with a clean empty dashboard
 export const DEFAULT_APPS: AppIntegration[] = [];
 
@@ -150,6 +190,8 @@ export function backendToAppIntegration(service: BackendServiceResponse): AppInt
     isCustom: !isBoilerplate,
     loginUrl: service.loginUrl,
     clientId: service.clientId,
+    isVault: Boolean(service.authProtocol?.toLowerCase() === "vault" || service.isVault),
+    vaultUsername: service.vaultUsername,
     metrics: {
       lastLogin: service.lastLogin ? service.lastLogin : "Never logged in",
       lastActive: service.lastActive ? service.lastActive : "Inactive",
