@@ -680,6 +680,19 @@ export default function DashboardPage() {
       }
     }
 
+    const handleGetSession = () => {
+      const stored = getStoredSession();
+      window.dispatchEvent(
+        new CustomEvent("SENTINEL_SESSION_RESPONSE", {
+          detail: {
+            isLoggedIn: Boolean(stored?.user),
+            user: stored?.user || null,
+          },
+        })
+      );
+    };
+    window.addEventListener("SENTINEL_GET_SESSION", handleGetSession);
+
     if (session.user.company) {
       getOrganizationPolicy(session.user.userId, session.user.company).then((res) => {
         if (res.success && res.data?.mfaEnforced) {
@@ -687,6 +700,10 @@ export default function DashboardPage() {
         }
       });
     }
+
+    return () => {
+      window.removeEventListener("SENTINEL_GET_SESSION", handleGetSession);
+    };
   }, [router]);
 
   const loadUserSessions = useCallback(async () => {
@@ -3674,6 +3691,18 @@ export default function DashboardPage() {
                         if (serviceApprovalModal.vaultPassword) {
                           navigator.clipboard.writeText(serviceApprovalModal.vaultPassword);
                           setCopiedVaultField("pass");
+                        }
+                        if (typeof window !== "undefined") {
+                          window.dispatchEvent(
+                            new CustomEvent("SENTINEL_VAULT_LAUNCH", {
+                              detail: {
+                                destination: serviceApprovalModal.destination,
+                                username: serviceApprovalModal.vaultUsername || user?.email || "",
+                                password: serviceApprovalModal.vaultPassword || "",
+                                appName: serviceApprovalModal.app.name,
+                              },
+                            })
+                          );
                         }
                         window.open(serviceApprovalModal.destination, "_blank", "noopener,noreferrer");
                       }}
