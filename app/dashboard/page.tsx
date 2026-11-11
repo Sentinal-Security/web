@@ -593,8 +593,16 @@ export default function DashboardPage() {
       return;
     }
 
-    // 2FA enabled or Vault app -> mobile step-up approval is mandatory before credentials or service are opened
-    if (user?.mfaEnabled || app.isVault || app.type === "vault") {
+    // 2FA enabled, Vault app, or service enforces MFA -> mobile step-up approval is mandatory
+    if (user?.mfaEnabled || app.isVault || app.type === "vault" || app.mfaRequired) {
+      if (!user?.mfaEnabled && app.mfaRequired && !app.isVault && app.type !== "vault") {
+        setForbiddenModal({
+          appName: app.name,
+          title: "Multi-Factor Authentication Required",
+          reason: `Access to ${app.name} requires Multi-Factor Authentication under organization policy. Please pair your Sentinel Mobile Authenticator app to access this service.`,
+        });
+        return;
+      }
       await startServiceStepUp(app);
       return;
     }
@@ -605,10 +613,19 @@ export default function DashboardPage() {
       const res = await launchUserService(Number(app.backendId), { userId: user.userId });
       setLaunchingAppId(null);
       if (!res.success) {
-        // Stored session may be stale (MFA enabled elsewhere): fall back to mobile step-up
-        if (/MFA approval is required/i.test(res.message || "")) {
-          await startServiceStepUp(app);
-          return;
+        // Fall back to mobile step-up if backend requires MFA
+        if (/MFA.*required/i.test(res.message || "")) {
+          if (user?.mfaEnabled) {
+            await startServiceStepUp(app);
+            return;
+          } else {
+            setForbiddenModal({
+              appName: app.name,
+              title: "Multi-Factor Authentication Required",
+              reason: `Access to ${app.name} requires Multi-Factor Authentication. Please pair your Sentinel Mobile Authenticator app to access this service.`,
+            });
+            return;
+          }
         }
         setForbiddenModal({
           appName: app.name,

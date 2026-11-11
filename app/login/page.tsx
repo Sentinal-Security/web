@@ -19,12 +19,38 @@ export default function LoginPage() {
   );
 }
 
+const CLIENT_REDIRECT_DEFAULTS: Record<string, { uri: string; name: string }> = {
+  acme_hr: { uri: "http://localhost:3001", name: "Acme HR Portal" },
+  fintech_payroll: { uri: "http://localhost:3002", name: "FinTech Payroll Portal" },
+  devops_incident: { uri: "http://localhost:3003", name: "DevOps Incident Command" },
+  devops: { uri: "http://localhost:3003", name: "DevOps Incident Command" },
+  nexus_ops: { uri: "http://localhost:3003", name: "Nexus Ops Portal" },
+};
+
 function LoginPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const redirectUri = searchParams.get("redirect_uri") || searchParams.get("redirectUrl") || searchParams.get("redirectUri");
-  const clientId = searchParams.get("client_id") || searchParams.get("clientId");
-  const appName = searchParams.get("app_name") || searchParams.get("appName") || (clientId ? clientId.toUpperCase() : "");
+
+  const rawClientId = (searchParams.get("client_id") || searchParams.get("clientId") || "").trim().toLowerCase();
+  let rawRedirectUri = (
+    searchParams.get("redirect_uri") ||
+    searchParams.get("redirectUrl") ||
+    searchParams.get("redirectUri") ||
+    ""
+  ).trim();
+
+  // If redirect_uri is missing or empty, resolve from registered client defaults
+  if (!rawRedirectUri && rawClientId && CLIENT_REDIRECT_DEFAULTS[rawClientId]) {
+    rawRedirectUri = CLIENT_REDIRECT_DEFAULTS[rawClientId].uri;
+  }
+
+  const redirectUri = rawRedirectUri || null;
+  const clientId = rawClientId || null;
+  const appName =
+    searchParams.get("app_name") ||
+    searchParams.get("appName") ||
+    (rawClientId && CLIENT_REDIRECT_DEFAULTS[rawClientId] ? CLIENT_REDIRECT_DEFAULTS[rawClientId].name : "") ||
+    (rawClientId ? rawClientId.toUpperCase() : "");
   const state = searchParams.get("state");
   const [inactivityNotice, setInactivityNotice] = useState<string | null>(null);
 
