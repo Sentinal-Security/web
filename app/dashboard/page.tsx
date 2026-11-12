@@ -8,6 +8,7 @@ import { AppIntegration, IntegrationType } from "@/types/integration";
 import { getStoredSession, updateStoredUser, clearSession } from "@/lib/session";
 import { useMfa } from "@/hooks/useMfa";
 import { useIntegrations } from "@/hooks/useIntegrations";
+import { resolveServiceUrl } from "@/lib/integrations";
 import {
   updateUserProfile,
   checkBackendHealth,
@@ -415,13 +416,14 @@ export default function DashboardPage() {
     });
   }, []);
 
-  // Resolve the final destination URL (and whether it opens externally) for a launched app
+  // Resolve the destination URL directly to the application dashboard with SSO tokens
   const buildLaunchTarget = (
     app: AppIntegration,
     data?: { redirectUrl?: string; ssoToken?: string }
   ): { destination: string; isExternal: boolean } => {
     const isVault = Boolean(app.isVault || app.type === "vault");
-    const targetUrl = data?.redirectUrl || app.loginUrl;
+    const rawTarget = data?.redirectUrl || app.loginUrl;
+    const targetUrl = resolveServiceUrl(rawTarget, String(app.id));
     if (isVault) {
       return { destination: targetUrl || "https://", isExternal: true };
     }
@@ -431,7 +433,7 @@ export default function DashboardPage() {
     const tokenParam = ssoTokenValue ? `&ssoToken=${ssoTokenValue}` : "";
     const destination =
       isExternal && targetUrl && user?.userId
-        ? `${targetUrl}${targetUrl.includes("?") ? "&" : "?"}ssoUserId=${user.userId}&ssoEmail=${encodeURIComponent(user.email || "")}${tokenParam}`
+        ? `${targetUrl}${targetUrl.includes("?") ? "&" : "?"}ssoUserId=${user.userId}&ssoUserEmail=${encodeURIComponent(user.email || "")}${tokenParam}`
         : (targetUrl || `/apps/${app.id}`);
     return { destination, isExternal };
   };
@@ -606,11 +608,11 @@ export default function DashboardPage() {
     // 2FA enabled, Vault app, or service enforces MFA -> mobile step-up approval is mandatory
     const serviceEnforcesMfa = Boolean(app.mfaRequired || app.metrics?.mfaRequired);
     if (user?.mfaEnabled || app.isVault || app.type === "vault" || serviceEnforcesMfa) {
-      if (!user?.mfaEnabled && serviceEnforcesMfa && !app.isVault && app.type !== "vault") {
+      if (!user?.mfaEnabled && !app.isVault && app.type !== "vault") {
         setForbiddenModal({
           appName: app.name,
           title: "Multi-Factor Authentication Required",
-          reason: `Access to ${app.name} requires Multi-Factor Authentication under organization policy. Please pair your Sentinel Mobile Authenticator app to access this service.`,
+          reason: `Access to ${app.name} requires mobile authenticator verification under Sentinel Zero-Trust policy. Please pair your Sentinel Mobile Authenticator app to access this service.`,
         });
         return;
       }
@@ -618,39 +620,12 @@ export default function DashboardPage() {
       return;
     }
 
-    // 2FA disabled -> authenticate on web only and open the service directly
-    if (app.backendId && user?.userId) {
-      setLaunchingAppId(String(app.id));
-      const res = await launchUserService(Number(app.backendId), { userId: user.userId });
-      setLaunchingAppId(null);
-      if (!res.success) {
-        // Fall back to mobile step-up if backend requires MFA
-        if (/MFA.*required/i.test(res.message || "")) {
-          if (user?.mfaEnabled) {
-            await startServiceStepUp(app);
-            return;
-          } else {
-            setForbiddenModal({
-              appName: app.name,
-              title: "Multi-Factor Authentication Required",
-              reason: `Access to ${app.name} requires Multi-Factor Authentication. Please pair your Sentinel Mobile Authenticator app to access this service.`,
-            });
-            return;
-          }
-        }
-        setForbiddenModal({
-          appName: app.name,
-          reason: res.message || "Access Denied (403): You do not have permission to access this service.",
-        });
-        return;
-      }
-      const { destination, isExternal } = buildLaunchTarget(app, res.data);
-      openLaunchTarget(destination, isExternal);
-      return;
-    }
-
-    const { destination, isExternal } = buildLaunchTarget(app);
-    openLaunchTarget(destination, isExternal);
+    // If MFA is not yet configured, inform user that mobile authentication is mandatory
+    setForbiddenModal({
+      appName: app.name,
+      title: "Mobile Authenticator Required",
+      reason: "Sentinel Zero-Trust access control requires mobile authenticator verification before launching applications. Please pair your mobile authenticator in Security Settings.",
+    });
   };
 
   // MFA Pairing Modal State

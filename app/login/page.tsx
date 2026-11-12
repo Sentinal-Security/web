@@ -19,39 +19,37 @@ export default function LoginPage() {
   );
 }
 
-const CLIENT_REDIRECT_DEFAULTS: Record<string, { uri: string; name: string }> = {
-  acme_hr: { uri: "http://localhost:3001", name: "Acme HR Portal" },
-  fintech_payroll: { uri: "http://localhost:3002", name: "FinTech Payroll Portal" },
-  devops_incident: { uri: "http://localhost:3003", name: "DevOps Incident Command" },
-  devops: { uri: "http://localhost:3003", name: "DevOps Incident Command" },
-  nexus_ops: { uri: "http://localhost:3003", name: "Nexus Ops Portal" },
+const CLIENT_REDIRECT_REGISTRY: Record<string, { name: string; localUrl: string; prodUrl: string }> = {
+  fintech_payroll: { name: "FinTech Payroll Portal", localUrl: "http://localhost:3002", prodUrl: "https://demo-apps-sfjl.vercel.app" },
+  "fintech-payroll": { name: "FinTech Payroll Portal", localUrl: "http://localhost:3002", prodUrl: "https://demo-apps-sfjl.vercel.app" },
+  acme_hr: { name: "Acme HR Portal", localUrl: "http://localhost:3001", prodUrl: "https://demo-apps-blue.vercel.app" },
+  "acme-hr": { name: "Acme HR Portal", localUrl: "http://localhost:3001", prodUrl: "https://demo-apps-blue.vercel.app" },
+  devops_incident: { name: "DevOps Incident Command", localUrl: "http://localhost:3003", prodUrl: "https://demo-apps-fjk5.vercel.app" },
+  "devops-incident": { name: "DevOps Incident Command", localUrl: "http://localhost:3003", prodUrl: "https://demo-apps-fjk5.vercel.app" },
+  devops: { name: "DevOps Incident Command", localUrl: "http://localhost:3003", prodUrl: "https://demo-apps-fjk5.vercel.app" },
+  nexus_ops: { name: "Nexus Ops Portal", localUrl: "http://localhost:3003", prodUrl: "https://demo-apps-fjk5.vercel.app" },
 };
+
+function resolveClientRedirect(clientId: string | null, rawRedirect: string | null): string {
+  if (rawRedirect && rawRedirect.trim().length > 0) return rawRedirect.trim();
+  if (!clientId) return "";
+  const key = clientId.toLowerCase();
+  const config = CLIENT_REDIRECT_REGISTRY[key];
+  if (!config) return "";
+  const isLocal = typeof window !== "undefined" && (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
+  return isLocal ? config.localUrl : config.prodUrl;
+}
 
 function LoginPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-
-  const rawClientId = (searchParams.get("client_id") || searchParams.get("clientId") || "").trim().toLowerCase();
-  let rawRedirectUri = (
-    searchParams.get("redirect_uri") ||
-    searchParams.get("redirectUrl") ||
-    searchParams.get("redirectUri") ||
-    ""
-  ).trim();
-
-  // If redirect_uri is missing or empty, resolve from registered client defaults
-  if (!rawRedirectUri && rawClientId && CLIENT_REDIRECT_DEFAULTS[rawClientId]) {
-    rawRedirectUri = CLIENT_REDIRECT_DEFAULTS[rawClientId].uri;
-  }
-
-  const redirectUri = rawRedirectUri || null;
-  const clientId = rawClientId || null;
-  const appName =
-    searchParams.get("app_name") ||
-    searchParams.get("appName") ||
-    (rawClientId && CLIENT_REDIRECT_DEFAULTS[rawClientId] ? CLIENT_REDIRECT_DEFAULTS[rawClientId].name : "") ||
-    (rawClientId ? rawClientId.toUpperCase() : "");
+  const rawRedirectUri = searchParams.get("redirect_uri") || searchParams.get("redirectUrl") || searchParams.get("redirectUri");
+  const clientId = searchParams.get("client_id") || searchParams.get("clientId");
+  const registeredClient = clientId ? CLIENT_REDIRECT_REGISTRY[clientId.toLowerCase()] : undefined;
+  const redirectUri = resolveClientRedirect(clientId, rawRedirectUri);
+  const appName = searchParams.get("app_name") || searchParams.get("appName") || registeredClient?.name || (clientId ? clientId.toUpperCase() : "");
   const state = searchParams.get("state");
+  const paramEmail = searchParams.get("email") || "";
   const [inactivityNotice, setInactivityNotice] = useState<string | null>(null);
 
   useEffect(() => {
@@ -175,14 +173,18 @@ function LoginPageContent() {
     setMfaMode("push");
   };
 
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(paramEmail);
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
   const [validationError, setValidationError] = useState("");
 
-  // Restore remembered email on mount if previously saved
+  // Restore remembered email on mount if previously saved (unless paramEmail passed)
   useEffect(() => {
+    if (paramEmail) {
+      setEmail(paramEmail);
+      return;
+    }
     try {
       const savedEmail = localStorage.getItem("sentinel_remembered_email");
       if (savedEmail) {
@@ -190,7 +192,7 @@ function LoginPageContent() {
         setRememberMe(true);
       }
     } catch {}
-  }, []);
+  }, [paramEmail]);
 
   // MFA Challenge State
   const [mfaChallenge, setMfaChallenge] = useState<{

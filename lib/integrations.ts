@@ -229,6 +229,23 @@ export function saveStoredIntegrations(apps: AppIntegration[], userId?: number):
   }
 }
 
+export function resolveServiceUrl(url?: string, clientIdOrId?: string): string {
+  const targetUrl = url || "";
+  const key = (clientIdOrId || "").toLowerCase();
+  if (typeof window !== "undefined" && (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1")) {
+    if (key.includes("fintech") || key.includes("3002") || targetUrl.includes("demo-apps-sfjl.vercel.app") || targetUrl.includes("3002")) {
+      return "http://localhost:3002";
+    }
+    if (key.includes("acme") || key.includes("3001") || targetUrl.includes("demo-apps-blue.vercel.app") || targetUrl.includes("3001")) {
+      return "http://localhost:3001";
+    }
+    if (key.includes("devops") || key.includes("3003") || targetUrl.includes("demo-apps-fjk5.vercel.app") || targetUrl.includes("3003")) {
+      return "http://localhost:3003";
+    }
+  }
+  return targetUrl;
+}
+
 export async function testConnectionPing(url: string): Promise<{ success: boolean; latencyMs: number; message: string }> {
   const start = performance.now();
   try {
