@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import { useMfa } from "@/hooks/useMfa";
 import { saveSession, getStoredSession, clearSession } from "@/lib/session";
-import { getMfaChallengeStatus, loginWithGoogle, resendVerification, sendEmailOtp, validateSsoSession } from "@/lib/api";
+import { checkClientAccess, getMfaChallengeStatus, loginWithGoogle, resendVerification, sendEmailOtp, validateSsoSession } from "@/lib/api";
 import { User } from "@/types/auth";
 import Footer from "@/app/partials/footer";
 import { PasswordToggleAdornment } from "@/components/PasswordToggleAdornment";
@@ -71,6 +71,8 @@ function LoginPageContent() {
   const { verifyLogin, verifyRecovery, loading: mfaLoading, error: mfaError, setError: setMfaError } = useMfa();
 
   const [existingUser, setExistingUser] = useState<User | null>(null);
+  const [clientAccessDenied, setClientAccessDenied] = useState<string | null>(null);
+  const [checkingClientAccess, setCheckingClientAccess] = useState(false);
 
   const impersonateToken = searchParams.get("impersonate_token");
   const [impersonating, setImpersonating] = useState(false);
@@ -135,12 +137,48 @@ function LoginPageContent() {
 
   useEffect(() => {
     const session = getStoredSession();
-    if (session && session.user) {
-      setExistingUser(session.user);
-    }
-  }, []);
+    if (!session || !session.user) return;
 
-  const handleSuccessfulHandoff = (userId: number, userEmail: string, ssoToken?: string) => {
+    setExistingUser(session.user);
+    if (!redirectUri && !clientId) return;
+
+    let cancelled = false;
+    setCheckingClientAccess(true);
+    setClientAccessDenied(null);
+
+    checkClientAccess({
+      userId: session.user.userId,
+      ssoToken: session.token,
+      clientId: clientId || undefined,
+      redirectUri: redirectUri || undefined,
+      appName: appName || undefined,
+    })
+      .then((res) => {
+        if (cancelled) return;
+        if (res.sessionValid === false) {
+          clearSession();
+          setExistingUser(null);
+          return;
+        }
+        if (!res.allowed) {
+          setClientAccessDenied(
+            res.message ||
+              `Access Denied (403): You do not have permission to access ${appName || "this application"}. Contact your administrator to request access.`
+          );
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setCheckingClientAccess(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [redirectUri, clientId, appName]);
+
+  const handleSuccessfulHandoff = async (userId: number, userEmail: string, ssoToken?: string) => {
     if (rememberMe && userEmail) {
       try {
         localStorage.setItem("sentinel_remembered_email", userEmail.trim());
@@ -149,6 +187,33 @@ function LoginPageContent() {
       try {
         localStorage.removeItem("sentinel_remembered_email");
       } catch {}
+    }
+
+    if (redirectUri || clientId) {
+      setCheckingClientAccess(true);
+      setClientAccessDenied(null);
+      const effectiveToken = ssoToken || getStoredSession()?.token;
+      const accessRes = await checkClientAccess({
+        userId,
+        ssoToken: effectiveToken,
+        clientId: clientId || undefined,
+        redirectUri: redirectUri || undefined,
+        appName: appName || undefined,
+      });
+      setCheckingClientAccess(false);
+
+      if (!accessRes.allowed) {
+        const stored = getStoredSession();
+        if (stored?.user) {
+          setExistingUser(stored.user);
+        }
+        setMfaChallenge(null);
+        setClientAccessDenied(
+          accessRes.message ||
+            `Access Denied (403): You do not have permission to access ${appName || "this application"}. Contact your administrator to request access.`
+        );
+        return;
+      }
     }
 
     if (redirectUri) {
@@ -164,6 +229,8 @@ function LoginPageContent() {
   const handleLogoutAndSwitch = () => {
     clearSession();
     setExistingUser(null);
+    setClientAccessDenied(null);
+    setCheckingClientAccess(false);
     setEmail("");
     setPassword("");
     setShowPassword(false);
@@ -701,20 +768,42 @@ function LoginPageContent() {
               {existingUser ? (
                 <div className="text-center py-2">
                   {/* Status Indicator */}
-                  <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 text-xs font-semibold mb-5">
-                    <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span>
-                    {redirectUri ? "Single Sign-On Authorization" : "Active Session Detected"}
-                  </div>
+                  {clientAccessDenied ? (
+                    <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-red-500/10 border border-red-500/30 text-red-400 text-xs font-semibold mb-5">
+                      <span className="w-2 h-2 rounded-full bg-red-400"></span>
+                      Access Denied (403)
+                    </div>
+                  ) : (
+                    <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 text-xs font-semibold mb-5">
+                      <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span>
+                      {redirectUri ? "Single Sign-On Authorization" : "Active Session Detected"}
+                    </div>
+                  )}
 
                   {/* Title & Context */}
                   <h2 className="text-2xl sm:text-[26px] font-bold text-white tracking-tight">
-                    {redirectUri ? `Authorize Access to ${appName || "Application"}` : "Already Signed In"}
+                    {clientAccessDenied
+                      ? `Access Restricted: ${appName || "Application"}`
+                      : redirectUri
+                      ? `Authorize Access to ${appName || "Application"}`
+                      : "Already Signed In"}
                   </h2>
-                  <p className="text-xs sm:text-sm text-slate-400 mt-2 mb-6 max-w-sm mx-auto">
-                    {redirectUri
-                      ? `You are signed in as ${existingUser.fullName || existingUser.email}. Click below to authorize single sign-on and return to ${appName || "the client application"}.`
-                      : "You are currently authenticated in Sentinel Security. Choose an option below to proceed."}
-                  </p>
+                  {clientAccessDenied ? (
+                    <div className="mt-3 mb-6 p-4 rounded-xl bg-red-950/30 border border-red-500/30 text-left">
+                      <p className="text-xs sm:text-sm text-red-200 leading-relaxed">
+                        {clientAccessDenied}
+                      </p>
+                      <p className="text-[11px] text-slate-400 mt-2">
+                        You remain signed in with Sentinel Security. Only applications assigned to your dashboard by an administrator can be accessed.
+                      </p>
+                    </div>
+                  ) : (
+                    <p className="text-xs sm:text-sm text-slate-400 mt-2 mb-6 max-w-sm mx-auto">
+                      {redirectUri
+                        ? `You are signed in as ${existingUser.fullName || existingUser.email}. Click below to authorize single sign-on and return to ${appName || "the client application"}.`
+                        : "You are currently authenticated in Sentinel Security. Choose an option below to proceed."}
+                    </p>
+                  )}
 
                   {/* Identity Box */}
                   <div className="bg-[#18293d]/70 border border-slate-700/60 rounded-2xl p-5 mb-8 text-left flex items-center gap-4 shadow-inner">
@@ -745,14 +834,26 @@ function LoginPageContent() {
 
                   {/* Action Buttons */}
                   <div className="space-y-3">
-                    {redirectUri ? (
+                    {clientAccessDenied ? (
+                      <button
+                        type="button"
+                        onClick={() => router.push("/dashboard")}
+                        className="w-full py-3.5 px-4 bg-[#38e1ff] hover:bg-[#2bc4e0] active:scale-[0.99] text-slate-950 font-bold text-xs sm:text-sm tracking-wider uppercase rounded-xl transition-all duration-200 shadow-[0_0_20px_rgba(56,225,255,0.3)] cursor-pointer flex items-center justify-center gap-2"
+                      >
+                        <span>Return to Sentinel Dashboard</span>
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+                        </svg>
+                      </button>
+                    ) : redirectUri ? (
                       <>
                         <button
                           type="button"
+                          disabled={checkingClientAccess}
                           onClick={() => handleSuccessfulHandoff(existingUser.userId, existingUser.email, getStoredSession()?.token)}
-                          className="w-full py-3.5 px-4 bg-[#38e1ff] hover:bg-[#2bc4e0] active:scale-[0.99] text-slate-950 font-bold text-xs sm:text-sm tracking-wider uppercase rounded-xl transition-all duration-200 shadow-[0_0_20px_rgba(56,225,255,0.3)] cursor-pointer flex items-center justify-center gap-2"
+                          className="w-full py-3.5 px-4 bg-[#38e1ff] hover:bg-[#2bc4e0] disabled:opacity-60 disabled:cursor-not-allowed active:scale-[0.99] text-slate-950 font-bold text-xs sm:text-sm tracking-wider uppercase rounded-xl transition-all duration-200 shadow-[0_0_20px_rgba(56,225,255,0.3)] cursor-pointer flex items-center justify-center gap-2"
                         >
-                          <span>Authorize & Enter {appName || "App"}</span>
+                          <span>{checkingClientAccess ? "Verifying Access..." : `Authorize & Enter ${appName || "App"}`}</span>
                           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
                             <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
                           </svg>
