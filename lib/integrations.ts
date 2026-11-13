@@ -224,6 +224,11 @@ export function saveStoredIntegrations(apps: AppIntegration[], userId?: number):
   try {
     const key = userId ? `${STORAGE_KEY}_u${userId}` : STORAGE_KEY;
     localStorage.setItem(key, JSON.stringify(apps));
+    window.dispatchEvent(
+      new CustomEvent("SENTINEL_INTEGRATIONS_UPDATED", {
+        detail: { userId, apps },
+      })
+    );
   } catch (err) {
     console.error("Failed to save integrations to localStorage", err);
   }

@@ -6,7 +6,17 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import { useMfa } from "@/hooks/useMfa";
 import { saveSession, getStoredSession, clearSession } from "@/lib/session";
-import { checkClientAccess, getMfaChallengeStatus, loginWithGoogle, resendVerification, sendEmailOtp, validateSsoSession } from "@/lib/api";
+import {
+  checkClientAccess,
+  fetchUserServices,
+  getMfaChallengeStatus,
+  initiateMfaChallenge,
+  launchUserService,
+  loginWithGoogle,
+  resendVerification,
+  sendEmailOtp,
+  validateSsoSession,
+} from "@/lib/api";
 import { User } from "@/types/auth";
 import Footer from "@/app/partials/footer";
 import { PasswordToggleAdornment } from "@/components/PasswordToggleAdornment";
@@ -67,6 +77,13 @@ function getFriendlyAppName(
     if (lower.includes("demo-apps-blue") || lower.includes(":3001")) return "Acme HR Portal";
     if (lower.includes("demo-apps-sfjl") || lower.includes(":3002")) return "FinTech Payroll Portal";
     if (lower.includes("demo-apps-fjk5") || lower.includes(":3003")) return "DevOps Incident Command";
+    if (lower.includes("facebook.com")) return "Facebook";
+    if (lower.includes("github.com")) return "GitHub";
+    if (lower.includes("google.com")) return "Google";
+    try {
+      const u = new URL(redirectUri.startsWith("http") ? redirectUri : `https://${redirectUri}`);
+      return u.hostname.replace(/^www\./i, "");
+    } catch {}
   }
   return "";
 }
@@ -85,7 +102,16 @@ function LoginPageContent() {
   );
   const state = searchParams.get("state");
   const paramEmail = searchParams.get("email") || "";
+  const isExtApprove = searchParams.get("sentinel_ext_approve") === "1";
+  const serviceIdParam = searchParams.get("service_id") || searchParams.get("serviceId");
+  const isVaultParam = searchParams.get("is_vault") === "1";
+  const sourceTabIdParam = searchParams.get("source_tab_id");
   const [inactivityNotice, setInactivityNotice] = useState<string | null>(null);
+  const [stepUpForExtension, setStepUpForExtension] = useState(false);
+  const [extHandoffSuccess, setExtHandoffSuccess] = useState<{
+    appName: string;
+    destination: string;
+  } | null>(null);
 
   useEffect(() => {
     const reason = searchParams.get("reason");
@@ -213,7 +239,12 @@ function LoginPageContent() {
     };
   }, [redirectUri, clientId, appName]);
 
-  const handleSuccessfulHandoff = async (userId: number, userEmail: string, ssoToken?: string) => {
+  const handleSuccessfulHandoff = async (
+    userId: number,
+    userEmail: string,
+    ssoToken?: string,
+    mfaProof?: { challengeId?: number; code?: string }
+  ) => {
     if (rememberMe && userEmail) {
       try {
         localStorage.setItem("sentinel_remembered_email", userEmail.trim());
@@ -251,10 +282,165 @@ function LoginPageContent() {
       }
     }
 
+    // Extension in-site popup / Vault service approval handoff
+    if (isExtApprove || serviceIdParam || isVaultParam) {
+      let resolvedServiceId: number | null =
+        serviceIdParam && !Number.isNaN(Number(serviceIdParam)) ? Number(serviceIdParam) : null;
+
+      if (!resolvedServiceId) {
+        try {
+          const userServices = await fetchUserServices(userId);
+          const normTarget = (redirectUri || "").toLowerCase();
+          const matched = userServices.find((s) => {
+            if (clientId && s.clientId && s.clientId.toLowerCase() === clientId.toLowerCase()) {
+              return true;
+            }
+            if (appName && s.name && s.name.toLowerCase() === appName.toLowerCase()) {
+              return true;
+            }
+            if (normTarget && s.loginUrl) {
+              try {
+                const u1 = new URL(normTarget.startsWith("http") ? normTarget : `https://${normTarget}`);
+                const u2 = new URL(s.loginUrl.startsWith("http") ? s.loginUrl : `https://${s.loginUrl}`);
+                return u1.hostname.replace(/^www\./i, "") === u2.hostname.replace(/^www\./i, "");
+              } catch {}
+            }
+            return false;
+          });
+          if (matched?.id) {
+            resolvedServiceId = Number(matched.id);
+          }
+        } catch {}
+      }
+
+      if (resolvedServiceId) {
+        const storedUser = getStoredSession()?.user || existingUser;
+        const requiresStepUpMfa = Boolean(storedUser?.mfaEnabled ?? true) && !mfaProof;
+
+        if (requiresStepUpMfa) {
+          setCheckingClientAccess(true);
+          const chRes = await initiateMfaChallenge(
+            userId,
+            userEmail,
+            `${appName || "Application"} Login`
+          );
+          setCheckingClientAccess(false);
+
+          if (chRes.success && chRes.data) {
+            setStepUpForExtension(true);
+            setExistingUser(null);
+            setMfaChallenge({
+              required: true,
+              userId,
+              email: userEmail,
+              fullName: storedUser?.fullName,
+              role: storedUser?.role,
+              company: storedUser?.company,
+              challengeId: chRes.data.challengeId,
+              matchCode: chRes.data.matchCode,
+            });
+            setMfaMode(chRes.data.matchCode ? "push" : "totp");
+            return;
+          }
+        }
+
+        setCheckingClientAccess(true);
+        const launchRes = await launchUserService(resolvedServiceId, {
+          userId,
+          ...(mfaProof || {}),
+        });
+        setCheckingClientAccess(false);
+
+        if (!launchRes.success) {
+          setValidationError(launchRes.message || "Could not authorize service launch.");
+          return;
+        }
+
+        const isVaultLaunch = Boolean(launchRes.data?.isVault || isVaultParam);
+        const resolvedAppName = appName || launchRes.data?.service?.name || "Application";
+        const resolvedDest = redirectUri || launchRes.data?.redirectUrl || "";
+
+        if (isVaultLaunch && launchRes.data?.vaultPassword) {
+          setStepUpForExtension(false);
+          setMfaChallenge(null);
+          setExtHandoffSuccess({
+            appName: resolvedAppName,
+            destination: resolvedDest,
+          });
+          window.dispatchEvent(
+            new CustomEvent("SENTINEL_VAULT_LAUNCH", {
+              detail: {
+                destination: resolvedDest,
+                username: launchRes.data.vaultUsername || userEmail,
+                password: launchRes.data.vaultPassword,
+                appName: resolvedAppName,
+                sourceTabId: sourceTabIdParam ? Number(sourceTabIdParam) : undefined,
+                closeApprovalTab: Boolean(sourceTabIdParam),
+              },
+            })
+          );
+          return;
+        }
+
+        if (resolvedDest) {
+          const sep = resolvedDest.includes("?") ? "&" : "?";
+          const token =
+            launchRes.data?.ssoToken ||
+            ssoToken ||
+            "sso_" + Math.random().toString(36).substring(2) + Date.now().toString(36);
+          const targetUrl = `${resolvedDest}${sep}ssoUserId=${userId}&ssoUserEmail=${encodeURIComponent(userEmail)}&ssoToken=${token}${state ? `&state=${encodeURIComponent(state)}` : ""}`;
+
+          if (sourceTabIdParam) {
+            setStepUpForExtension(false);
+            setMfaChallenge(null);
+            setExtHandoffSuccess({
+              appName: resolvedAppName,
+              destination: targetUrl,
+            });
+            window.dispatchEvent(
+              new CustomEvent("SENTINEL_SSO_REDIRECT", {
+                detail: {
+                  destination: targetUrl,
+                  sourceTabId: Number(sourceTabIdParam),
+                  closeApprovalTab: true,
+                },
+              })
+            );
+            setTimeout(() => {
+              window.location.href = targetUrl;
+            }, 700);
+            return;
+          }
+
+          window.location.href = targetUrl;
+          return;
+        }
+      }
+    }
+
     if (redirectUri) {
       const sep = redirectUri.includes("?") ? "&" : "?";
       const token = ssoToken || ("sso_" + Math.random().toString(36).substring(2) + Date.now().toString(36));
       const targetUrl = `${redirectUri}${sep}ssoUserId=${userId}&ssoUserEmail=${encodeURIComponent(userEmail)}&ssoToken=${token}${state ? `&state=${encodeURIComponent(state)}` : ""}`;
+      if (sourceTabIdParam) {
+        setExtHandoffSuccess({
+          appName: appName || "Application",
+          destination: targetUrl,
+        });
+        window.dispatchEvent(
+          new CustomEvent("SENTINEL_SSO_REDIRECT", {
+            detail: {
+              destination: targetUrl,
+              sourceTabId: Number(sourceTabIdParam),
+              closeApprovalTab: true,
+            },
+          })
+        );
+        setTimeout(() => {
+          window.location.href = targetUrl;
+        }, 700);
+        return;
+      }
       window.location.href = targetUrl;
     } else {
       router.push("/dashboard");
@@ -402,7 +588,9 @@ function LoginPageContent() {
               mfaEnabled: true,
               passwordResetRequired: res.data.passwordResetRequired,
             }, res.data.ssoToken);
-            handleSuccessfulHandoff(finalUserId, finalEmail, res.data.ssoToken);
+            handleSuccessfulHandoff(finalUserId, finalEmail, res.data.ssoToken, {
+              challengeId: mfaChallenge.challengeId,
+            });
           } else if (res.data.status === "DENIED") {
             clearInterval(interval);
             setValidationError("Login request was denied from your mobile device.");
@@ -524,6 +712,16 @@ function LoginPageContent() {
     }, 2500);
 
     try {
+      if (stepUpForExtension && mfaChallenge?.userId && mfaChallenge?.email) {
+        await handleSuccessfulHandoff(
+          mfaChallenge.userId,
+          mfaChallenge.email,
+          getStoredSession()?.token,
+          { code: cleanCode }
+        );
+        return;
+      }
+
       const res = await verifyLogin(
         mfaChallenge?.userId,
         mfaChallenge?.email,
@@ -545,7 +743,7 @@ function LoginPageContent() {
           mfaEnabled: true,
           passwordResetRequired: res.passwordResetRequired,
         }, res.ssoToken);
-        handleSuccessfulHandoff(finalUserId, finalEmail, res.ssoToken);
+        handleSuccessfulHandoff(finalUserId, finalEmail, res.ssoToken, { code: cleanCode });
       }
     } finally {
       clearTimeout(delayTimer);
@@ -800,7 +998,36 @@ function LoginPageContent() {
                 </svg>
               </div>
 
-              {existingUser ? (
+              {extHandoffSuccess ? (
+                <div className="text-center py-6 space-y-4">
+                  <div className="w-14 h-14 rounded-2xl bg-emerald-500/15 border border-emerald-500/40 flex items-center justify-center mx-auto text-emerald-400 shadow-[0_0_25px_rgba(16,185,129,0.2)]">
+                    <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                    </svg>
+                  </div>
+                  <div>
+                    <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs font-semibold mb-3">
+                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                      Sentinel Authorization Verified
+                    </div>
+                    <h2 className="text-2xl font-bold text-white tracking-tight">
+                      Signing In to {extHandoffSuccess.appName}
+                    </h2>
+                    <p className="text-xs sm:text-sm text-slate-400 mt-2 max-w-sm mx-auto">
+                      Sentinel Autofill Bridge has received your approved credentials and is automatically signing you in on your application tab.
+                    </p>
+                  </div>
+                  <div className="pt-3">
+                    <button
+                      type="button"
+                      onClick={() => router.push("/dashboard")}
+                      className="w-full py-3 px-4 bg-slate-800/80 hover:bg-slate-700/80 text-slate-200 hover:text-white font-medium text-xs sm:text-sm rounded-xl border border-slate-700 transition-all cursor-pointer"
+                    >
+                      Return to Sentinel Dashboard
+                    </button>
+                  </div>
+                </div>
+              ) : existingUser ? (
                 <div className="text-center py-2">
                   {/* Status Indicator */}
                   {clientAccessDenied ? (

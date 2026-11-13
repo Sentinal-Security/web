@@ -4232,7 +4232,7 @@ export default function DashboardPage() {
                 </div>
                 <div>
                   <h3 className="text-sm font-bold text-white">Sentinel Autofill Bridge</h3>
-                  <p className="text-[11px] text-slate-400">Cross-Browser Secure In-Page Credential Injector (v1.1.1)</p>
+                  <p className="text-[11px] text-slate-400">Cross-Browser In-Site Auth Popup &amp; Credential Injector (v1.2.0)</p>
                 </div>
               </div>
               <button
@@ -4355,7 +4355,7 @@ export default function DashboardPage() {
                     <div className="flex items-start gap-2.5">
                       <span className="w-5 h-5 rounded-full bg-cyan-500/10 text-cyan-300 font-mono text-[10px] font-bold flex items-center justify-center shrink-0 border border-cyan-500/30">5</span>
                       <p className="pt-0.5">
-                        Select the unzipped folder. <strong className="text-white">Sentinel Autofill Bridge (v1.1.1)</strong> will load immediately.
+                        Select the unzipped folder. <strong className="text-white">Sentinel Autofill Bridge (v1.2.0)</strong> will load immediately.
                       </p>
                     </div>
                   </div>
