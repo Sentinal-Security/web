@@ -3767,8 +3767,8 @@ export default function DashboardPage() {
                 </svg>
               </div>
               <div>
-                <h3 className="text-base font-semibold text-white">{forbiddenModal.title || "Access Denied (403 Forbidden)"}</h3>
-                <p className="text-xs text-red-300 font-mono mt-0.5">{forbiddenModal.appName || "Service Gateway"}</p>
+                <h3 className="text-base font-semibold text-white">{forbiddenModal.title || "Access Denied"}</h3>
+                <p className="text-xs text-red-300 font-medium mt-0.5">{forbiddenModal.appName || "Application Access"}</p>
               </div>
             </div>
 
@@ -3778,7 +3778,7 @@ export default function DashboardPage() {
 
             {!forbiddenModal.title && (
               <div className="mt-4 p-3 rounded-lg bg-white/5 border border-white/10 text-[11px] text-slate-400 leading-relaxed">
-                Under organization zero-trust policy, employees are restricted to strictly assigned workstation services. Contact your workspace IT administrator to request access assignment.
+                Your account only has access to apps approved by your administrator. Please contact your administrator if you need access.
               </div>
             )}
 
