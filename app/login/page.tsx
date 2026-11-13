@@ -40,6 +40,37 @@ function resolveClientRedirect(clientId: string | null, rawRedirect: string | nu
   return isLocal ? config.localUrl : config.prodUrl;
 }
 
+function isTechnicalLabel(value: string): boolean {
+  const trimmed = value.trim();
+  return (
+    trimmed.includes("://") ||
+    trimmed.includes("/") ||
+    trimmed.includes("\\") ||
+    trimmed.includes("_") ||
+    /\.(app|com|net|org|io)$/i.test(trimmed)
+  );
+}
+
+function getFriendlyAppName(
+  rawAppName: string | null,
+  registeredClient?: { name: string },
+  redirectUri?: string
+): string {
+  if (rawAppName && rawAppName.trim() && !isTechnicalLabel(rawAppName)) {
+    return rawAppName.trim();
+  }
+  if (registeredClient?.name) {
+    return registeredClient.name;
+  }
+  if (redirectUri) {
+    const lower = redirectUri.toLowerCase();
+    if (lower.includes("demo-apps-blue") || lower.includes(":3001")) return "Acme HR Portal";
+    if (lower.includes("demo-apps-sfjl") || lower.includes(":3002")) return "FinTech Payroll Portal";
+    if (lower.includes("demo-apps-fjk5") || lower.includes(":3003")) return "DevOps Incident Command";
+  }
+  return "";
+}
+
 function LoginPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -47,7 +78,11 @@ function LoginPageContent() {
   const clientId = searchParams.get("client_id") || searchParams.get("clientId");
   const registeredClient = clientId ? CLIENT_REDIRECT_REGISTRY[clientId.toLowerCase()] : undefined;
   const redirectUri = resolveClientRedirect(clientId, rawRedirectUri);
-  const appName = searchParams.get("app_name") || searchParams.get("appName") || registeredClient?.name || (clientId ? clientId.toUpperCase() : "");
+  const appName = getFriendlyAppName(
+    searchParams.get("app_name") || searchParams.get("appName"),
+    registeredClient,
+    redirectUri
+  );
   const state = searchParams.get("state");
   const paramEmail = searchParams.get("email") || "";
   const [inactivityNotice, setInactivityNotice] = useState<string | null>(null);
@@ -163,7 +198,7 @@ function LoginPageContent() {
         if (!res.allowed) {
           setClientAccessDenied(
             res.message ||
-              `Access Denied (403): You do not have permission to access ${appName || "this application"}. Contact your administrator to request access.`
+              `You don't have permission to open ${appName || "this application"}. Please ask your administrator if you need access.`
           );
         }
       })
@@ -210,7 +245,7 @@ function LoginPageContent() {
         setMfaChallenge(null);
         setClientAccessDenied(
           accessRes.message ||
-            `Access Denied (403): You do not have permission to access ${appName || "this application"}. Contact your administrator to request access.`
+            `You don't have permission to open ${appName || "this application"}. Please ask your administrator if you need access.`
         );
         return;
       }
@@ -771,7 +806,7 @@ function LoginPageContent() {
                   {clientAccessDenied ? (
                     <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-red-500/10 border border-red-500/30 text-red-400 text-xs font-semibold mb-5">
                       <span className="w-2 h-2 rounded-full bg-red-400"></span>
-                      Access Denied (403)
+                      Access Not Allowed
                     </div>
                   ) : (
                     <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 text-xs font-semibold mb-5">
@@ -783,7 +818,7 @@ function LoginPageContent() {
                   {/* Title & Context */}
                   <h2 className="text-2xl sm:text-[26px] font-bold text-white tracking-tight">
                     {clientAccessDenied
-                      ? `Access Restricted: ${appName || "Application"}`
+                      ? "You Don't Have Access"
                       : redirectUri
                       ? `Authorize Access to ${appName || "Application"}`
                       : "Already Signed In"}
@@ -794,7 +829,7 @@ function LoginPageContent() {
                         {clientAccessDenied}
                       </p>
                       <p className="text-[11px] text-slate-400 mt-2">
-                        You remain signed in with Sentinel Security. Only applications assigned to your dashboard by an administrator can be accessed.
+                        You&apos;re still signed in to Sentinel Security. You can return to your dashboard to open the apps assigned to you.
                       </p>
                     </div>
                   ) : (
