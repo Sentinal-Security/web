@@ -197,6 +197,26 @@ function LoginPageContent() {
   }, [impersonateToken, redirectUri, state, router]);
 
   useEffect(() => {
+    const handleGetSession = () => {
+      const stored = getStoredSession();
+      window.dispatchEvent(
+        new CustomEvent("SENTINEL_SESSION_RESPONSE", {
+          detail: {
+            isLoggedIn: Boolean(stored?.user),
+            user: stored?.user || null,
+            token: stored?.token,
+          },
+        })
+      );
+    };
+    window.addEventListener("SENTINEL_GET_SESSION", handleGetSession);
+    handleGetSession();
+    return () => {
+      window.removeEventListener("SENTINEL_GET_SESSION", handleGetSession);
+    };
+  }, []);
+
+  useEffect(() => {
     const session = getStoredSession();
     if (!session || !session.user) return;
 
@@ -287,31 +307,57 @@ function LoginPageContent() {
       let resolvedServiceId: number | null =
         serviceIdParam && !Number.isNaN(Number(serviceIdParam)) ? Number(serviceIdParam) : null;
 
-      if (!resolvedServiceId) {
-        try {
-          const userServices = await fetchUserServices(userId);
-          const normTarget = (redirectUri || "").toLowerCase();
-          const matched = userServices.find((s) => {
-            if (clientId && s.clientId && s.clientId.toLowerCase() === clientId.toLowerCase()) {
-              return true;
-            }
-            if (appName && s.name && s.name.toLowerCase() === appName.toLowerCase()) {
-              return true;
-            }
-            if (normTarget && s.loginUrl) {
-              try {
-                const u1 = new URL(normTarget.startsWith("http") ? normTarget : `https://${normTarget}`);
-                const u2 = new URL(s.loginUrl.startsWith("http") ? s.loginUrl : `https://${s.loginUrl}`);
-                return u1.hostname.replace(/^www\./i, "") === u2.hostname.replace(/^www\./i, "");
-              } catch {}
-            }
-            return false;
-          });
-          if (matched?.id) {
-            resolvedServiceId = Number(matched.id);
+      try {
+        const userServices = await fetchUserServices(userId);
+        if (Array.isArray(userServices) && userServices.length > 0) {
+          const byId = resolvedServiceId
+            ? userServices.find((s) => Number(s.id) === resolvedServiceId)
+            : undefined;
+          if (byId) {
+            resolvedServiceId = Number(byId.id);
+          } else {
+            const normTarget = (redirectUri || "").toLowerCase();
+            const matched = userServices.find((s) => {
+              if (clientId && s.clientId && s.clientId.toLowerCase() === clientId.toLowerCase()) {
+                return true;
+              }
+              if (appName && s.name && s.name.toLowerCase() === appName.toLowerCase()) {
+                return true;
+              }
+              if (normTarget && s.loginUrl) {
+                const sUrlLower = s.loginUrl.toLowerCase();
+                if (
+                  (normTarget.includes(":3001") || normTarget.includes("demo-apps-blue")) &&
+                  (sUrlLower.includes(":3001") || sUrlLower.includes("demo-apps-blue"))
+                ) {
+                  return true;
+                }
+                if (
+                  (normTarget.includes(":3002") || normTarget.includes("demo-apps-sfjl")) &&
+                  (sUrlLower.includes(":3002") || sUrlLower.includes("demo-apps-sfjl"))
+                ) {
+                  return true;
+                }
+                if (
+                  (normTarget.includes(":3003") || normTarget.includes("demo-apps-fjk5")) &&
+                  (sUrlLower.includes(":3003") || sUrlLower.includes("demo-apps-fjk5"))
+                ) {
+                  return true;
+                }
+                try {
+                  const u1 = new URL(normTarget.startsWith("http") ? normTarget : `https://${normTarget}`);
+                  const u2 = new URL(s.loginUrl.startsWith("http") ? s.loginUrl : `https://${s.loginUrl}`);
+                  const h1 = u1.hostname.replace(/^www\./i, "");
+                  const h2 = u2.hostname.replace(/^www\./i, "");
+                  return h1 === h2 || h1.endsWith("." + h2) || h2.endsWith("." + h1);
+                } catch {}
+              }
+              return false;
+            });
+            resolvedServiceId = matched?.id ? Number(matched.id) : resolvedServiceId;
           }
-        } catch {}
-      }
+        }
+      } catch {}
 
       if (resolvedServiceId) {
         const storedUser = getStoredSession()?.user || existingUser;
@@ -397,6 +443,14 @@ function LoginPageContent() {
               appName: resolvedAppName,
               destination: targetUrl,
             });
+            let handledByExtension = false;
+            const onSsoResult = (ev: Event) => {
+              if ((ev as CustomEvent)?.detail?.success) {
+                handledByExtension = true;
+              }
+              window.removeEventListener("SENTINEL_SSO_REDIRECT_RESULT", onSsoResult);
+            };
+            window.addEventListener("SENTINEL_SSO_REDIRECT_RESULT", onSsoResult);
             window.dispatchEvent(
               new CustomEvent("SENTINEL_SSO_REDIRECT", {
                 detail: {
@@ -407,8 +461,11 @@ function LoginPageContent() {
               })
             );
             setTimeout(() => {
-              window.location.href = targetUrl;
-            }, 700);
+              window.removeEventListener("SENTINEL_SSO_REDIRECT_RESULT", onSsoResult);
+              if (!handledByExtension) {
+                window.location.href = targetUrl;
+              }
+            }, 900);
             return;
           }
 
@@ -427,6 +484,14 @@ function LoginPageContent() {
           appName: appName || "Application",
           destination: targetUrl,
         });
+        let handledByExtension = false;
+        const onSsoResult = (ev: Event) => {
+          if ((ev as CustomEvent)?.detail?.success) {
+            handledByExtension = true;
+          }
+          window.removeEventListener("SENTINEL_SSO_REDIRECT_RESULT", onSsoResult);
+        };
+        window.addEventListener("SENTINEL_SSO_REDIRECT_RESULT", onSsoResult);
         window.dispatchEvent(
           new CustomEvent("SENTINEL_SSO_REDIRECT", {
             detail: {
@@ -437,8 +502,11 @@ function LoginPageContent() {
           })
         );
         setTimeout(() => {
-          window.location.href = targetUrl;
-        }, 700);
+          window.removeEventListener("SENTINEL_SSO_REDIRECT_RESULT", onSsoResult);
+          if (!handledByExtension) {
+            window.location.href = targetUrl;
+          }
+        }, 900);
         return;
       }
       window.location.href = targetUrl;
@@ -1362,10 +1430,17 @@ function LoginPageContent() {
                             setRecoveryCode("");
                             setValidationError("");
                             setMfaError(null);
+                            if (stepUpForExtension) {
+                              setStepUpForExtension(false);
+                              const session = getStoredSession();
+                              if (session?.user?.email) {
+                                setExistingUser(session.user);
+                              }
+                            }
                           }}
                           className="w-full py-2.5 px-4 bg-transparent hover:bg-white/5 text-slate-400 hover:text-white text-xs font-medium rounded-xl transition-colors cursor-pointer"
                         >
-                          Back to Login
+                          {stepUpForExtension ? "Back to Account Selection" : "Back to Login"}
                         </button>
                       </div>
                     </div>
