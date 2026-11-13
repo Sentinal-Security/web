@@ -386,6 +386,55 @@ export async function validateSsoSession(
   }
 }
 
+export interface ClientAccessCheckResponse {
+  success: boolean;
+  allowed: boolean;
+  sessionValid?: boolean;
+  message?: string;
+}
+
+export async function checkClientAccess(payload: {
+  userId?: number;
+  ssoToken?: string;
+  clientId?: string;
+  redirectUri?: string;
+  appName?: string;
+}): Promise<ClientAccessCheckResponse> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/auth/check-client-access`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const contentType = res.headers.get("content-type");
+    if (contentType && contentType.includes("application/json")) {
+      const json = await res.json();
+      return {
+        success: Boolean(json?.success),
+        allowed: Boolean(json?.allowed),
+        sessionValid:
+          json?.sessionValid !== undefined
+            ? Boolean(json.sessionValid)
+            : res.status !== 401,
+        message: json?.message,
+      };
+    }
+    return {
+      success: false,
+      allowed: false,
+      sessionValid: res.status !== 401,
+      message: "Unable to verify application access permissions.",
+    };
+  } catch {
+    return {
+      success: false,
+      allowed: false,
+      sessionValid: true,
+      message: "Network error verifying application access permissions.",
+    };
+  }
+}
+
 // User Services REST Client
 export async function fetchUserServices(
   userId: number
