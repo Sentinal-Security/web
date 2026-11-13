@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { User, MfaSetupResponse } from "@/types/auth";
@@ -8,6 +8,7 @@ import { AppIntegration, IntegrationType } from "@/types/integration";
 import { getStoredSession, updateStoredUser, clearSession } from "@/lib/session";
 import { useMfa } from "@/hooks/useMfa";
 import { useIntegrations } from "@/hooks/useIntegrations";
+import { resolveServiceUrl } from "@/lib/integrations";
 import {
   updateUserProfile,
   checkBackendHealth,
@@ -23,7 +24,6 @@ import {
   launchUserService,
   initiateMfaChallenge,
   getMfaChallengeStatus,
-  respondToMfaChallenge,
   updateMfaPreference,
   verifyMfaLogin,
 } from "@/lib/api";
@@ -342,42 +342,182 @@ export default function DashboardPage() {
 
   const isAdmin = user?.role === "ADMIN";
   const isEnterpriseEmployee = Boolean(user?.company && user.company.toLowerCase() !== "personal" && user.role !== "ADMIN");
-  const [forbiddenModal, setForbiddenModal] = useState<{ appName: string; reason: string } | null>(null);
+  const [forbiddenModal, setForbiddenModal] = useState<{ appName: string; reason: string; title?: string } | null>(null);
   const [launchingAppId, setLaunchingAppId] = useState<string | null>(null);
 
-  // Step-Up Service Sign-In Approval State
+  // Step-Up Service Sign-In Approval State (approval is mobile-only; web can never self-approve)
   const [serviceApprovalModal, setServiceApprovalModal] = useState<{
     app: AppIntegration;
     challengeId: number;
     matchCode: string;
-    destination: string;
     status: "PENDING" | "APPROVED" | "DENIED" | "EXPIRED";
-    isExternal: boolean;
+    destination?: string;
+    isExternal?: boolean;
+    isVault?: boolean;
+    vaultUsername?: string;
+    vaultPassword?: string;
   } | null>(null);
-  const [approvalActionLoading, setApprovalActionLoading] = useState(false);
   const [approvalOtpCode, setApprovalOtpCode] = useState("");
   const [approvalOtpError, setApprovalOtpError] = useState("");
   const [approvalOtpLoading, setApprovalOtpLoading] = useState(false);
+  const finalizingLaunchRef = useRef(false);
+  const [vaultPasswordVisible, setVaultPasswordVisible] = useState(false);
+  const [copiedVaultField, setCopiedVaultField] = useState<"user" | "pass" | null>(null);
+  const [vaultAutofillDispatched, setVaultAutofillDispatched] = useState(false);
 
-  // Poll for Mobile Push Challenge resolution when service approval is active
+  // Browser Extension Presence & Middleware Gate State
+  const [isExtensionInstalled, setIsExtensionInstalled] = useState<boolean>(false);
+  const [extensionChecking, setExtensionChecking] = useState<boolean>(false);
+  const [showExtensionGuideModal, setShowExtensionGuideModal] = useState<boolean>(false);
+  const [guideBrowserTab, setGuideBrowserTab] = useState<"chromium" | "firefox">("chromium");
+  const [extensionWarningDismissed, setExtensionWarningDismissed] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && navigator.userAgent.toLowerCase().includes("firefox")) {
+      setGuideBrowserTab("firefox");
+    }
+  }, []);
+
+  // Live active ping to detect Sentinel Autofill Bridge extension
+  const checkExtensionPresence = useCallback((): Promise<boolean> => {
+    return new Promise((resolve) => {
+      if (typeof window === "undefined") {
+        resolve(false);
+        return;
+      }
+      setExtensionChecking(true);
+      let responded = false;
+
+      const handlePong = () => {
+        responded = true;
+        window.removeEventListener("SENTINEL_EXTENSION_PONG", handlePong);
+        setIsExtensionInstalled(true);
+        setExtensionChecking(false);
+        resolve(true);
+      };
+
+      window.addEventListener("SENTINEL_EXTENSION_PONG", handlePong);
+      window.dispatchEvent(new CustomEvent("SENTINEL_EXTENSION_PING"));
+
+      // Check current DOM attribute and verify heartbeat timestamp freshness (< 4500ms)
+      const lastHeartbeat = Number(document.documentElement.getAttribute("data-sentinel-heartbeat") || 0);
+      const isFresh =
+        document.documentElement.getAttribute("data-sentinel-extension") === "active" &&
+        Date.now() - lastHeartbeat < 4500;
+
+      setTimeout(() => {
+        window.removeEventListener("SENTINEL_EXTENSION_PONG", handlePong);
+        setExtensionChecking(false);
+        if (!responded) {
+          setIsExtensionInstalled(isFresh);
+          resolve(isFresh);
+        }
+      }, 300);
+    });
+  }, []);
+
+  // Resolve the destination URL directly to the application dashboard with SSO tokens
+  const buildLaunchTarget = (
+    app: AppIntegration,
+    data?: { redirectUrl?: string; ssoToken?: string }
+  ): { destination: string; isExternal: boolean } => {
+    const isVault = Boolean(app.isVault || app.type === "vault");
+    const rawTarget = data?.redirectUrl || app.loginUrl;
+    const targetUrl = resolveServiceUrl(rawTarget, String(app.id));
+    if (isVault) {
+      return { destination: targetUrl || "https://", isExternal: true };
+    }
+    const ssoTokenValue =
+      data?.ssoToken || ssoToken || ("sso_" + Math.random().toString(36).substring(2) + Date.now().toString(36));
+    const isExternal = Boolean(targetUrl && (targetUrl.startsWith("http://") || targetUrl.startsWith("https://")));
+    const tokenParam = ssoTokenValue ? `&ssoToken=${ssoTokenValue}` : "";
+    const destination =
+      isExternal && targetUrl && user?.userId
+        ? `${targetUrl}${targetUrl.includes("?") ? "&" : "?"}ssoUserId=${user.userId}&ssoUserEmail=${encodeURIComponent(user.email || "")}${tokenParam}`
+        : (targetUrl || `/apps/${app.id}`);
+    return { destination, isExternal };
+  };
+
+  const openLaunchTarget = (destination: string, isExternal: boolean) => {
+    if (isExternal) {
+      window.open(destination, "_blank", "noopener,noreferrer");
+    } else {
+      router.push(destination);
+    }
+  };
+
+  // Complete a launch after the user proved MFA (mobile approval challengeId or TOTP code).
+  // The backend validates the proof; this returns an error message on failure.
+  const finalizeServiceLaunch = async (
+    app: AppIntegration,
+    proof: { challengeId?: number; code?: string }
+  ): Promise<{ ok: true } | { ok: false; message: string }> => {
+    let launchData: {
+      redirectUrl?: string;
+      ssoToken?: string;
+      isVault?: boolean;
+      vaultUsername?: string;
+      vaultPassword?: string;
+    } | undefined;
+
+    if (app.backendId && user?.userId) {
+      const res = await launchUserService(Number(app.backendId), { userId: user.userId, ...proof });
+      if (!res.success) {
+        return { ok: false, message: res.message || "Service launch could not be authorized." };
+      }
+      launchData = res.data;
+    }
+
+    const isVault = Boolean(launchData?.isVault || app.isVault || app.type === "vault");
+    const vaultUsername = launchData?.vaultUsername || app.vaultUsername || "";
+    const vaultPassword = launchData?.vaultPassword || "";
+    const { destination, isExternal } = buildLaunchTarget(app, launchData);
+
+    setServiceApprovalModal((prev) => (prev ? {
+      ...prev,
+      status: "APPROVED",
+      destination,
+      isExternal,
+      isVault,
+      vaultUsername,
+      vaultPassword,
+    } : null));
+
+    if (!isVault) {
+      setTimeout(() => {
+        openLaunchTarget(destination, isExternal);
+        setServiceApprovalModal(null);
+      }, 700);
+    }
+    return { ok: true };
+  };
+
+  // Poll for the Mobile Push Challenge result while the approval modal is active
   useEffect(() => {
     if (!serviceApprovalModal || serviceApprovalModal.status !== "PENDING") return;
 
+    const modal = serviceApprovalModal;
     const interval = setInterval(async () => {
       try {
-        const res = await getMfaChallengeStatus(serviceApprovalModal.challengeId);
+        const res = await getMfaChallengeStatus(modal.challengeId);
         if (res.success && res.data) {
           if (res.data.status === "APPROVED") {
             clearInterval(interval);
-            setServiceApprovalModal((prev) => (prev ? { ...prev, status: "APPROVED" } : null));
-            setTimeout(() => {
-              if (serviceApprovalModal.isExternal) {
-                window.open(serviceApprovalModal.destination, "_blank", "noopener,noreferrer");
-              } else {
-                router.push(serviceApprovalModal.destination);
+            if (finalizingLaunchRef.current) return;
+            finalizingLaunchRef.current = true;
+            try {
+              const result = await finalizeServiceLaunch(modal.app, { challengeId: modal.challengeId });
+              if (!result.ok) {
+                setServiceApprovalModal(null);
+                setForbiddenModal({
+                  appName: modal.app.name,
+                  title: "Authentication Required",
+                  reason: result.message,
+                });
               }
-              setServiceApprovalModal(null);
-            }, 800);
+            } finally {
+              finalizingLaunchRef.current = false;
+            }
           } else if (res.data.status === "DENIED") {
             clearInterval(interval);
             setServiceApprovalModal((prev) => (prev ? { ...prev, status: "DENIED" } : null));
@@ -390,35 +530,8 @@ export default function DashboardPage() {
     }, 1500);
 
     return () => clearInterval(interval);
-  }, [serviceApprovalModal, router]);
-
-  const handleApproveServiceLogin = async () => {
-    if (!serviceApprovalModal) return;
-    setApprovalActionLoading(true);
-    try {
-      await respondToMfaChallenge(serviceApprovalModal.challengeId, "APPROVE");
-    } catch {}
-    setApprovalActionLoading(false);
-    setServiceApprovalModal((prev) => (prev ? { ...prev, status: "APPROVED" } : null));
-    setTimeout(() => {
-      if (serviceApprovalModal.isExternal) {
-        window.open(serviceApprovalModal.destination, "_blank", "noopener,noreferrer");
-      } else {
-        router.push(serviceApprovalModal.destination);
-      }
-      setServiceApprovalModal(null);
-    }, 700);
-  };
-
-  const handleDenyServiceLogin = async () => {
-    if (!serviceApprovalModal) return;
-    setApprovalActionLoading(true);
-    try {
-      await respondToMfaChallenge(serviceApprovalModal.challengeId, "DENY");
-    } catch {}
-    setApprovalActionLoading(false);
-    setServiceApprovalModal((prev) => (prev ? { ...prev, status: "DENIED" } : null));
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [serviceApprovalModal]);
 
   const handleVerifyOtpForService = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -430,29 +543,56 @@ export default function DashboardPage() {
     setApprovalOtpLoading(true);
     setApprovalOtpError("");
     try {
-      const res = await verifyMfaLogin({
-        userId: user.userId,
-        email: user.email,
-        code: approvalOtpCode.trim(),
-      });
-      if (res.success) {
-        setServiceApprovalModal((prev) => (prev ? { ...prev, status: "APPROVED" } : null));
-        setTimeout(() => {
-          if (serviceApprovalModal.isExternal) {
-            window.open(serviceApprovalModal.destination, "_blank", "noopener,noreferrer");
-          } else {
-            router.push(serviceApprovalModal.destination);
-          }
-          setServiceApprovalModal(null);
-        }, 700);
-      } else {
-        setApprovalOtpError(res.message || "Invalid passcode. Please check your authenticator app.");
+      const app = serviceApprovalModal.app;
+      const code = approvalOtpCode.trim();
+      if (!app.backendId) {
+        // Local (non-managed) integration: verify identity directly
+        const res = await verifyMfaLogin({ userId: user.userId, email: user.email, code });
+        if (!res.success) {
+          setApprovalOtpError(res.message || "Invalid passcode. Please check your authenticator app.");
+          return;
+        }
+      }
+      const result = await finalizeServiceLaunch(app, { code });
+      if (!result.ok) {
+        setApprovalOtpError(result.message);
       }
     } catch {
       setApprovalOtpError("Error verifying passcode. Please try again.");
     } finally {
       setApprovalOtpLoading(false);
     }
+  };
+
+  // Start the mobile step-up flow: push a number-match challenge to the paired authenticator
+  const startServiceStepUp = async (app: AppIntegration) => {
+    if (!user?.userId) return;
+    setLaunchingAppId(String(app.id));
+    let challengeRes;
+    try {
+      challengeRes = await initiateMfaChallenge(user.userId, user.email, `${app.name} Workstation Login`);
+    } catch {
+      challengeRes = undefined;
+    }
+    setLaunchingAppId(null);
+
+    if (!challengeRes || !challengeRes.success || !challengeRes.data) {
+      setForbiddenModal({
+        appName: app.name,
+        title: "Approval Request Failed",
+        reason: challengeRes?.message || "Could not send the sign-in approval request to your mobile authenticator. Please try again.",
+      });
+      return;
+    }
+
+    setApprovalOtpCode("");
+    setApprovalOtpError("");
+    setServiceApprovalModal({
+      app,
+      challengeId: challengeRes.data.challengeId,
+      matchCode: challengeRes.data.matchCode,
+      status: "PENDING",
+    });
   };
 
   const handleLaunchApp = async (app: AppIntegration, e: React.MouseEvent) => {
@@ -465,75 +605,27 @@ export default function DashboardPage() {
       return;
     }
 
-    setApprovalOtpCode("");
-    setApprovalOtpError("");
-
-    let destination = "";
-    let isExternal = false;
-
-    if (app.backendId && user?.userId) {
-      setLaunchingAppId(String(app.id));
-      const res = await launchUserService(Number(app.backendId), { userId: user.userId });
-      setLaunchingAppId(null);
-      if (!res.success) {
+    // 2FA enabled, Vault app, or service enforces MFA -> mobile step-up approval is mandatory
+    const serviceEnforcesMfa = Boolean(app.mfaRequired || app.metrics?.mfaRequired);
+    if (user?.mfaEnabled || app.isVault || app.type === "vault" || serviceEnforcesMfa) {
+      if (!user?.mfaEnabled && !app.isVault && app.type !== "vault") {
         setForbiddenModal({
           appName: app.name,
-          reason: res.message || "Access Denied (403): You do not have permission to access this service.",
+          title: "Multi-Factor Authentication Required",
+          reason: `Access to ${app.name} requires mobile authenticator verification under Sentinel Zero-Trust policy. Please pair your Sentinel Mobile Authenticator app to access this service.`,
         });
         return;
       }
-      const targetUrl = res.data?.redirectUrl || app.loginUrl;
-      const ssoTokenValue = res.data?.ssoToken || ssoToken || ("sso_" + Math.random().toString(36).substring(2) + Date.now().toString(36));
-      isExternal = Boolean(targetUrl && (targetUrl.startsWith("http://") || targetUrl.startsWith("https://")));
-      const tokenParam = ssoTokenValue ? `&ssoToken=${ssoTokenValue}` : "";
-      destination = isExternal && targetUrl
-        ? `${targetUrl}${targetUrl.includes("?") ? "&" : "?"}ssoUserId=${user.userId}&ssoEmail=${encodeURIComponent(user.email || "")}${tokenParam}`
-        : (targetUrl || `/apps/${app.id}`);
-    } else {
-      const targetUrl = app.loginUrl;
-      const ssoTokenValue = ssoToken || ("sso_" + Math.random().toString(36).substring(2) + Date.now().toString(36));
-      isExternal = Boolean(targetUrl && (targetUrl.startsWith("http://") || targetUrl.startsWith("https://")));
-      const tokenParam = ssoTokenValue ? `&ssoToken=${ssoTokenValue}` : "";
-      destination = isExternal && targetUrl && user?.userId
-        ? `${targetUrl}${targetUrl.includes("?") ? "&" : "?"}ssoUserId=${user.userId}&ssoEmail=${encodeURIComponent(user.email || "")}${tokenParam}`
-        : (app.loginUrl || `/apps/${app.id}`);
-    }
-
-    // Always require Sentinel Step-Up Authorization gate when launching workstation applications
-    if (user?.userId) {
-      setLaunchingAppId(String(app.id));
-      let challengeId = Math.floor(100000 + Math.random() * 900000);
-      let matchCode = String(Math.floor(10 + Math.random() * 90));
-
-      try {
-        const challengeRes = await initiateMfaChallenge(
-          user.userId,
-          user.email,
-          `${app.name} Workstation Login`
-        );
-        if (challengeRes.success && challengeRes.data) {
-          challengeId = challengeRes.data.challengeId;
-          matchCode = challengeRes.data.matchCode;
-        }
-      } catch {}
-
-      setLaunchingAppId(null);
-      setServiceApprovalModal({
-        app,
-        challengeId,
-        matchCode,
-        destination,
-        status: "PENDING",
-        isExternal,
-      });
+      await startServiceStepUp(app);
       return;
     }
 
-    if (isExternal) {
-      window.open(destination, "_blank", "noopener,noreferrer");
-    } else {
-      router.push(destination);
-    }
+    // If MFA is not yet configured, inform user that mobile authentication is mandatory
+    setForbiddenModal({
+      appName: app.name,
+      title: "Mobile Authenticator Required",
+      reason: "Sentinel Zero-Trust access control requires mobile authenticator verification before launching applications. Please pair your mobile authenticator in Security Settings.",
+    });
   };
 
   // MFA Pairing Modal State
@@ -546,7 +638,7 @@ export default function DashboardPage() {
 
   // Add / Configure Service Modal State
   const [addModalOpen, setAddModalOpen] = useState(false);
-  const [activeModalTab, setActiveModalTab] = useState<"templates" | "custom">("templates");
+  const [activeModalTab, setActiveModalTab] = useState<"templates" | "custom" | "vault">("templates");
   const [connectingId, setConnectingId] = useState<string | null>(null);
   const [customName, setCustomName] = useState("");
   const [customCategory, setCustomCategory] = useState("");
@@ -556,6 +648,17 @@ export default function DashboardPage() {
   const [customMfaRequired, setCustomMfaRequired] = useState(true);
   const [modalErr, setModalErr] = useState("");
   const [modalSuccess, setModalSuccess] = useState("");
+
+  // Vault form state
+  const [vaultPreset, setVaultPreset] = useState<"facebook" | "github" | "google" | "custom">("facebook");
+  const [vaultName, setVaultName] = useState("Facebook");
+  const [vaultCategory, setVaultCategory] = useState("Social Network");
+  const [vaultLoginUrl, setVaultLoginUrl] = useState("https://www.facebook.com/login");
+  const [vaultUsername, setVaultUsername] = useState("");
+  const [vaultPassword, setVaultPassword] = useState("");
+  const [vaultShowPassword, setVaultShowPassword] = useState(false);
+  const [vaultMfaRequired, setVaultMfaRequired] = useState(true);
+  const [vaultSaving, setVaultSaving] = useState(false);
 
   // Profile Modal State (Self-Service Name Edit with Locked Credentials)
   const [profileModalOpen, setProfileModalOpen] = useState(false);
@@ -591,6 +694,49 @@ export default function DashboardPage() {
   const [personalAuditLogs, setPersonalAuditLogs] = useState<SecurityAuditRecord[]>([]);
   const [auditLogsLoading, setAuditLogsLoading] = useState(false);
 
+  // Root Super Admin Impersonation Moderator Banner
+  const [impersonationNotice, setImpersonationNotice] = useState<{
+    active: boolean;
+    targetEmail: string;
+  } | null>(null);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("sentinel_impersonated_session");
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed?.impersonated) {
+          setImpersonationNotice({
+            active: true,
+            targetEmail: parsed.targetEmail || user?.email || "User",
+          });
+          return;
+        }
+      }
+      if (typeof window !== "undefined") {
+        const params = new URLSearchParams(window.location.search);
+        if (params.get("impersonated") === "true") {
+          setImpersonationNotice({
+            active: true,
+            targetEmail: user?.email || "User",
+          });
+        }
+      }
+    } catch {}
+  }, [user]);
+
+  const handleExitImpersonation = () => {
+    try {
+      localStorage.removeItem("sentinel_impersonated_session");
+    } catch {}
+    clearSession();
+    const controlUrl =
+      typeof window !== "undefined" && window.location.hostname === "localhost"
+        ? "http://localhost:3004"
+        : "https://sentinel-control-green.vercel.app";
+    window.location.href = controlUrl;
+  };
+
   useEffect(() => {
     const session = getStoredSession();
     if (!session || !session.user) {
@@ -622,6 +768,41 @@ export default function DashboardPage() {
       }
     }
 
+    const handleGetSession = () => {
+      const stored = getStoredSession();
+      window.dispatchEvent(
+        new CustomEvent("SENTINEL_SESSION_RESPONSE", {
+          detail: {
+            isLoggedIn: Boolean(stored?.user),
+            user: stored?.user || null,
+          },
+        })
+      );
+    };
+    window.addEventListener("SENTINEL_GET_SESSION", handleGetSession);
+
+    // Listen for extension presence responses
+    const handleExtensionPong = () => {
+      setIsExtensionInstalled(true);
+    };
+    window.addEventListener("SENTINEL_EXTENSION_PONG", handleExtensionPong);
+
+    // Initial on-load presence probe
+    checkExtensionPresence();
+
+    // Dynamic heartbeat every 3.5s to detect if user disabled or removed extension mid-session
+    const extCheckInterval = setInterval(() => {
+      const attr = document.documentElement.getAttribute("data-sentinel-extension");
+      const lastHeartbeat = Number(document.documentElement.getAttribute("data-sentinel-heartbeat") || 0);
+      const isFresh = attr === "active" && (Date.now() - lastHeartbeat < 4500);
+
+      if (!isFresh) {
+        setIsExtensionInstalled(false);
+      } else {
+        window.dispatchEvent(new CustomEvent("SENTINEL_EXTENSION_PING"));
+      }
+    }, 3500);
+
     if (session.user.company) {
       getOrganizationPolicy(session.user.userId, session.user.company).then((res) => {
         if (res.success && res.data?.mfaEnforced) {
@@ -629,6 +810,12 @@ export default function DashboardPage() {
         }
       });
     }
+
+    return () => {
+      window.removeEventListener("SENTINEL_GET_SESSION", handleGetSession);
+      window.removeEventListener("SENTINEL_EXTENSION_PONG", handleExtensionPong);
+      clearInterval(extCheckInterval);
+    };
   }, [router]);
 
   const loadUserSessions = useCallback(async () => {
@@ -730,6 +917,9 @@ export default function DashboardPage() {
   };
 
   const handleLogout = () => {
+    try {
+      localStorage.removeItem("sentinel_impersonated_session");
+    } catch {}
     clearSession();
     router.push("/login");
   };
@@ -866,6 +1056,14 @@ export default function DashboardPage() {
       return;
     }
 
+    // Force live check of extension presence
+    const active = await checkExtensionPresence();
+    if (!active && !extensionWarningDismissed) {
+      setExtensionWarningDismissed(true);
+      setModalErr("Extension Not Detected: Sentinel Autofill Bridge is offline or uninstalled. In-browser form autofill will not work automatically. Click 'Add Integration' again to proceed with manual copy/paste mode, or open the setup guide below.");
+      return;
+    }
+
     const ok = await addCustomApp({
       name: customName.trim(),
       category: customCategory.trim() || "Custom Service",
@@ -876,7 +1074,12 @@ export default function DashboardPage() {
     });
 
     if (ok) {
-      setModalSuccess("Custom application registered successfully.");
+      setExtensionWarningDismissed(false);
+      setModalSuccess(
+        active
+          ? "Application registered. Sentinel Autofill Bridge is active for this service."
+          : "Application registered. Note: Manual fallback mode active (extension offline)."
+      );
       setCustomName("");
       setCustomCategory("");
       setCustomLoginUrl("");
@@ -884,9 +1087,93 @@ export default function DashboardPage() {
       setTimeout(() => {
         setAddModalOpen(false);
         setModalSuccess("");
-      }, 1200);
+      }, 1400);
     } else {
       setModalErr("Failed to register custom application.");
+    }
+  };
+
+  const handleSelectVaultPreset = (preset: "facebook" | "github" | "google" | "custom") => {
+    setVaultPreset(preset);
+    setModalErr("");
+    if (preset === "facebook") {
+      setVaultName("Facebook");
+      setVaultCategory("Social Network");
+      setVaultLoginUrl("https://www.facebook.com/login");
+    } else if (preset === "github") {
+      setVaultName("GitHub");
+      setVaultCategory("Developer Platform");
+      setVaultLoginUrl("https://github.com/login");
+    } else if (preset === "google") {
+      setVaultName("Gmail / Google");
+      setVaultCategory("Email & Workspace");
+      setVaultLoginUrl("https://accounts.google.com/signin");
+    } else {
+      setVaultName("");
+      setVaultCategory("Personal Account");
+      setVaultLoginUrl("https://");
+    }
+  };
+
+  const handleAddVaultApp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setModalErr("");
+    setModalSuccess("");
+
+    if (!vaultName.trim()) {
+      setModalErr("Application or service name is required.");
+      return;
+    }
+    if (!vaultLoginUrl.trim()) {
+      setModalErr("Login URL is required.");
+      return;
+    }
+    if (!vaultUsername.trim()) {
+      setModalErr("Username or email is required.");
+      return;
+    }
+    if (!vaultPassword.trim()) {
+      setModalErr("Password is required.");
+      return;
+    }
+
+    // Force live check of extension presence
+    const active = await checkExtensionPresence();
+    if (!active && !extensionWarningDismissed) {
+      setExtensionWarningDismissed(true);
+      setModalErr("Extension Not Detected: Sentinel Autofill Bridge is offline or was removed. Credentials will still be stored in your encrypted vault, but automatic in-page injection cannot run. Click 'Save to Secure Vault' again to confirm manual copy mode, or load the extension.");
+      return;
+    }
+
+    setVaultSaving(true);
+    const iconType = vaultPreset !== "custom" ? vaultPreset : "key";
+    const ok = await addCustomApp({
+      name: vaultName.trim(),
+      category: vaultCategory.trim() || "Credential Vault",
+      type: "vault",
+      iconType,
+      loginUrl: vaultLoginUrl.trim(),
+      mfaRequired: vaultMfaRequired,
+      vaultUsername: vaultUsername.trim(),
+      vaultPassword: vaultPassword.trim(),
+    });
+    setVaultSaving(false);
+
+    if (ok) {
+      setExtensionWarningDismissed(false);
+      setModalSuccess(
+        active
+          ? `Credentials for ${vaultName} securely vaulted. Autofill bridge active.`
+          : `Credentials for ${vaultName} vaulted. Manual copy mode active (extension offline).`
+      );
+      setVaultUsername("");
+      setVaultPassword("");
+      setTimeout(() => {
+        setAddModalOpen(false);
+        setModalSuccess("");
+      }, 1400);
+    } else {
+      setModalErr("Failed to save credentials to vault.");
     }
   };
 
@@ -1195,6 +1482,45 @@ export default function DashboardPage() {
 
       {/* Main Content Area */}
       <main className="flex-1 flex flex-col min-w-0 px-4 sm:px-6 lg:px-8 pt-6 pb-8">
+        {/* Root Super Admin Impersonation Moderator Banner */}
+        {impersonationNotice?.active && (
+          <div className="mb-4 px-4 py-3 rounded-xl bg-cyan-950/70 border border-cyan-500/40 text-cyan-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-lg">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-8 h-8 rounded-lg bg-cyan-500/20 border border-cyan-500/40 flex items-center justify-center text-cyan-400 shrink-0">
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                </svg>
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold uppercase tracking-wider text-cyan-300">
+                    Root Impersonation Active
+                  </span>
+                  <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-cyan-900/60 border border-cyan-700/60 text-cyan-200">
+                    MODERATOR MODE
+                  </span>
+                </div>
+                <p className="text-xs text-slate-300 truncate">
+                  You are viewing the workstation space of <span className="font-semibold text-white font-mono">{impersonationNotice.targetEmail}</span>. All actions are logged.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={handleExitImpersonation}
+                className="px-3 py-1.5 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold rounded-lg text-xs transition-colors cursor-pointer flex items-center gap-1.5 shadow"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                </svg>
+                <span>Exit Session &amp; Return to Control</span>
+              </button>
+            </div>
+          </div>
+        )}
         {/* Backend Cold Start / Gateway Status Banner */}
         {gatewayStatus === "cold_starting" && (
           <div className="mb-4 px-3.5 py-2.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-200 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
@@ -1205,7 +1531,7 @@ export default function DashboardPage() {
               </span>
               <div>
                 <span className="font-semibold text-amber-300">Backend API Gateway Cold Start</span>
-                <span className="text-slate-400 mx-2 hidden sm:inline">•</span>
+                <span className="text-slate-400 mx-2 hidden sm:inline">â€¢</span>
                 <span className="text-slate-300 text-[11px]">
                   Free Render instance is resuming from inactivity standby ({coldStartSeconds}s elapsed). Services and MFA challenges may take up to 60s to respond.
                 </span>
@@ -1227,7 +1553,7 @@ export default function DashboardPage() {
               <span className="h-2 w-2 rounded-full bg-red-500 shrink-0" />
               <div>
                 <span className="font-semibold text-red-300">Backend API Gateway Unreachable</span>
-                <span className="text-slate-400 mx-2 hidden sm:inline">•</span>
+                <span className="text-slate-400 mx-2 hidden sm:inline">â€¢</span>
                 <span className="text-slate-300 text-[11px]">
                   Unable to connect to the central authentication service. Retrying in background...
                 </span>
@@ -1248,7 +1574,7 @@ export default function DashboardPage() {
             <div className="flex items-center gap-2">
               <span className="h-2 w-2 rounded-full bg-emerald-400 shrink-0" />
               <span className="font-semibold text-emerald-300">Backend Gateway Connected</span>
-              <span className="text-slate-400 hidden sm:inline">•</span>
+              <span className="text-slate-400 hidden sm:inline">â€¢</span>
               <span className="text-slate-300 text-[11px]">
                 Central API and Supabase PostgreSQL operational {gatewayLatency ? `(${gatewayLatency}ms)` : ""}.
               </span>
@@ -1503,7 +1829,30 @@ export default function DashboardPage() {
                     <span className="text-[10px] text-slate-400 font-mono">Audit</span>
                   </button>
 
-                  {user?.mfaEnabled ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setProfileDropdownOpen(false);
+                      setShowExtensionGuideModal(true);
+                    }}
+                    className="w-full px-3 py-2 text-left text-xs text-slate-300 hover:text-white hover:bg-white/5 rounded-lg flex items-center justify-between transition-colors cursor-pointer"
+                  >
+                    <div className="flex items-center gap-2">
+                      <svg className="w-3.5 h-3.5 text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                      </svg>
+                      <span>Autofill Extension</span>
+                    </div>
+                    <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${
+                      isExtensionInstalled
+                        ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/30"
+                        : "bg-amber-500/10 text-amber-400 border border-amber-500/30"
+                    }`}>
+                      {isExtensionInstalled ? "Active" : "Install"}
+                    </span>
+                  </button>
+
+            {user?.mfaEnabled ? (
                     <>
                       <button
                         type="button"
@@ -1652,6 +2001,36 @@ export default function DashboardPage() {
                 <span>{servicesLoading ? "Syncing..." : "Sync Services"}</span>
               </button>
             )}
+
+            {/* Browser Autofill Extension Status / Setup Gate */}
+            <button
+              type="button"
+              onClick={() => setShowExtensionGuideModal(true)}
+              title={
+                isExtensionInstalled
+                  ? "Sentinel Autofill Bridge Extension is active and connected"
+                  : "Install Sentinel Autofill Bridge Extension for Chrome or Firefox"
+              }
+              className={`px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors cursor-pointer flex items-center gap-1.5 ${
+                isExtensionInstalled
+                  ? "bg-emerald-500/10 hover:bg-emerald-500/20 border-emerald-500/30 text-emerald-300"
+                  : "bg-amber-500/10 hover:bg-amber-500/20 border-amber-500/30 text-amber-300"
+              }`}
+            >
+              {isExtensionInstalled ? (
+                <>
+                  <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+                  <span>Extension Active</span>
+                </>
+              ) : (
+                <>
+                  <svg className="w-3.5 h-3.5 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                  </svg>
+                  <span>Install Extension</span>
+                </>
+              )}
+            </button>
 
             {user?.mfaEnabled ? (
               <button
@@ -1875,13 +2254,25 @@ export default function DashboardPage() {
                       onClick={(e) => handleLaunchApp(app, e)}
                       className="text-left w-full group-hover:text-cyan-300 transition-colors cursor-pointer truncate"
                     >
-                      <h3 className="text-sm font-semibold text-white tracking-tight truncate">
-                        {app.name}
-                      </h3>
+                      <div className="flex items-center gap-1.5 truncate">
+                        <h3 className="text-sm font-semibold text-white tracking-tight truncate">
+                          {app.name}
+                        </h3>
+                        {(app.isVault || app.type === "vault") && (
+                          <span className="px-1.5 py-0.2 rounded text-[9px] font-mono bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 shrink-0">
+                            Vault
+                          </span>
+                        )}
+                      </div>
                     </button>
                     <p className="text-xs text-slate-400 truncate mt-0.5">
                       {app.category}
                     </p>
+                    {app.vaultUsername && (
+                      <p className="text-[11px] text-slate-500 font-mono truncate mt-0.5">
+                        {app.vaultUsername}
+                      </p>
+                    )}
 
                     <div className="mt-3 pt-2.5 border-t border-white/5 flex items-center justify-between">
                       <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-medium bg-white/5 border border-white/10 text-slate-300">
@@ -1936,11 +2327,15 @@ export default function DashboardPage() {
             </div>
 
             {/* Modal Tabs */}
-            <div className="flex items-center gap-2 border-b border-white/10 pb-3 mb-5">
+            <div className="flex items-center gap-2 border-b border-white/10 pb-3 mb-5 overflow-x-auto">
               <button
                 type="button"
-                onClick={() => setActiveModalTab("templates")}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
+                onClick={() => {
+                  setActiveModalTab("templates");
+                  setModalErr("");
+                  setModalSuccess("");
+                }}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer shrink-0 ${
                   activeModalTab === "templates"
                     ? "bg-cyan-500 text-slate-950 font-semibold"
                     : "text-slate-400 hover:text-white hover:bg-white/5"
@@ -1950,14 +2345,33 @@ export default function DashboardPage() {
               </button>
               <button
                 type="button"
-                onClick={() => setActiveModalTab("custom")}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
+                onClick={() => {
+                  setActiveModalTab("custom");
+                  setModalErr("");
+                  setModalSuccess("");
+                }}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer shrink-0 ${
                   activeModalTab === "custom"
                     ? "bg-cyan-500 text-slate-950 font-semibold"
                     : "text-slate-400 hover:text-white hover:bg-white/5"
                 }`}
               >
                 Custom Integration
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveModalTab("vault");
+                  setModalErr("");
+                  setModalSuccess("");
+                }}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer shrink-0 ${
+                  activeModalTab === "vault"
+                    ? "bg-cyan-500 text-slate-950 font-semibold"
+                    : "text-slate-400 hover:text-white hover:bg-white/5"
+                }`}
+              >
+                Credential Vault (Password Manager)
               </button>
             </div>
 
@@ -2040,8 +2454,237 @@ export default function DashboardPage() {
                   );
                 })}
               </div>
+            ) : activeModalTab === "vault" ? (
+              <form onSubmit={handleAddVaultApp} className="space-y-4">
+                {/* Live Extension Presence Banner */}
+                {isExtensionInstalled ? (
+                  <div className="p-2.5 rounded-lg bg-emerald-950/20 border border-emerald-500/30 flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-2 text-emerald-400 font-medium">
+                      <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+                      <span>Sentinel Autofill Bridge: Connected</span>
+                    </div>
+                    <span className="text-[10px] text-emerald-300 font-mono px-1.5 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20">
+                      In-Page Autofill Active
+                    </span>
+                  </div>
+                ) : (
+                  <div className="p-3 rounded-lg bg-amber-950/20 border border-amber-500/30 text-xs space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2 text-amber-300 font-semibold">
+                        <svg className="w-4 h-4 shrink-0 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
+                        <span>Autofill Bridge Extension Not Detected</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setShowExtensionGuideModal(true)}
+                        className="text-[11px] text-cyan-400 hover:text-cyan-300 underline font-medium cursor-pointer"
+                      >
+                        Setup Guide
+                      </button>
+                    </div>
+                    <p className="text-[11px] text-slate-300 leading-relaxed">
+                      If the extension was uninstalled or disabled in your browser, automatic in-page credential injection is disabled. Saved credentials will operate via manual copy/paste mode upon push approval.
+                    </p>
+                  </div>
+                )}
+
+                <div className="p-3 rounded-lg bg-cyan-950/20 border border-cyan-500/30 text-xs text-slate-300 space-y-1">
+                  <div className="flex items-center gap-2 text-cyan-300 font-semibold text-xs">
+                    <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                    </svg>
+                    <span>Secure Password Vault & Out-of-Band Push Gate</span>
+                  </div>
+                  <p className="text-[11px] text-slate-400 leading-relaxed">
+                    Store account credentials for external platforms like Facebook, GitHub, or Gmail. Credentials are encrypted at rest with AES-256 and will remain locked until verified with a 2-digit Sentinel Mobile number match challenge.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-slate-300 mb-1.5">Quick Service Presets</label>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    {[
+                      { id: "facebook", name: "Facebook", icon: "facebook" },
+                      { id: "github", name: "GitHub", icon: "github" },
+                      { id: "google", name: "Gmail", icon: "google" },
+                      { id: "custom", name: "Custom Site", icon: "key" },
+                    ].map((item) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => handleSelectVaultPreset(item.id as any)}
+                        className={`p-2.5 rounded-lg border flex items-center gap-2 transition-all cursor-pointer ${
+                          vaultPreset === item.id
+                            ? "bg-cyan-500/10 border-cyan-500 text-cyan-300 font-semibold"
+                            : "bg-slate-900/50 border-white/10 hover:border-white/20 text-slate-300"
+                        }`}
+                      >
+                        <div className="w-5 h-5 flex items-center justify-center shrink-0">
+                          <AppIcon iconType={item.icon} />
+                        </div>
+                        <span className="text-xs truncate">{item.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-300 mb-1">Service Name *</label>
+                    <input
+                      type="text"
+                      value={vaultName}
+                      onChange={(e) => setVaultName(e.target.value)}
+                      placeholder="e.g. Facebook, GitHub, Gmail"
+                      className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-white/10 text-xs text-white outline-none focus:border-cyan-500/60"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-300 mb-1">Category</label>
+                    <input
+                      type="text"
+                      value={vaultCategory}
+                      onChange={(e) => setVaultCategory(e.target.value)}
+                      placeholder="e.g. Social Network, Developer"
+                      className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-white/10 text-xs text-white outline-none focus:border-cyan-500/60"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-slate-300 mb-1">Launch / Login URL *</label>
+                  <input
+                    type="url"
+                    value={vaultLoginUrl}
+                    onChange={(e) => setVaultLoginUrl(e.target.value)}
+                    placeholder="https://www.facebook.com/login"
+                    className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-white/10 text-xs text-white outline-none focus:border-cyan-500/60 font-mono"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-slate-300 mb-1">Username / Email *</label>
+                  <input
+                    type="text"
+                    value={vaultUsername}
+                    onChange={(e) => setVaultUsername(e.target.value)}
+                    placeholder={
+                      vaultPreset === "facebook"
+                        ? "name@example.com or mobile number"
+                        : vaultPreset === "github"
+                        ? "username or email"
+                        : vaultPreset === "google"
+                        ? "username@gmail.com"
+                        : "user@example.com"
+                    }
+                    className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-white/10 text-xs text-white outline-none focus:border-cyan-500/60 font-mono"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-slate-300 mb-1">Account Password *</label>
+                  <div className="relative">
+                    <input
+                      type={vaultShowPassword ? "text" : "password"}
+                      value={vaultPassword}
+                      onChange={(e) => setVaultPassword(e.target.value)}
+                      placeholder="Enter account password to vault"
+                      className="w-full px-3 py-2 pr-10 rounded-lg bg-slate-900 border border-white/10 text-xs text-white outline-none focus:border-cyan-500/60 font-mono"
+                      required
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setVaultShowPassword(!vaultShowPassword)}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white cursor-pointer"
+                      title={vaultShowPassword ? "Hide password" : "Show password"}
+                    >
+                      {vaultShowPassword ? (
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l18 18" />
+                        </svg>
+                      ) : (
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                        </svg>
+                      )}
+                    </button>
+                  </div>
+                  <div className="mt-1.5">
+                    <PasswordEntropyMeter password={vaultPassword} />
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 pt-1">
+                  <input
+                    type="checkbox"
+                    id="vaultEnforceMfa"
+                    checked={vaultMfaRequired}
+                    onChange={(e) => setVaultMfaRequired(e.target.checked)}
+                    className="w-4 h-4 rounded border-slate-700 bg-slate-900 text-cyan-400 accent-cyan-500 cursor-pointer"
+                  />
+                  <label htmlFor="vaultEnforceMfa" className="text-xs text-slate-300 cursor-pointer select-none">
+                    Require Sentinel Push Verification (Number Match) before unlocking credentials
+                  </label>
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-3 border-t border-white/10">
+                  <button
+                    type="button"
+                    onClick={() => setAddModalOpen(false)}
+                    className="px-3.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-slate-300 text-xs font-medium transition-colors cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={vaultSaving}
+                    className="px-4 py-1.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-xs font-semibold transition-colors cursor-pointer disabled:opacity-50"
+                  >
+                    {vaultSaving ? "Saving to Vault..." : "Save to Secure Vault"}
+                  </button>
+                </div>
+              </form>
             ) : (
               <form onSubmit={handleAddCustom} className="space-y-3.5">
+                {/* Live Extension Presence Banner for Custom App */}
+                {isExtensionInstalled ? (
+                  <div className="p-2.5 rounded-lg bg-emerald-950/20 border border-emerald-500/30 flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-2 text-emerald-400 font-medium">
+                      <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+                      <span>Sentinel Autofill Bridge: Connected</span>
+                    </div>
+                    <span className="text-[10px] text-emerald-300 font-mono px-1.5 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20">
+                      Autofill Available
+                    </span>
+                  </div>
+                ) : (
+                  <div className="p-3 rounded-lg bg-amber-950/20 border border-amber-500/30 text-xs space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2 text-amber-300 font-semibold">
+                        <svg className="w-4 h-4 shrink-0 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
+                        <span>Autofill Bridge Extension Not Detected</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setShowExtensionGuideModal(true)}
+                        className="text-[11px] text-cyan-400 hover:text-cyan-300 underline font-medium cursor-pointer"
+                      >
+                        Setup Guide
+                      </button>
+                    </div>
+                    <p className="text-[11px] text-slate-300 leading-relaxed">
+                      If you uninstalled or disabled the extension, automatic login form injection cannot run for this custom application. You will be able to launch via manual copy/paste fallback.
+                    </p>
+                  </div>
+                )}
                 <div>
                   <label className="block text-xs font-medium text-slate-300 mb-1">Application Name *</label>
                   <input
@@ -2796,7 +3439,7 @@ export default function DashboardPage() {
                         </div>
                         <div className="flex items-center gap-2 mt-1 text-[11px] text-slate-400 font-mono flex-wrap">
                           <span>IP: {s.clientIp || "Direct Gateway"}</span>
-                          <span>•</span>
+                          <span>â€¢</span>
                           <span>Origin: {s.clientOrigin || "Sentinel Portal"}</span>
                         </div>
                         <p className="text-[10px] text-slate-400 mt-0.5">
@@ -3064,13 +3707,13 @@ export default function DashboardPage() {
                       <span>Resource: {log.targetResource || "IAM Portal"}</span>
                       {log.ipAddress && (
                         <>
-                          <span>•</span>
+                          <span>â€¢</span>
                           <span>IP: {log.ipAddress}</span>
                         </>
                       )}
                       {log.userAgent && (
                         <>
-                          <span>•</span>
+                          <span>â€¢</span>
                           <span className="truncate max-w-[200px]" title={log.userAgent}>
                             {log.userAgent}
                           </span>
@@ -3124,7 +3767,7 @@ export default function DashboardPage() {
                 </svg>
               </div>
               <div>
-                <h3 className="text-base font-semibold text-white">Access Denied (403 Forbidden)</h3>
+                <h3 className="text-base font-semibold text-white">{forbiddenModal.title || "Access Denied (403 Forbidden)"}</h3>
                 <p className="text-xs text-red-300 font-mono mt-0.5">{forbiddenModal.appName || "Service Gateway"}</p>
               </div>
             </div>
@@ -3133,9 +3776,11 @@ export default function DashboardPage() {
               {forbiddenModal.reason}
             </p>
 
-            <div className="mt-4 p-3 rounded-lg bg-white/5 border border-white/10 text-[11px] text-slate-400 leading-relaxed">
-              Under organization zero-trust policy, employees are restricted to strictly assigned workstation services. Contact your workspace IT administrator to request access assignment.
-            </div>
+            {!forbiddenModal.title && (
+              <div className="mt-4 p-3 rounded-lg bg-white/5 border border-white/10 text-[11px] text-slate-400 leading-relaxed">
+                Under organization zero-trust policy, employees are restricted to strictly assigned workstation services. Contact your workspace IT administrator to request access assignment.
+              </div>
+            )}
 
             <div className="mt-5 flex justify-end">
               <button
@@ -3185,7 +3830,7 @@ export default function DashboardPage() {
                     {serviceApprovalModal.matchCode}
                   </div>
                   <p className="text-[11px] text-slate-400">
-                    Verify this 2-digit number match on your paired <strong>Sentinel Authenticator</strong> app, or approve directly below.
+                    Open your paired <strong>Sentinel Authenticator</strong> mobile app and approve this request by selecting <strong className="text-cyan-300">{serviceApprovalModal.matchCode}</strong>. Approval is only possible from your mobile device.
                   </p>
                 </div>
 
@@ -3206,25 +3851,16 @@ export default function DashboardPage() {
 
                 <div className="flex items-center gap-2 pt-1 text-[11px] text-cyan-400 justify-center">
                   <div className="w-3 h-3 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin" />
-                  <span>Waiting for mobile or dashboard confirmation...</span>
+                  <span>Waiting for mobile approval...</span>
                 </div>
 
                 <div className="flex items-center gap-2.5 pt-2">
                   <button
                     type="button"
-                    onClick={handleDenyServiceLogin}
-                    disabled={approvalActionLoading}
-                    className="flex-1 py-2.5 rounded-xl bg-white/5 hover:bg-rose-500/10 text-rose-300 border border-rose-500/30 text-xs font-semibold transition-colors cursor-pointer disabled:opacity-50"
+                    onClick={() => setServiceApprovalModal(null)}
+                    className="flex-1 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 border border-white/15 text-xs font-semibold transition-colors cursor-pointer"
                   >
-                    Deny Access
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleApproveServiceLogin}
-                    disabled={approvalActionLoading}
-                    className="flex-1 py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-xs font-bold transition-all shadow-md shadow-cyan-500/20 cursor-pointer disabled:opacity-50"
-                  >
-                    {approvalActionLoading ? "Authorizing..." : "Approve Access"}
+                    Cancel
                   </button>
                 </div>
 
@@ -3261,17 +3897,183 @@ export default function DashboardPage() {
             )}
 
             {serviceApprovalModal.status === "APPROVED" && (
-              <div className="mt-4 p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-center space-y-2 animate-in fade-in duration-200">
-                <div className="w-10 h-10 rounded-full bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center mx-auto text-emerald-400">
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                  </svg>
+              serviceApprovalModal.isVault ? (
+                <div className="mt-4 p-4 rounded-xl bg-slate-900 border border-emerald-500/40 text-left space-y-4 animate-in fade-in duration-200">
+                  <div className="flex items-center gap-3 pb-3 border-b border-white/10">
+                    <div className="w-8 h-8 rounded-full bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 shrink-0">
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                      </svg>
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold text-emerald-300">Credentials Unlocked</h4>
+                      <p className="text-[11px] text-slate-400">Authorized by Sentinel Mobile Authenticator</p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    <div>
+                      <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block mb-1">
+                        Username / Email
+                      </label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          readOnly
+                          value={serviceApprovalModal.vaultUsername || user?.email || ""}
+                          className="flex-1 bg-slate-950 border border-white/10 rounded-lg px-3 py-2 text-xs font-mono text-cyan-200 outline-none select-all"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            navigator.clipboard.writeText(serviceApprovalModal.vaultUsername || user?.email || "");
+                            setCopiedVaultField("user");
+                            setTimeout(() => setCopiedVaultField(null), 2000);
+                          }}
+                          className="px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-medium text-slate-200 cursor-pointer transition-colors"
+                        >
+                          {copiedVaultField === "user" ? "Copied" : "Copy"}
+                        </button>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block mb-1">
+                        Password
+                      </label>
+                      <div className="flex items-center gap-2">
+                        <div className="relative flex-1">
+                          <input
+                            type={vaultPasswordVisible ? "text" : "password"}
+                            readOnly
+                            value={serviceApprovalModal.vaultPassword || "••••••••"}
+                            className="w-full bg-slate-950 border border-white/10 rounded-lg px-3 py-2 pr-10 text-xs font-mono text-amber-200 outline-none select-all"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setVaultPasswordVisible(!vaultPasswordVisible)}
+                            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white cursor-pointer"
+                            title={vaultPasswordVisible ? "Hide password" : "Show password"}
+                          >
+                            {vaultPasswordVisible ? (
+                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l18 18" />
+                              </svg>
+                            ) : (
+                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                              </svg>
+                            )}
+                          </button>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (serviceApprovalModal.vaultPassword) {
+                              navigator.clipboard.writeText(serviceApprovalModal.vaultPassword);
+                              setCopiedVaultField("pass");
+                              setTimeout(() => setCopiedVaultField(null), 2000);
+                            }
+                          }}
+                          className="px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-medium text-slate-200 cursor-pointer transition-colors"
+                        >
+                          {copiedVaultField === "pass" ? "Copied" : "Copy"}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="pt-2 flex flex-col gap-2">
+                    {isExtensionInstalled ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (typeof window !== "undefined") {
+                              window.dispatchEvent(
+                                new CustomEvent("SENTINEL_VAULT_LAUNCH", {
+                                  detail: {
+                                    destination: serviceApprovalModal.destination,
+                                    username: serviceApprovalModal.vaultUsername || user?.email || "",
+                                    password: serviceApprovalModal.vaultPassword || "",
+                                    appName: serviceApprovalModal.app.name,
+                                  },
+                                })
+                              );
+                            }
+                            setVaultAutofillDispatched(true);
+                            setTimeout(() => setVaultAutofillDispatched(false), 3500);
+                          }}
+                          className="w-full py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-xs font-bold transition-all shadow-md shadow-cyan-500/20 cursor-pointer flex items-center justify-center gap-2"
+                        >
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                          </svg>
+                          <span>Launch & Autofill {serviceApprovalModal.app.name}</span>
+                        </button>
+                        <p className="text-[11px] text-center text-slate-400">
+                          {vaultAutofillDispatched
+                            ? "Dispatched to Sentinel Autofill Bridge. Form injection in progress..."
+                            : "Sentinel Autofill Bridge will open the login page and inject your credentials automatically."}
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (serviceApprovalModal.vaultPassword) {
+                              navigator.clipboard.writeText(serviceApprovalModal.vaultPassword);
+                              setCopiedVaultField("pass");
+                              setTimeout(() => setCopiedVaultField(null), 2500);
+                            }
+                            window.open(serviceApprovalModal.destination, "_blank", "noopener,noreferrer");
+                          }}
+                          className="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold transition-all shadow-md shadow-amber-500/20 cursor-pointer flex items-center justify-center gap-2"
+                        >
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                          </svg>
+                          <span>Copy Password & Open {serviceApprovalModal.app.name}</span>
+                        </button>
+                        <div className="flex items-center justify-between text-[11px] text-slate-400 px-1">
+                          <span>Extension offline: Manual paste mode</span>
+                          <button
+                            type="button"
+                            onClick={() => setShowExtensionGuideModal(true)}
+                            className="text-cyan-400 hover:text-cyan-300 underline font-medium cursor-pointer"
+                          >
+                            Setup Guide
+                          </button>
+                        </div>
+                      </>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setServiceApprovalModal(null);
+                        setVaultPasswordVisible(false);
+                      }}
+                      className="w-full py-2 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white text-xs font-medium transition-colors cursor-pointer"
+                    >
+                      Done / Lock Vault
+                    </button>
+                  </div>
                 </div>
-                <h4 className="text-sm font-bold text-emerald-300">Login Approved</h4>
-                <p className="text-xs text-slate-300">
-                  Redirecting to <strong>{serviceApprovalModal.app.name}</strong> workstation session...
-                </p>
-              </div>
+              ) : (
+                <div className="mt-4 p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-center space-y-2 animate-in fade-in duration-200">
+                  <div className="w-10 h-10 rounded-full bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center mx-auto text-emerald-400">
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                    </svg>
+                  </div>
+                  <h4 className="text-sm font-bold text-emerald-300">Login Approved</h4>
+                  <p className="text-xs text-slate-300">
+                    Redirecting to <strong>{serviceApprovalModal.app.name}</strong> workstation session...
+                  </p>
+                </div>
+              )
             )}
 
             {serviceApprovalModal.status === "DENIED" && (
@@ -3312,6 +4114,232 @@ export default function DashboardPage() {
                 </button>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Extension Installation & Setup Guide Modal */}
+      {showExtensionGuideModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-150">
+          <div className="relative w-full max-w-xl rounded-2xl bg-slate-950 border border-cyan-500/40 p-6 shadow-2xl text-white max-h-[92vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-3 border-b border-white/10">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400 shrink-0">
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white">Sentinel Autofill Bridge</h3>
+                  <p className="text-[11px] text-slate-400">Cross-Browser Secure In-Page Credential Injector (v1.1.0)</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowExtensionGuideModal(false)}
+                className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-colors cursor-pointer"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Current Real-Time Live Status Card */}
+            <div className="mt-4 p-3 rounded-xl bg-slate-900 border border-white/10 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <span className={`w-2.5 h-2.5 rounded-full ${isExtensionInstalled ? "bg-emerald-400 animate-pulse" : "bg-rose-400"}`} />
+                <div>
+                  <div className="text-xs font-semibold text-white">
+                    {isExtensionInstalled ? "Extension Active & Connected" : "Extension Not Detected"}
+                  </div>
+                  <div className="text-[10px] text-slate-400">
+                    {isExtensionInstalled
+                      ? "In-page credential injection is ready. Launches will autofill automatically."
+                      : "Load the unpacked extension below to activate automatic autofill."}
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => checkExtensionPresence()}
+                disabled={extensionChecking}
+                className="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/15 text-xs font-medium text-slate-200 transition-colors cursor-pointer disabled:opacity-50"
+              >
+                {extensionChecking ? "Checking..." : "Check Status"}
+              </button>
+            </div>
+
+            {/* Browser Selector Tabs */}
+            <div className="mt-4 grid grid-cols-2 gap-2 p-1 rounded-xl bg-slate-900 border border-white/10">
+              <button
+                type="button"
+                onClick={() => setGuideBrowserTab("chromium")}
+                className={`py-2 px-3 rounded-lg text-xs font-medium transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                  guideBrowserTab === "chromium"
+                    ? "bg-cyan-500 text-slate-950 font-bold shadow-sm"
+                    : "text-slate-300 hover:text-white hover:bg-white/5"
+                }`}
+              >
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-1-13h2v6h-2zm0 8h2v2h-2z" />
+                </svg>
+                <span>Chromium (Chrome / Brave / Edge)</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setGuideBrowserTab("firefox")}
+                className={`py-2 px-3 rounded-lg text-xs font-medium transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                  guideBrowserTab === "firefox"
+                    ? "bg-amber-500 text-slate-950 font-bold shadow-sm"
+                    : "text-slate-300 hover:text-white hover:bg-white/5"
+                }`}
+              >
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 2A10 10 0 0 0 2 12a10 10 0 0 0 10 10 10 10 0 0 0 10-10A10 10 0 0 0 12 2zm0 18a8 8 0 1 1 8-8 8 8 0 0 1-8 8z" />
+                </svg>
+                <span>Mozilla Firefox</span>
+              </button>
+            </div>
+
+            {/* Dynamic Browser Guide Content */}
+            {guideBrowserTab === "chromium" ? (
+              <div className="mt-4 space-y-3.5 text-xs">
+                {/* Download Card */}
+                <div className="p-3.5 rounded-xl bg-cyan-950/20 border border-cyan-500/30 flex items-center justify-between gap-3">
+                  <div>
+                    <div className="font-semibold text-cyan-300 text-xs">Chromium Package (Manifest V3)</div>
+                    <div className="text-[11px] text-slate-400 mt-0.5">Compatible with Google Chrome, Brave, Microsoft Edge, and Opera</div>
+                  </div>
+                  <a
+                    href="/sentinel-extension-chrome.zip"
+                    download="sentinel-extension-chrome.zip"
+                    className="px-3.5 py-2 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-xs font-bold transition-all shadow-md shadow-cyan-500/20 flex items-center gap-1.5 shrink-0"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                    </svg>
+                    <span>Download (.zip)</span>
+                  </a>
+                </div>
+
+                {/* Installation Steps */}
+                <div className="p-4 rounded-xl bg-slate-900 border border-white/10 space-y-3">
+                  <div className="text-xs font-bold text-slate-200">Installation Steps for Chrome / Brave / Edge:</div>
+                  <div className="space-y-2 text-[11px] text-slate-300">
+                    <div className="flex items-start gap-2.5">
+                      <span className="w-5 h-5 rounded-full bg-cyan-500/10 text-cyan-300 font-mono text-[10px] font-bold flex items-center justify-center shrink-0 border border-cyan-500/30">1</span>
+                      <p className="pt-0.5">
+                        Download <strong className="text-white">sentinel-extension-chrome.zip</strong> above and extract the folder to your computer.
+                      </p>
+                    </div>
+                    <div className="flex items-start gap-2.5">
+                      <span className="w-5 h-5 rounded-full bg-cyan-500/10 text-cyan-300 font-mono text-[10px] font-bold flex items-center justify-center shrink-0 border border-cyan-500/30">2</span>
+                      <p className="pt-0.5">
+                        Open a new browser tab and navigate to <code className="px-1.5 py-0.5 rounded bg-slate-950 font-mono text-cyan-200 border border-white/10">chrome://extensions</code> (or <code className="px-1.5 py-0.5 rounded bg-slate-950 font-mono text-cyan-200 border border-white/10">brave://extensions</code> / <code className="px-1.5 py-0.5 rounded bg-slate-950 font-mono text-cyan-200 border border-white/10">edge://extensions</code>).
+                      </p>
+                    </div>
+                    <div className="flex items-start gap-2.5">
+                      <span className="w-5 h-5 rounded-full bg-cyan-500/10 text-cyan-300 font-mono text-[10px] font-bold flex items-center justify-center shrink-0 border border-cyan-500/30">3</span>
+                      <p className="pt-0.5">
+                        In the top-right corner, switch the <strong className="text-white">Developer mode</strong> toggle to <strong className="text-cyan-300">ON</strong>.
+                      </p>
+                    </div>
+                    <div className="flex items-start gap-2.5">
+                      <span className="w-5 h-5 rounded-full bg-cyan-500/10 text-cyan-300 font-mono text-[10px] font-bold flex items-center justify-center shrink-0 border border-cyan-500/30">4</span>
+                      <p className="pt-0.5">
+                        Click the <strong className="text-white">Load unpacked</strong> button that appears in the top-left subheader.
+                      </p>
+                    </div>
+                    <div className="flex items-start gap-2.5">
+                      <span className="w-5 h-5 rounded-full bg-cyan-500/10 text-cyan-300 font-mono text-[10px] font-bold flex items-center justify-center shrink-0 border border-cyan-500/30">5</span>
+                      <p className="pt-0.5">
+                        Select the unzipped folder. <strong className="text-white">Sentinel Autofill Bridge (v1.1.0)</strong> will load immediately.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="mt-4 space-y-3.5 text-xs">
+                {/* Download Card */}
+                <div className="p-3.5 rounded-xl bg-amber-950/20 border border-amber-500/30 flex items-center justify-between gap-3">
+                  <div>
+                    <div className="font-semibold text-amber-300 text-xs">Firefox Add-on Package (Gecko MV3)</div>
+                    <div className="text-[11px] text-slate-400 mt-0.5">Native Gecko manifest with strict background script specifications</div>
+                  </div>
+                  <a
+                    href="/sentinel-extension-firefox.zip"
+                    download="sentinel-extension-firefox.zip"
+                    className="px-3.5 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold transition-all shadow-md shadow-amber-500/20 flex items-center gap-1.5 shrink-0"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                    </svg>
+                    <span>Download (.zip)</span>
+                  </a>
+                </div>
+
+                {/* Installation Steps */}
+                <div className="p-4 rounded-xl bg-slate-900 border border-white/10 space-y-3">
+                  <div className="text-xs font-bold text-slate-200">Installation Steps for Mozilla Firefox:</div>
+                  <div className="space-y-2 text-[11px] text-slate-300">
+                    <div className="flex items-start gap-2.5">
+                      <span className="w-5 h-5 rounded-full bg-amber-500/10 text-amber-300 font-mono text-[10px] font-bold flex items-center justify-center shrink-0 border border-amber-500/30">1</span>
+                      <p className="pt-0.5">
+                        Download <strong className="text-white">sentinel-extension-firefox.zip</strong> above.
+                      </p>
+                    </div>
+                    <div className="flex items-start gap-2.5">
+                      <span className="w-5 h-5 rounded-full bg-amber-500/10 text-amber-300 font-mono text-[10px] font-bold flex items-center justify-center shrink-0 border border-amber-500/30">2</span>
+                      <p className="pt-0.5">
+                        Open a new tab in Firefox and navigate to <code className="px-1.5 py-0.5 rounded bg-slate-950 font-mono text-amber-200 border border-white/10">about:debugging#/runtime/this-firefox</code>.
+                      </p>
+                    </div>
+                    <div className="flex items-start gap-2.5">
+                      <span className="w-5 h-5 rounded-full bg-amber-500/10 text-amber-300 font-mono text-[10px] font-bold flex items-center justify-center shrink-0 border border-amber-500/30">3</span>
+                      <p className="pt-0.5">
+                        Under the <strong className="text-white">Temporary Extensions</strong> section, click <strong className="text-amber-300">Load Temporary Add-on...</strong>.
+                      </p>
+                    </div>
+                    <div className="flex items-start gap-2.5">
+                      <span className="w-5 h-5 rounded-full bg-amber-500/10 text-amber-300 font-mono text-[10px] font-bold flex items-center justify-center shrink-0 border border-amber-500/30">4</span>
+                      <p className="pt-0.5">
+                        Select the downloaded <code className="text-white font-mono">sentinel-extension-firefox.zip</code> file (or unzip and select its <code className="text-white font-mono">manifest.json</code>).
+                      </p>
+                    </div>
+                    <div className="flex items-start gap-2.5">
+                      <span className="w-5 h-5 rounded-full bg-amber-500/10 text-amber-300 font-mono text-[10px] font-bold flex items-center justify-center shrink-0 border border-amber-500/30">5</span>
+                      <p className="pt-0.5">
+                        Sentinel Autofill Bridge will appear under active add-ons with ID <code className="text-amber-200 font-mono">sentinel-autofill@sentinel.security</code>.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Zero-Trust Security Guarantee Banner */}
+            <div className="mt-4 p-3 rounded-xl bg-slate-900/60 border border-white/10 text-[11px] text-slate-400 space-y-1">
+              <div className="font-semibold text-slate-200">Zero-Trust Memory Quarantine</div>
+              <p>
+                The extension does not store passwords in local storage or cookies. It holds credentials ephemerally in RAM only after your mobile push 2-digit number match is verified, and immediately zeroes memory upon field injection or within 60 seconds.
+              </p>
+            </div>
+
+            {/* Footer Buttons */}
+            <div className="mt-5 pt-3 border-t border-white/10 flex items-center justify-between">
+              <div className="text-[11px] text-slate-400">
+                Need source code? Check <code className="text-cyan-300 font-mono">sentinel-extension/</code> in the repo.
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowExtensionGuideModal(false)}
+                className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-white text-xs font-semibold transition-colors cursor-pointer"
+              >
+                Done
+              </button>
+            </div>
           </div>
         </div>
       )}

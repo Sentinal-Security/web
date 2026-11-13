@@ -1,4 +1,4 @@
-export type IntegrationType = "sso_oauth" | "rest_api" | "webhook" | "saml";
+export type IntegrationType = "sso_oauth" | "rest_api" | "webhook" | "saml" | "vault";
 
 export interface AppMetrics {
   lastLogin: string;
@@ -25,6 +25,9 @@ export interface AppIntegration {
   loginUrl?: string;
   endpoint?: string;
   clientId?: string;
+  isVault?: boolean;
+  vaultUsername?: string;
+  mfaRequired?: boolean;
   metrics: AppMetrics;
 }
 
@@ -49,6 +52,9 @@ export interface CustomAppPayload {
   clientId?: string;
   clientSecret?: string;
   mfaRequired: boolean;
+  vaultUsername?: string;
+  vaultPassword?: string;
+  iconType?: string;
 }
 
 export interface BackendServiceResponse {
@@ -62,6 +68,8 @@ export interface BackendServiceResponse {
   clientId: string;
   mfaRequired: boolean;
   status: string;
+  vaultUsername?: string;
+  isVault?: boolean;
   lastLogin?: string;
   lastActive?: string;
   totalLogins: number;
@@ -77,11 +85,14 @@ export interface CreateServicePayload {
   loginUrl?: string;
   clientId?: string;
   mfaRequired: boolean;
+  vaultUsername?: string;
+  vaultPassword?: string;
 }
 
 export interface LaunchServicePayload {
   userId: number;
   code?: string;
+  challengeId?: number;
 }
 
 export interface LaunchServiceResponse {
@@ -91,5 +102,8 @@ export interface LaunchServiceResponse {
     ssoToken: string;
     redirectUrl: string;
     service: BackendServiceResponse;
+    isVault?: boolean;
+    vaultUsername?: string;
+    vaultPassword?: string;
   };
 }

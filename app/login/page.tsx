@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import { useMfa } from "@/hooks/useMfa";
 import { saveSession, getStoredSession, clearSession } from "@/lib/session";
-import { getMfaChallengeStatus, loginWithGoogle, resendVerification, sendEmailOtp } from "@/lib/api";
+import { getMfaChallengeStatus, loginWithGoogle, resendVerification, sendEmailOtp, validateSsoSession } from "@/lib/api";
 import { User } from "@/types/auth";
 import Footer from "@/app/partials/footer";
 import { PasswordToggleAdornment } from "@/components/PasswordToggleAdornment";
@@ -19,13 +19,37 @@ export default function LoginPage() {
   );
 }
 
+const CLIENT_REDIRECT_REGISTRY: Record<string, { name: string; localUrl: string; prodUrl: string }> = {
+  fintech_payroll: { name: "FinTech Payroll Portal", localUrl: "http://localhost:3002", prodUrl: "https://demo-apps-sfjl.vercel.app" },
+  "fintech-payroll": { name: "FinTech Payroll Portal", localUrl: "http://localhost:3002", prodUrl: "https://demo-apps-sfjl.vercel.app" },
+  acme_hr: { name: "Acme HR Portal", localUrl: "http://localhost:3001", prodUrl: "https://demo-apps-blue.vercel.app" },
+  "acme-hr": { name: "Acme HR Portal", localUrl: "http://localhost:3001", prodUrl: "https://demo-apps-blue.vercel.app" },
+  devops_incident: { name: "DevOps Incident Command", localUrl: "http://localhost:3003", prodUrl: "https://demo-apps-fjk5.vercel.app" },
+  "devops-incident": { name: "DevOps Incident Command", localUrl: "http://localhost:3003", prodUrl: "https://demo-apps-fjk5.vercel.app" },
+  devops: { name: "DevOps Incident Command", localUrl: "http://localhost:3003", prodUrl: "https://demo-apps-fjk5.vercel.app" },
+  nexus_ops: { name: "Nexus Ops Portal", localUrl: "http://localhost:3003", prodUrl: "https://demo-apps-fjk5.vercel.app" },
+};
+
+function resolveClientRedirect(clientId: string | null, rawRedirect: string | null): string {
+  if (rawRedirect && rawRedirect.trim().length > 0) return rawRedirect.trim();
+  if (!clientId) return "";
+  const key = clientId.toLowerCase();
+  const config = CLIENT_REDIRECT_REGISTRY[key];
+  if (!config) return "";
+  const isLocal = typeof window !== "undefined" && (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
+  return isLocal ? config.localUrl : config.prodUrl;
+}
+
 function LoginPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const redirectUri = searchParams.get("redirect_uri") || searchParams.get("redirectUrl") || searchParams.get("redirectUri");
+  const rawRedirectUri = searchParams.get("redirect_uri") || searchParams.get("redirectUrl") || searchParams.get("redirectUri");
   const clientId = searchParams.get("client_id") || searchParams.get("clientId");
-  const appName = searchParams.get("app_name") || searchParams.get("appName") || (clientId ? clientId.toUpperCase() : "");
+  const registeredClient = clientId ? CLIENT_REDIRECT_REGISTRY[clientId.toLowerCase()] : undefined;
+  const redirectUri = resolveClientRedirect(clientId, rawRedirectUri);
+  const appName = searchParams.get("app_name") || searchParams.get("appName") || registeredClient?.name || (clientId ? clientId.toUpperCase() : "");
   const state = searchParams.get("state");
+  const paramEmail = searchParams.get("email") || "";
   const [inactivityNotice, setInactivityNotice] = useState<string | null>(null);
 
   useEffect(() => {
@@ -47,6 +71,67 @@ function LoginPageContent() {
   const { verifyLogin, verifyRecovery, loading: mfaLoading, error: mfaError, setError: setMfaError } = useMfa();
 
   const [existingUser, setExistingUser] = useState<User | null>(null);
+
+  const impersonateToken = searchParams.get("impersonate_token");
+  const [impersonating, setImpersonating] = useState(false);
+  const [impersonateError, setImpersonateError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!impersonateToken) return;
+
+    let cancelled = false;
+    const runImpersonation = async () => {
+      setImpersonating(true);
+      setImpersonateError(null);
+      try {
+        const res = await validateSsoSession(undefined, impersonateToken);
+        if (cancelled) return;
+        if (res.success && res.userId && res.email) {
+          const u: User = {
+            userId: res.userId,
+            email: res.email,
+            fullName: res.fullName || res.email.split("@")[0],
+            role: (res.role as any) || "USER",
+            company: res.company || "",
+            subscriptionTier: res.subscriptionTier,
+            mfaEnabled: Boolean(res.mfaEnabled),
+          };
+          saveSession(u, impersonateToken);
+          try {
+            localStorage.setItem(
+              "sentinel_impersonated_session",
+              JSON.stringify({
+                impersonated: true,
+                targetEmail: res.email,
+                targetUserId: res.userId,
+                timestamp: Date.now(),
+              })
+            );
+          } catch {}
+
+          if (redirectUri) {
+            const sep = redirectUri.includes("?") ? "&" : "?";
+            const targetUrl = `${redirectUri}${sep}ssoUserId=${res.userId}&ssoUserEmail=${encodeURIComponent(res.email)}&ssoToken=${impersonateToken}${state ? `&state=${encodeURIComponent(state)}` : ""}`;
+            window.location.href = targetUrl;
+          } else {
+            router.push("/dashboard?impersonated=true");
+          }
+        } else {
+          setImpersonateError(res.message || "Failed to validate root impersonation token.");
+          setImpersonating(false);
+        }
+      } catch (err: any) {
+        if (cancelled) return;
+        setImpersonateError(err?.message || "Network error validating impersonation token.");
+        setImpersonating(false);
+      }
+    };
+
+    runImpersonation();
+    return () => {
+      cancelled = true;
+    };
+  }, [impersonateToken, redirectUri, state, router]);
 
   useEffect(() => {
     const session = getStoredSession();
@@ -88,14 +173,18 @@ function LoginPageContent() {
     setMfaMode("push");
   };
 
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(paramEmail);
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
   const [validationError, setValidationError] = useState("");
 
-  // Restore remembered email on mount if previously saved
+  // Restore remembered email on mount if previously saved (unless paramEmail passed)
   useEffect(() => {
+    if (paramEmail) {
+      setEmail(paramEmail);
+      return;
+    }
     try {
       const savedEmail = localStorage.getItem("sentinel_remembered_email");
       if (savedEmail) {
@@ -103,7 +192,7 @@ function LoginPageContent() {
         setRememberMe(true);
       }
     } catch {}
-  }, []);
+  }, [paramEmail]);
 
   // MFA Challenge State
   const [mfaChallenge, setMfaChallenge] = useState<{
@@ -489,6 +578,27 @@ function LoginPageContent() {
     );
   };
 
+  if (impersonating) {
+    return (
+      <div className="min-h-screen bg-[#030712] text-white flex flex-col items-center justify-center p-4">
+        <div className="w-full max-w-md bg-zinc-900/80 border border-cyan-500/40 rounded-2xl p-8 text-center shadow-2xl backdrop-blur space-y-4">
+          <div className="w-12 h-12 mx-auto rounded-xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400">
+            <svg className="w-6 h-6 animate-spin" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+          </div>
+          <div>
+            <h2 className="text-lg font-bold text-white">Root Super Admin Impersonation</h2>
+            <p className="text-xs text-zinc-400 font-mono mt-1">
+              Establishing authenticated workstation session...
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#030712] text-white flex flex-col justify-between selection:bg-cyan-400 selection:text-black font-sans antialiased relative overflow-hidden">
       {/* Background ambient glowing blue aura */}
@@ -639,7 +749,7 @@ function LoginPageContent() {
                       <>
                         <button
                           type="button"
-                          onClick={() => handleSuccessfulHandoff(existingUser.userId, existingUser.email)}
+                          onClick={() => handleSuccessfulHandoff(existingUser.userId, existingUser.email, getStoredSession()?.token)}
                           className="w-full py-3.5 px-4 bg-[#38e1ff] hover:bg-[#2bc4e0] active:scale-[0.99] text-slate-950 font-bold text-xs sm:text-sm tracking-wider uppercase rounded-xl transition-all duration-200 shadow-[0_0_20px_rgba(56,225,255,0.3)] cursor-pointer flex items-center justify-center gap-2"
                         >
                           <span>Authorize & Enter {appName || "App"}</span>
@@ -1258,6 +1368,18 @@ function LoginPageContent() {
                             </button>
                           </div>
                         </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Alert: Impersonation Error */}
+                  {impersonateError && (
+                    <div className="mb-4 p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-300 text-xs">
+                      <div className="flex items-center gap-2">
+                        <svg className="w-4 h-4 shrink-0 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                        </svg>
+                        <span>{impersonateError}</span>
                       </div>
                     </div>
                   )}

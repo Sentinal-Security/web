@@ -155,12 +155,14 @@ export function useIntegrations(userId?: number) {
         const created = await createUserService({
           userId,
           name: payload.name.trim(),
-          category: payload.category.trim() || "Enterprise Service",
-          iconType: "custom",
+          category: payload.category.trim() || (payload.type === "vault" ? "Credential Vault" : "Enterprise Service"),
+          iconType: payload.iconType || "custom",
           authProtocol: payload.type.toUpperCase(),
           loginUrl: payload.loginUrl.trim(),
           clientId: payload.clientId?.trim(),
           mfaRequired: payload.mfaRequired,
+          vaultUsername: payload.vaultUsername?.trim(),
+          vaultPassword: payload.vaultPassword?.trim(),
         });
 
         if (created) {
@@ -179,14 +181,16 @@ export function useIntegrations(userId?: number) {
       const newApp: AppIntegration = {
         id: localId,
         name: payload.name.trim(),
-        category: payload.category.trim() || "Enterprise Service",
-        iconType: "custom",
+        category: payload.category.trim() || (payload.type === "vault" ? "Credential Vault" : "Enterprise Service"),
+        iconType: (payload.iconType as any) || "custom",
         status: "Active",
         statusColor: "bg-cyan-400",
         type: payload.type,
         isCustom: true,
         loginUrl: payload.loginUrl.trim(),
         clientId: payload.clientId?.trim(),
+        isVault: payload.type === "vault",
+        vaultUsername: payload.vaultUsername?.trim(),
         metrics: {
           lastLogin: `Today, ${formatCurrentTime()}`,
           lastActive: "Active now",
