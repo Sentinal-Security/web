@@ -364,9 +364,11 @@ export default function DashboardPage() {
   const [vaultPasswordVisible, setVaultPasswordVisible] = useState(false);
   const [copiedVaultField, setCopiedVaultField] = useState<"user" | "pass" | null>(null);
   const [vaultAutofillDispatched, setVaultAutofillDispatched] = useState(false);
+  const [vaultAutofillError, setVaultAutofillError] = useState<string | null>(null);
 
   // Browser Extension Presence & Middleware Gate State
   const [isExtensionInstalled, setIsExtensionInstalled] = useState<boolean>(false);
+  const [extensionVersion, setExtensionVersion] = useState<string | null>(null);
   const [extensionChecking, setExtensionChecking] = useState<boolean>(false);
   const [showExtensionGuideModal, setShowExtensionGuideModal] = useState<boolean>(false);
   const [guideBrowserTab, setGuideBrowserTab] = useState<"chromium" | "firefox">("chromium");
@@ -388,10 +390,15 @@ export default function DashboardPage() {
       setExtensionChecking(true);
       let responded = false;
 
-      const handlePong = () => {
+      const handlePong = (ev: Event) => {
         responded = true;
         window.removeEventListener("SENTINEL_EXTENSION_PONG", handlePong);
+        const ver =
+          (ev as CustomEvent)?.detail?.version ||
+          document.documentElement.getAttribute("data-sentinel-version") ||
+          null;
         setIsExtensionInstalled(true);
+        if (ver) setExtensionVersion(ver);
         setExtensionChecking(false);
         resolve(true);
       };
@@ -404,12 +411,14 @@ export default function DashboardPage() {
       const isFresh =
         document.documentElement.getAttribute("data-sentinel-extension") === "active" &&
         Date.now() - lastHeartbeat < 4500;
+      const domVer = document.documentElement.getAttribute("data-sentinel-version");
 
       setTimeout(() => {
         window.removeEventListener("SENTINEL_EXTENSION_PONG", handlePong);
         setExtensionChecking(false);
         if (!responded) {
           setIsExtensionInstalled(isFresh);
+          if (isFresh && domVer) setExtensionVersion(domVer);
           resolve(isFresh);
         }
       }, 300);
@@ -780,10 +789,17 @@ export default function DashboardPage() {
       );
     };
     window.addEventListener("SENTINEL_GET_SESSION", handleGetSession);
+    // Proactively sync session so Sentinel Autofill Bridge stays connected
+    handleGetSession();
 
     // Listen for extension presence responses
-    const handleExtensionPong = () => {
+    const handleExtensionPong = (ev: Event) => {
       setIsExtensionInstalled(true);
+      const ver =
+        (ev as CustomEvent)?.detail?.version ||
+        document.documentElement.getAttribute("data-sentinel-version");
+      if (ver) setExtensionVersion(ver);
+      handleGetSession();
     };
     window.addEventListener("SENTINEL_EXTENSION_PONG", handleExtensionPong);
 
@@ -795,10 +811,12 @@ export default function DashboardPage() {
       const attr = document.documentElement.getAttribute("data-sentinel-extension");
       const lastHeartbeat = Number(document.documentElement.getAttribute("data-sentinel-heartbeat") || 0);
       const isFresh = attr === "active" && (Date.now() - lastHeartbeat < 4500);
+      const domVer = document.documentElement.getAttribute("data-sentinel-version");
 
       if (!isFresh) {
         setIsExtensionInstalled(false);
       } else {
+        if (domVer) setExtensionVersion(domVer);
         window.dispatchEvent(new CustomEvent("SENTINEL_EXTENSION_PING"));
       }
     }, 3500);
@@ -3987,23 +4005,77 @@ export default function DashboardPage() {
                   <div className="pt-2 flex flex-col gap-2">
                     {isExtensionInstalled ? (
                       <>
+                        {extensionVersion && extensionVersion !== "1.1.1" && (
+                          <div className="p-2.5 rounded-xl bg-amber-950/30 border border-amber-500/30 text-[11px] text-amber-200 flex items-center justify-between gap-2">
+                            <span>
+                              Extension <strong className="font-mono">v{extensionVersion}</strong> detected. Update to{" "}
+                              <strong className="font-mono">v1.1.1</strong> for working autofill.
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => setShowExtensionGuideModal(true)}
+                              className="px-2 py-1 rounded-md bg-amber-500 text-slate-950 font-bold shrink-0 cursor-pointer"
+                            >
+                              Update
+                            </button>
+                          </div>
+                        )}
                         <button
                           type="button"
                           onClick={() => {
-                            if (typeof window !== "undefined") {
-                              window.dispatchEvent(
-                                new CustomEvent("SENTINEL_VAULT_LAUNCH", {
-                                  detail: {
-                                    destination: serviceApprovalModal.destination,
-                                    username: serviceApprovalModal.vaultUsername || user?.email || "",
-                                    password: serviceApprovalModal.vaultPassword || "",
-                                    appName: serviceApprovalModal.app.name,
-                                  },
-                                })
-                              );
-                            }
+                            if (typeof window === "undefined") return;
+                            setVaultAutofillError(null);
                             setVaultAutofillDispatched(true);
-                            setTimeout(() => setVaultAutofillDispatched(false), 3500);
+
+                            const stored = getStoredSession();
+                            window.dispatchEvent(
+                              new CustomEvent("SENTINEL_SESSION_RESPONSE", {
+                                detail: {
+                                  isLoggedIn: Boolean(stored?.user || user),
+                                  user: stored?.user || user || null,
+                                },
+                              })
+                            );
+
+                            let settled = false;
+                            const onResult = (ev: Event) => {
+                              settled = true;
+                              window.removeEventListener("SENTINEL_VAULT_LAUNCH_RESULT", onResult);
+                              const detail = (ev as CustomEvent)?.detail;
+                              if (detail && detail.success) {
+                                setTimeout(() => setVaultAutofillDispatched(false), 3500);
+                              } else {
+                                setVaultAutofillDispatched(false);
+                                const reason = detail?.reason;
+                                setVaultAutofillError(
+                                  reason === "NOT_LOGGED_IN"
+                                    ? "Extension session wasn't synced. Reload the extension or use Copy Password & Open below."
+                                    : "Autofill bridge couldn't launch this tab automatically. Reload extension v1.1.1 or use Copy Password & Open."
+                                );
+                              }
+                            };
+
+                            window.addEventListener("SENTINEL_VAULT_LAUNCH_RESULT", onResult);
+                            window.dispatchEvent(
+                              new CustomEvent("SENTINEL_VAULT_LAUNCH", {
+                                detail: {
+                                  destination: serviceApprovalModal.destination,
+                                  username: serviceApprovalModal.vaultUsername || user?.email || "",
+                                  password: serviceApprovalModal.vaultPassword || "",
+                                  appName: serviceApprovalModal.app.name,
+                                },
+                              })
+                            );
+
+                            setTimeout(() => {
+                              if (!settled) {
+                                window.removeEventListener("SENTINEL_VAULT_LAUNCH_RESULT", onResult);
+                                setVaultAutofillDispatched(false);
+                                setVaultAutofillError(
+                                  "Your loaded extension did not respond (v1.1.0 is outdated). Download & reload v1.1.1 from Setup Guide, or click Copy Password & Open."
+                                );
+                              }
+                            }, 1500);
                           }}
                           className="w-full py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-xs font-bold transition-all shadow-md shadow-cyan-500/20 cursor-pointer flex items-center justify-center gap-2"
                         >
@@ -4012,11 +4084,40 @@ export default function DashboardPage() {
                           </svg>
                           <span>Launch & Autofill {serviceApprovalModal.app.name}</span>
                         </button>
-                        <p className="text-[11px] text-center text-slate-400">
-                          {vaultAutofillDispatched
-                            ? "Dispatched to Sentinel Autofill Bridge. Form injection in progress..."
-                            : "Sentinel Autofill Bridge will open the login page and inject your credentials automatically."}
-                        </p>
+                        {vaultAutofillError ? (
+                          <div className="p-2.5 rounded-xl bg-rose-950/30 border border-rose-500/30 text-[11px] text-rose-200 space-y-2">
+                            <p>{vaultAutofillError}</p>
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (serviceApprovalModal.vaultPassword) {
+                                    navigator.clipboard.writeText(serviceApprovalModal.vaultPassword);
+                                    setCopiedVaultField("pass");
+                                    setTimeout(() => setCopiedVaultField(null), 2500);
+                                  }
+                                  window.open(serviceApprovalModal.destination, "_blank", "noopener,noreferrer");
+                                }}
+                                className="flex-1 py-1.5 px-2.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold cursor-pointer"
+                              >
+                                Copy Password & Open {serviceApprovalModal.app.name}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setShowExtensionGuideModal(true)}
+                                className="py-1.5 px-2.5 rounded-lg bg-white/10 hover:bg-white/15 text-white font-medium cursor-pointer"
+                              >
+                                Setup Guide
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <p className="text-[11px] text-center text-slate-400">
+                            {vaultAutofillDispatched
+                              ? "Dispatched to Sentinel Autofill Bridge. Opening tab & autofilling..."
+                              : "Sentinel Autofill Bridge will open the login page and inject your credentials automatically."}
+                          </p>
+                        )}
                       </>
                     ) : (
                       <>
@@ -4131,7 +4232,7 @@ export default function DashboardPage() {
                 </div>
                 <div>
                   <h3 className="text-sm font-bold text-white">Sentinel Autofill Bridge</h3>
-                  <p className="text-[11px] text-slate-400">Cross-Browser Secure In-Page Credential Injector (v1.1.0)</p>
+                  <p className="text-[11px] text-slate-400">Cross-Browser Secure In-Page Credential Injector (v1.1.1)</p>
                 </div>
               </div>
               <button
@@ -4254,7 +4355,7 @@ export default function DashboardPage() {
                     <div className="flex items-start gap-2.5">
                       <span className="w-5 h-5 rounded-full bg-cyan-500/10 text-cyan-300 font-mono text-[10px] font-bold flex items-center justify-center shrink-0 border border-cyan-500/30">5</span>
                       <p className="pt-0.5">
-                        Select the unzipped folder. <strong className="text-white">Sentinel Autofill Bridge (v1.1.0)</strong> will load immediately.
+                        Select the unzipped folder. <strong className="text-white">Sentinel Autofill Bridge (v1.1.1)</strong> will load immediately.
                       </p>
                     </div>
                   </div>
