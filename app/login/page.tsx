@@ -41,7 +41,17 @@ const CLIENT_REDIRECT_REGISTRY: Record<string, { name: string; localUrl: string;
 };
 
 function resolveClientRedirect(clientId: string | null, rawRedirect: string | null): string {
-  if (rawRedirect && rawRedirect.trim().length > 0) return rawRedirect.trim();
+  if (rawRedirect && rawRedirect.trim().length > 0) {
+    try {
+      const parsed = new URL(rawRedirect.trim());
+      if (parsed.protocol === "http:" || parsed.protocol === "https:") {
+        return parsed.toString();
+      }
+    } catch {
+      return "";
+    }
+    return "";
+  }
   if (!clientId) return "";
   const key = clientId.toLowerCase();
   const config = CLIENT_REDIRECT_REGISTRY[key];
@@ -430,11 +440,12 @@ function LoginPageContent() {
 
         if (resolvedDest) {
           const sep = resolvedDest.includes("?") ? "&" : "?";
-          const token =
-            launchRes.data?.ssoToken ||
-            ssoToken ||
-            "sso_" + Math.random().toString(36).substring(2) + Date.now().toString(36);
-          const targetUrl = `${resolvedDest}${sep}ssoUserId=${userId}&ssoUserEmail=${encodeURIComponent(userEmail)}&ssoToken=${token}${state ? `&state=${encodeURIComponent(state)}` : ""}`;
+          const token = launchRes.data?.ssoToken || ssoToken;
+          if (!token) {
+            setValidationError("Unable to issue a verified SSO session token. Please sign in again.");
+            return;
+          }
+          const targetUrl = `${resolvedDest}${sep}ssoUserId=${userId}&ssoUserEmail=${encodeURIComponent(userEmail)}&ssoToken=${encodeURIComponent(token)}${state ? `&state=${encodeURIComponent(state)}` : ""}`;
 
           if (sourceTabIdParam) {
             setStepUpForExtension(false);
@@ -476,9 +487,12 @@ function LoginPageContent() {
     }
 
     if (redirectUri) {
+      if (!ssoToken) {
+        setValidationError("Missing verified SSO session token. Please sign in again.");
+        return;
+      }
       const sep = redirectUri.includes("?") ? "&" : "?";
-      const token = ssoToken || ("sso_" + Math.random().toString(36).substring(2) + Date.now().toString(36));
-      const targetUrl = `${redirectUri}${sep}ssoUserId=${userId}&ssoUserEmail=${encodeURIComponent(userEmail)}&ssoToken=${token}${state ? `&state=${encodeURIComponent(state)}` : ""}`;
+      const targetUrl = `${redirectUri}${sep}ssoUserId=${userId}&ssoUserEmail=${encodeURIComponent(userEmail)}&ssoToken=${encodeURIComponent(ssoToken)}${state ? `&state=${encodeURIComponent(state)}` : ""}`;
       if (sourceTabIdParam) {
         setExtHandoffSuccess({
           appName: appName || "Application",
@@ -925,25 +939,7 @@ function LoginPageContent() {
       return;
     }
 
-    const providerEmail =
-      provider === "Apple"
-        ? "demo.user@privaterelay.appleid.com"
-        : "demo.user@outlook.com";
-
-    const ssoId = provider === "Apple" ? 102 : 103;
-    saveSession({
-      userId: ssoId,
-      email: providerEmail,
-      fullName: `${provider} SSO User`,
-      role: "USER",
-      company: "Acme Global",
-      mfaEnabled: false,
-    });
-    handleSuccessfulHandoff(
-      ssoId,
-      providerEmail,
-      `sso_${provider.toLowerCase()}_token_demo`
-    );
+    setValidationError(`${provider} OAuth federation is not enabled for this workspace. Please sign in with email and password or Google.`);
   };
 
   if (impersonating) {

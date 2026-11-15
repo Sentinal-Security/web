@@ -24,9 +24,11 @@ import { InactivityWarningModal } from "@/components/session/InactivityWarningMo
 
 function generateSecureTempPassword(prefix = "Sec!"): string {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!#$*";
+  const buf = new Uint32Array(8);
+  crypto.getRandomValues(buf);
   let result = prefix;
   for (let i = 0; i < 8; i++) {
-    result += chars.charAt(Math.floor(Math.random() * chars.length));
+    result += chars.charAt(buf[i] % chars.length);
   }
   return result;
 }
@@ -84,7 +86,7 @@ export default function UserManagementPage() {
     }
 
     validateSsoSession(session.user.userId, session.token).then((res) => {
-      if (!res.success) {
+      if (!res.success && !res.networkError) {
         clearSession();
         router.push("/login?error=session_terminated");
       }

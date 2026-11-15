@@ -436,10 +436,9 @@ export default function DashboardPage() {
     if (isVault) {
       return { destination: targetUrl || "https://", isExternal: true };
     }
-    const ssoTokenValue =
-      data?.ssoToken || ssoToken || ("sso_" + Math.random().toString(36).substring(2) + Date.now().toString(36));
+    const ssoTokenValue = data?.ssoToken || ssoToken || "";
     const isExternal = Boolean(targetUrl && (targetUrl.startsWith("http://") || targetUrl.startsWith("https://")));
-    const tokenParam = ssoTokenValue ? `&ssoToken=${ssoTokenValue}` : "";
+    const tokenParam = ssoTokenValue ? `&ssoToken=${encodeURIComponent(ssoTokenValue)}` : "";
     const destination =
       isExternal && targetUrl && user?.userId
         ? `${targetUrl}${targetUrl.includes("?") ? "&" : "?"}ssoUserId=${user.userId}&ssoUserEmail=${encodeURIComponent(user.email || "")}${tokenParam}`
@@ -755,7 +754,7 @@ export default function DashboardPage() {
 
     // Active server-side verification: force logout if account was deleted, purged, or session revoked
     validateSsoSession(session.user.userId, session.token).then((res) => {
-      if (!res.success) {
+      if (!res.success && !res.networkError) {
         clearSession();
         router.push("/login?error=session_terminated");
       }
