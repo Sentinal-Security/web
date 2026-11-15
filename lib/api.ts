@@ -109,23 +109,39 @@ export async function loginUser(
 export async function setupMfa(
   userId: number
 ): Promise<MfaSetupResponse> {
-  const res = await fetch(`${API_BASE_URL}/api/mfa/setup`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ userId }),
-  });
-  return res.json();
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/mfa/setup`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId }),
+    });
+    const contentType = res.headers.get("content-type");
+    if (contentType && contentType.includes("application/json")) {
+      return await res.json();
+    }
+    return { success: false, message: "Network issue, please wait a few seconds..." };
+  } catch {
+    return { success: false, message: "Network issue, please wait a few seconds..." };
+  }
 }
 
 export async function verifyMfaSetup(
   data: MfaVerifySetupPayload
 ): Promise<AuthResponse> {
-  const res = await fetch(`${API_BASE_URL}/api/mfa/verify-setup`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
-  });
-  return res.json();
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/mfa/verify-setup`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+    const contentType = res.headers.get("content-type");
+    if (contentType && contentType.includes("application/json")) {
+      return await res.json();
+    }
+    return { success: false, message: "Network issue, please wait a few seconds..." };
+  } catch {
+    return { success: false, message: "Network issue, please wait a few seconds..." };
+  }
 }
 
 export async function verifyMfaLogin(
@@ -162,12 +178,20 @@ export async function verifyMfaLogin(
 export async function disableMfa(
   userId: number
 ): Promise<AuthResponse> {
-  const res = await fetch(`${API_BASE_URL}/api/mfa/disable`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ userId }),
-  });
-  return res.json();
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/mfa/disable`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId }),
+    });
+    const contentType = res.headers.get("content-type");
+    if (contentType && contentType.includes("application/json")) {
+      return await res.json();
+    }
+    return { success: false, message: "Network issue, please wait a few seconds..." };
+  } catch {
+    return { success: false, message: "Network issue, please wait a few seconds..." };
+  }
 }
 
 export async function verifyRecoveryCode(data: {
@@ -370,17 +394,25 @@ export async function loginWithGoogle(
 export async function validateSsoSession(
   userId?: number,
   ssoToken?: string
-): Promise<AuthResponse> {
+): Promise<AuthResponse & { networkError?: boolean }> {
   try {
     const res = await fetch(`${API_BASE_URL}/api/auth/validate`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ userId, ssoToken }),
     });
+    if (!res.ok && res.status >= 500) {
+      return {
+        success: false,
+        networkError: true,
+        message: "Gateway temporarily unavailable.",
+      };
+    }
     return await res.json();
   } catch {
     return {
       success: false,
+      networkError: true,
       message: "Session validation failed due to network error.",
     };
   }

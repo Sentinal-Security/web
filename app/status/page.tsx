@@ -9,7 +9,7 @@ import { SystemTelemetry } from "@/types/status";
 export default function StatusPage() {
   const [telemetry, setTelemetry] = useState<SystemTelemetry | null>(null);
   const [loading, setLoading] = useState(true);
-  const [lastRefreshed, setLastRefreshed] = useState<Date>(new Date());
+  const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null);
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
@@ -41,6 +41,7 @@ export default function StatusPage() {
     setTimeout(() => setCopiedKey(null), 2500);
   };
 
+  const isInitialLoading = !telemetry && loading;
   const isAllOperational = telemetry?.status === "OPERATIONAL";
 
   return (
@@ -119,7 +120,11 @@ export default function StatusPage() {
               </div>
               <div>
                 <h1 className="text-xl font-bold tracking-tight text-white">
-                  {isAllOperational ? "All Systems Operational" : "Service Experiencing Performance Degradation"}
+                  {isInitialLoading
+                    ? "Checking System Telemetry..."
+                    : isAllOperational
+                      ? "All Systems Operational"
+                      : "Service Experiencing Performance Degradation"}
                 </h1>
                 <p className="text-xs text-slate-300 mt-0.5">
                   Identity federation, MFA challenges, session vaults, and OIDC discovery services are running normally.
@@ -130,7 +135,7 @@ export default function StatusPage() {
             <div className="text-right sm:text-right shrink-0">
               <span className="text-[11px] font-mono text-slate-400 block">Last Check:</span>
               <span className="text-xs font-mono font-semibold text-slate-200">
-                {lastRefreshed.toLocaleTimeString()}
+                {lastRefreshed ? lastRefreshed.toLocaleTimeString() : "--:--:--"}
               </span>
             </div>
           </div>

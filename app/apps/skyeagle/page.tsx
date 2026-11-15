@@ -135,7 +135,7 @@ export default function SkyEaglePage() {
           <span className="text-xs text-cyan-100 truncate">
             {tickerPaused
               ? "[FEED PAUSED BY ANALYST]"
-              : "● LIVE: 142 brute-force attempts thwarted in last 60m • 0 endpoints compromised • Heuristic anomaly threshold: 99.8%"}
+              : "LIVE: 142 brute-force attempts thwarted in last 60m | 0 endpoints compromised | Heuristic anomaly threshold: 99.8%"}
           </span>
         </div>
         <button

@@ -23,6 +23,17 @@ export function saveSession(user: User, token?: string): AuthSession {
   };
   if (typeof window !== "undefined") {
     localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session));
+    try {
+      window.dispatchEvent(
+        new CustomEvent("SENTINEL_SESSION_RESPONSE", {
+          detail: {
+            isLoggedIn: true,
+            user,
+            token: effectiveToken,
+          },
+        })
+      );
+    } catch {}
   }
   return session;
 }
@@ -41,5 +52,15 @@ export function updateStoredUser(updates: Partial<User>): User | null {
 export function clearSession(): void {
   if (typeof window !== "undefined") {
     localStorage.removeItem(SESSION_STORAGE_KEY);
+    try {
+      window.dispatchEvent(
+        new CustomEvent("SENTINEL_SESSION_RESPONSE", {
+          detail: {
+            isLoggedIn: false,
+            user: null,
+          },
+        })
+      );
+    } catch {}
   }
 }

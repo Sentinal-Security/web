@@ -57,12 +57,6 @@ export function useInactivityTimeout({
       window.addEventListener(event, handleUserActivity, { passive: true });
     });
 
-    // Provide a developer/panelist trigger for instant demo: window.__triggerSentinelInactivity()
-    (window as any).__triggerSentinelInactivity = () => {
-      setIsWarningOpen(true);
-      setSecondsRemaining(warningSeconds);
-    };
-
     checkIntervalRef.current = setInterval(() => {
       if (isWarningOpen) return;
 

@@ -1,6 +1,7 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { SecurityAuditRecord, AuditCategory, AuditSeverity } from "@/types/audit";
 import { fetchAuditLogs } from "@/lib/api";
+import { exportCsvRows } from "@/lib/csvExport";
 
 export function useAuditLogs(adminId?: number, company?: string) {
   const [logs, setLogs] = useState<SecurityAuditRecord[]>([]);
@@ -10,8 +11,10 @@ export function useAuditLogs(adminId?: number, company?: string) {
   const [selectedSeverity, setSelectedSeverity] = useState<AuditSeverity>("ALL");
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [lastRefreshedAt, setLastRefreshedAt] = useState<Date>(new Date());
+  const requestSeqRef = useRef(0);
 
   const loadLogs = useCallback(async () => {
+    const seq = ++requestSeqRef.current;
     setLoading(true);
     const data = await fetchAuditLogs({
       adminId,
@@ -21,6 +24,7 @@ export function useAuditLogs(adminId?: number, company?: string) {
       search: searchQuery,
       limit: 200,
     });
+    if (seq !== requestSeqRef.current) return;
     setLogs(data);
     setLoading(false);
     setLastRefreshedAt(new Date());
@@ -33,6 +37,8 @@ export function useAuditLogs(adminId?: number, company?: string) {
   useEffect(() => {
     if (!autoRefresh) return;
     const interval = setInterval(() => {
+      if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
+      const seq = ++requestSeqRef.current;
       fetchAuditLogs({
         adminId,
         company,
@@ -41,6 +47,7 @@ export function useAuditLogs(adminId?: number, company?: string) {
         search: searchQuery,
         limit: 200,
       }).then((data) => {
+        if (seq !== requestSeqRef.current) return;
         setLogs(data);
         setLastRefreshedAt(new Date());
       });
@@ -66,30 +73,20 @@ export function useAuditLogs(adminId?: number, company?: string) {
     ];
 
     const rows = logs.map((l) => [
-      `"${l.createdAt}"`,
-      `"${l.userEmail || "System"}"`,
-      `"${l.company || ""}"`,
-      `"${l.category}"`,
-      `"${l.actionType}"`,
-      `"${l.severity}"`,
-      `"${(l.targetResource || "").replace(/"/g, '""')}"`,
-      `"${(l.details || "").replace(/"/g, '""')}"`,
-      `"${l.ipAddress || ""}"`,
-      `"${(l.userAgent || "").replace(/"/g, '""')}"`,
+      l.createdAt,
+      l.userEmail || "System",
+      l.company || "",
+      l.category,
+      l.actionType,
+      l.severity,
+      l.targetResource || "",
+      l.details || "",
+      l.ipAddress || "",
+      l.userAgent || "",
     ]);
 
-    const csvContent =
-      "data:text/csv;charset=utf-8," +
-      [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
-
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
     const dateStr = new Date().toISOString().slice(0, 10);
-    link.setAttribute("download", `sentinel-audit-logs-${dateStr}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    exportCsvRows(`sentinel-audit-logs-${dateStr}.csv`, headers, rows);
   }, [logs]);
 
   return {
