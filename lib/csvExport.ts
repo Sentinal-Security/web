@@ -1,4 +1,4 @@
-import { AdminUser } from "@/types/admin";
+import type { AdminUser } from "@/types/admin";
 
 const FORMULA_PREFIX = /^[=+\-@\t\r]/;
 
