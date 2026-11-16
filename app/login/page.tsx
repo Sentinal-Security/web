@@ -312,6 +312,41 @@ function LoginPageContent() {
       }
     }
 
+    const isExternalHandoff = Boolean(
+      redirectUri || clientId || isExtApprove || serviceIdParam || isVaultParam
+    );
+    if (isExternalHandoff && !mfaProof) {
+      const storedUser = getStoredSession()?.user || existingUser;
+      const requiresStepUpMfa = Boolean(storedUser?.mfaEnabled ?? true);
+
+      if (requiresStepUpMfa) {
+        setCheckingClientAccess(true);
+        const chRes = await initiateMfaChallenge(
+          userId,
+          userEmail,
+          `${appName || "Application"} Login`
+        );
+        setCheckingClientAccess(false);
+
+        if (chRes.success && chRes.data) {
+          setStepUpForExtension(true);
+          setExistingUser(null);
+          setMfaChallenge({
+            required: true,
+            userId,
+            email: userEmail,
+            fullName: storedUser?.fullName,
+            role: storedUser?.role,
+            company: storedUser?.company,
+            challengeId: chRes.data.challengeId,
+            matchCode: chRes.data.matchCode,
+          });
+          setMfaMode(chRes.data.matchCode ? "push" : "totp");
+          return;
+        }
+      }
+    }
+
     // Extension in-site popup / Vault service approval handoff
     if (isExtApprove || serviceIdParam || isVaultParam) {
       let resolvedServiceId: number | null =
@@ -370,36 +405,6 @@ function LoginPageContent() {
       } catch {}
 
       if (resolvedServiceId) {
-        const storedUser = getStoredSession()?.user || existingUser;
-        const requiresStepUpMfa = Boolean(storedUser?.mfaEnabled ?? true) && !mfaProof;
-
-        if (requiresStepUpMfa) {
-          setCheckingClientAccess(true);
-          const chRes = await initiateMfaChallenge(
-            userId,
-            userEmail,
-            `${appName || "Application"} Login`
-          );
-          setCheckingClientAccess(false);
-
-          if (chRes.success && chRes.data) {
-            setStepUpForExtension(true);
-            setExistingUser(null);
-            setMfaChallenge({
-              required: true,
-              userId,
-              email: userEmail,
-              fullName: storedUser?.fullName,
-              role: storedUser?.role,
-              company: storedUser?.company,
-              challengeId: chRes.data.challengeId,
-              matchCode: chRes.data.matchCode,
-            });
-            setMfaMode(chRes.data.matchCode ? "push" : "totp");
-            return;
-          }
-        }
-
         setCheckingClientAccess(true);
         const launchRes = await launchUserService(resolvedServiceId, {
           userId,
@@ -795,12 +800,34 @@ function LoginPageContent() {
 
     try {
       if (stepUpForExtension && mfaChallenge?.userId && mfaChallenge?.email) {
-        await handleSuccessfulHandoff(
+        if (isExtApprove || serviceIdParam || isVaultParam) {
+          await handleSuccessfulHandoff(
+            mfaChallenge.userId,
+            mfaChallenge.email,
+            getStoredSession()?.token,
+            { code: cleanCode }
+          );
+          return;
+        }
+        const res = await verifyLogin(
           mfaChallenge.userId,
           mfaChallenge.email,
-          getStoredSession()?.token,
-          { code: cleanCode }
+          cleanCode
         );
+        if (res.success) {
+          const finalUserId = res.userId || mfaChallenge.userId;
+          const finalEmail = res.email || mfaChallenge.email;
+          saveSession({
+            userId: finalUserId,
+            email: finalEmail,
+            fullName: res.fullName || mfaChallenge.fullName || "",
+            role: (res.role || mfaChallenge.role || "USER") as any,
+            company: res.company || mfaChallenge.company || "",
+            mfaEnabled: true,
+            passwordResetRequired: res.passwordResetRequired,
+          }, res.ssoToken);
+          await handleSuccessfulHandoff(finalUserId, finalEmail, res.ssoToken, { code: cleanCode });
+        }
         return;
       }
 
@@ -866,7 +893,7 @@ function LoginPageContent() {
           mfaEnabled: true,
           passwordResetRequired: res.passwordResetRequired,
         }, res.ssoToken);
-        handleSuccessfulHandoff(finalUserId, finalEmail, res.ssoToken);
+        handleSuccessfulHandoff(finalUserId, finalEmail, res.ssoToken, { code: cleanCode });
       }
     } catch {
       setValidationError("Error validating recovery code. Please check your network and try again.");
