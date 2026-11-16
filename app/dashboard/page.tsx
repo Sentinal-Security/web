@@ -658,7 +658,7 @@ export default function DashboardPage() {
   const [modalSuccess, setModalSuccess] = useState("");
 
   // Vault form state
-  const [vaultPreset, setVaultPreset] = useState<"facebook" | "github" | "google" | "custom">("facebook");
+  const [vaultPreset, setVaultPreset] = useState<"facebook" | "github" | "google" | "figma" | "custom">("facebook");
   const [vaultName, setVaultName] = useState("Facebook");
   const [vaultCategory, setVaultCategory] = useState("Social Network");
   const [vaultLoginUrl, setVaultLoginUrl] = useState("https://www.facebook.com/login");
@@ -1110,7 +1110,7 @@ export default function DashboardPage() {
     }
   };
 
-  const handleSelectVaultPreset = (preset: "facebook" | "github" | "google" | "custom") => {
+  const handleSelectVaultPreset = (preset: "facebook" | "github" | "google" | "figma" | "custom") => {
     setVaultPreset(preset);
     setModalErr("");
     if (preset === "facebook") {
@@ -1125,6 +1125,10 @@ export default function DashboardPage() {
       setVaultName("Gmail / Google");
       setVaultCategory("Email & Workspace");
       setVaultLoginUrl("https://accounts.google.com/signin");
+    } else if (preset === "figma") {
+      setVaultName("Figma");
+      setVaultCategory("Design & Prototyping");
+      setVaultLoginUrl("https://www.figma.com/login");
     } else {
       setVaultName("");
       setVaultCategory("Personal Account");
@@ -1154,43 +1158,48 @@ export default function DashboardPage() {
       return;
     }
 
-    // Force live check of extension presence
-    const active = await checkExtensionPresence();
-    if (!active && !extensionWarningDismissed) {
-      setExtensionWarningDismissed(true);
-      setModalErr("Extension Not Detected: Sentinel Autofill Bridge is offline or was removed. Credentials will still be stored in your encrypted vault, but automatic in-page injection cannot run. Click 'Save to Secure Vault' again to confirm manual copy mode, or load the extension.");
-      return;
-    }
-
     setVaultSaving(true);
-    const iconType = vaultPreset !== "custom" ? vaultPreset : "key";
-    const ok = await addCustomApp({
-      name: vaultName.trim(),
-      category: vaultCategory.trim() || "Credential Vault",
-      type: "vault",
-      iconType,
-      loginUrl: vaultLoginUrl.trim(),
-      mfaRequired: vaultMfaRequired,
-      vaultUsername: vaultUsername.trim(),
-      vaultPassword: vaultPassword.trim(),
-    });
-    setVaultSaving(false);
+    try {
+      // Force live check of extension presence
+      const active = await checkExtensionPresence();
+      if (!active && !extensionWarningDismissed) {
+        setExtensionWarningDismissed(true);
+        setModalErr("Extension Not Detected: Sentinel Autofill Bridge is offline or was removed. Credentials will still be stored in your encrypted vault, but automatic in-page injection cannot run. Click 'Save to Secure Vault' again to confirm manual copy mode, or load the extension.");
+        return;
+      }
 
-    if (ok) {
-      setExtensionWarningDismissed(false);
-      setModalSuccess(
-        active
-          ? `Credentials for ${vaultName} securely vaulted. Autofill bridge active.`
-          : `Credentials for ${vaultName} vaulted. Manual copy mode active (extension offline).`
-      );
-      setVaultUsername("");
-      setVaultPassword("");
-      setTimeout(() => {
-        setAddModalOpen(false);
-        setModalSuccess("");
-      }, 1400);
-    } else {
-      setModalErr("Failed to save credentials to vault.");
+      const iconType = vaultPreset !== "custom" ? vaultPreset : "key";
+      const ok = await addCustomApp({
+        name: vaultName.trim(),
+        category: vaultCategory.trim() || "Credential Vault",
+        type: "vault",
+        iconType,
+        loginUrl: vaultLoginUrl.trim(),
+        mfaRequired: vaultMfaRequired,
+        vaultUsername: vaultUsername.trim(),
+        vaultPassword: vaultPassword.trim(),
+      });
+
+      if (ok) {
+        setExtensionWarningDismissed(false);
+        setModalSuccess(
+          active
+            ? `Credentials for ${vaultName} securely vaulted. Autofill bridge active.`
+            : `Credentials for ${vaultName} vaulted. Manual copy mode active (extension offline).`
+        );
+        setVaultUsername("");
+        setVaultPassword("");
+        setTimeout(() => {
+          setAddModalOpen(false);
+          setModalSuccess("");
+        }, 1400);
+      } else {
+        setModalErr("Failed to save credentials to vault.");
+      }
+    } catch {
+      setModalErr("Network error while saving credentials to vault. Please try again.");
+    } finally {
+      setVaultSaving(false);
     }
   };
 
@@ -2521,11 +2530,12 @@ export default function DashboardPage() {
 
                 <div>
                   <label className="block text-xs font-medium text-slate-300 mb-1.5">Quick Service Presets</label>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
                     {[
                       { id: "facebook", name: "Facebook", icon: "facebook" },
                       { id: "github", name: "GitHub", icon: "github" },
                       { id: "google", name: "Gmail", icon: "google" },
+                      { id: "figma", name: "Figma", icon: "figma" },
                       { id: "custom", name: "Custom Site", icon: "key" },
                     ].map((item) => (
                       <button
@@ -4684,6 +4694,16 @@ function AppIcon({ iconType }: { iconType?: string }) {
       return (
         <svg className="w-6 h-6 text-white fill-current" viewBox="0 0 24 24">
           <path fillRule="evenodd" clipRule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" />
+        </svg>
+      );
+    case "figma":
+      return (
+        <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none">
+          <path d="M8.5 2h3.5v6.667H8.5A3.333 3.333 0 0 1 8.5 2Z" fill="#F24E1E" />
+          <path d="M12 2h3.5a3.333 3.333 0 0 1 0 6.667H12V2Z" fill="#FF7262" />
+          <path d="M15.5 12a3.333 3.333 0 1 1-3.5-3.333A3.333 3.333 0 0 1 15.5 12Z" fill="#1ABCFE" />
+          <path d="M8.5 15.333H12v3.334a3.333 3.333 0 1 1-3.5-3.334Z" fill="#0ACF83" />
+          <path d="M8.5 8.667H12v6.666H8.5a3.333 3.333 0 0 1 0-6.666Z" fill="#A259FF" />
         </svg>
       );
     case "microsoft":
