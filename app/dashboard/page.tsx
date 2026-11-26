@@ -343,7 +343,8 @@ export default function DashboardPage() {
   } = useIntegrations(user?.userId);
 
   const isAdmin = user?.role === "ADMIN";
-  const isEnterpriseEmployee = Boolean(user?.company && user.company.toLowerCase() !== "personal" && user.role !== "ADMIN");
+  const isPersonalAccount = user?.company?.toLowerCase() === "personal";
+  const isEnterpriseEmployee = Boolean(user?.company && !isPersonalAccount && user.role !== "ADMIN");
   const [forbiddenModal, setForbiddenModal] = useState<{ appName: string; reason: string; title?: string } | null>(null);
   const [launchingAppId, setLaunchingAppId] = useState<string | null>(null);
 
@@ -2008,7 +2009,11 @@ export default function DashboardPage() {
           <div>
             <div className="flex items-center gap-2.5">
               <h1 className="text-lg font-semibold text-white tracking-tight">
-                {isEnterpriseEmployee ? "My Apps" : "Applications"}
+                {isPersonalAccount
+                  ? "Personal Password Vault"
+                  : isEnterpriseEmployee
+                  ? "My Apps"
+                  : "Organization Applications"}
               </h1>
               {gatewayStatus === "offline" ? (
                 <span className="px-2 py-0.5 rounded text-[11px] font-mono font-medium bg-red-500/10 border border-red-500/30 text-red-300 flex items-center gap-1.5">
@@ -2026,7 +2031,11 @@ export default function DashboardPage() {
                   <span>{apps.length} {apps.length === 1 ? "app" : "apps"}</span>
                 </span>
               )}
-              {isAdmin ? (
+              {isPersonalAccount ? (
+                <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-400/30 text-emerald-300 font-semibold uppercase">
+                  Personal
+                </span>
+              ) : isAdmin ? (
                 <span className="text-[10px] px-2 py-0.5 rounded bg-purple-500/10 border border-purple-400/30 text-purple-300 font-semibold uppercase">
                   Admin
                 </span>
@@ -2037,9 +2046,11 @@ export default function DashboardPage() {
               ) : null}
             </div>
             <p className="text-xs text-slate-400 mt-0.5">
-              {isEnterpriseEmployee
+              {isPersonalAccount
+                ? "Your private password manager & connected accounts"
+                : isEnterpriseEmployee
                 ? `Apps assigned to you (${user?.company})`
-                : `Personal password vault & SSO directory for ${user?.email || "your account"}`}
+                : `Enterprise single sign-on directory for ${user?.email || "internal tenant"}`}
             </p>
           </div>
 
