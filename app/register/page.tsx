@@ -8,6 +8,7 @@ import { resendVerification } from "@/lib/api";
 import Footer from "@/app/partials/footer";
 import { PasswordEntropyMeter } from "@/components/PasswordEntropyMeter";
 import { PasswordToggleAdornment } from "@/components/PasswordToggleAdornment";
+import { DemoCaptcha } from "@/components/DemoCaptcha";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -22,6 +23,7 @@ export default function RegisterPage() {
   const [company, setCompany] = useState("");
   const [companyManual, setCompanyManual] = useState(false);
   const [agreed, setAgreed] = useState(false);
+  const [captchaVerified, setCaptchaVerified] = useState(false);
   const [validationError, setValidationError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [activationPending, setActivationPending] = useState<{ email: string } | null>(null);
@@ -94,6 +96,11 @@ export default function RegisterPage() {
 
     if (!agreed) {
       setValidationError("Please agree to the Terms and Privacy Policy.");
+      return;
+    }
+
+    if (!captchaVerified) {
+      setValidationError("Please complete the human verification captcha.");
       return;
     }
 
@@ -606,6 +613,8 @@ export default function RegisterPage() {
                   </Link>
                 </label>
               </div>
+
+              <DemoCaptcha verified={captchaVerified} onVerifyChange={setCaptchaVerified} />
 
               {/* Continue Button */}
               <button
