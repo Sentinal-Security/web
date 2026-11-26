@@ -1309,7 +1309,7 @@ export default function DashboardPage() {
                     <rect x="2" y="3" width="20" height="15" rx="2" />
                     <path d="M6 14l3.5-4.5 3 3 4-5" />
                   </svg>
-                  {!sidebarCollapsed && <span>Applications</span>}
+                  {!sidebarCollapsed && <span>{isPersonalAccount ? "Password Vault" : "Applications"}</span>}
                 </button>
               )}
 
@@ -1378,13 +1378,13 @@ export default function DashboardPage() {
               )}
 
               {/* Developer & Integration Section */}
-              {!isEnterpriseEmployee && (sidebarPrefs.apiDocs || sidebarPrefs.connectService) && !sidebarCollapsed && (
+              {!isEnterpriseEmployee && !isPersonalAccount && (sidebarPrefs.apiDocs || sidebarPrefs.connectService) && !sidebarCollapsed && (
                 <div className="pt-4 px-3 pb-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">
                   Developer &amp; SSO
                 </div>
               )}
 
-              {!isEnterpriseEmployee && sidebarPrefs.apiDocs && (
+              {!isEnterpriseEmployee && !isPersonalAccount && sidebarPrefs.apiDocs && (
                 <Link
                   href="/docs"
                   title="API & Documentation"
@@ -1399,7 +1399,7 @@ export default function DashboardPage() {
                 </Link>
               )}
 
-              {!isEnterpriseEmployee && sidebarPrefs.connectService && (
+              {!isEnterpriseEmployee && !isPersonalAccount && sidebarPrefs.connectService && (
                 <button
                   type="button"
                   title="Connect Service"
@@ -1731,7 +1731,7 @@ export default function DashboardPage() {
               </span>
             </div>
 
-            {!isEnterpriseEmployee && (
+            {!isEnterpriseEmployee && !isPersonalAccount && (
               <button
                 type="button"
                 onClick={() => setAddModalOpen(true)}
@@ -2127,25 +2127,30 @@ export default function DashboardPage() {
 
             {!isEnterpriseEmployee && (
               <>
-                <Link
-                  href="/docs"
-                  className="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white text-xs font-medium transition-colors flex items-center gap-1.5"
-                >
-                  <svg className="w-3.5 h-3.5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
-                  </svg>
-                  <span>API Docs</span>
-                </Link>
+                {!isPersonalAccount && (
+                  <Link
+                    href="/docs"
+                    className="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white text-xs font-medium transition-colors flex items-center gap-1.5"
+                  >
+                    <svg className="w-3.5 h-3.5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+                    </svg>
+                    <span>API Docs</span>
+                  </Link>
+                )}
 
                 <button
                   type="button"
-                  onClick={() => setAddModalOpen(true)}
+                  onClick={() => {
+                    if (isPersonalAccount) setActiveModalTab("vault");
+                    setAddModalOpen(true);
+                  }}
                   className="px-3 py-1.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-xs font-semibold transition-colors cursor-pointer flex items-center gap-1.5"
                 >
                   <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
                   </svg>
-                  <span>Add Application</span>
+                  <span>{isPersonalAccount ? "Add Website" : "Add Application"}</span>
                 </button>
               </>
             )}
@@ -2206,6 +2211,8 @@ export default function DashboardPage() {
             <p className="text-xs text-slate-400 max-w-sm mt-1 leading-relaxed">
               {isEnterpriseEmployee
                 ? "Your company IT administrator has not assigned any enterprise applications to your profile yet. Please contact IT support to request access."
+                : isPersonalAccount
+                ? "Save websites and login credentials for one-click launch and browser autofill."
                 : "Your account currently has no active integrations. Connect an enterprise template or register a custom application."}
             </p>
 
@@ -2225,7 +2232,22 @@ export default function DashboardPage() {
               </div>
             )}
 
-            {!isEnterpriseEmployee && (
+            {!isEnterpriseEmployee && isPersonalAccount && (
+              <div className="mt-5 flex items-center justify-center">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveModalTab("vault");
+                    setAddModalOpen(true);
+                  }}
+                  className="px-4 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-semibold text-xs transition-colors cursor-pointer"
+                >
+                  + Add Custom Website
+                </button>
+              </div>
+            )}
+
+            {!isEnterpriseEmployee && !isPersonalAccount && (
               <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
                 {boilerplateTemplates.slice(0, 3).map((tpl) => (
                   <button
@@ -2388,44 +2410,52 @@ export default function DashboardPage() {
             </button>
 
             <div className="mb-5">
-              <h3 className="text-base font-semibold tracking-tight text-white">Configure Applications</h3>
+              <h3 className="text-base font-semibold tracking-tight text-white">
+                {isPersonalAccount ? "Add Website to Vault" : "Configure Applications"}
+              </h3>
               <p className="text-xs text-slate-400 mt-0.5">
-                Select enterprise templates or register custom applications to add them to your dashboard.
+                {isPersonalAccount
+                  ? "Save a custom website URL and login credentials for autofill."
+                  : "Select enterprise templates or register custom applications to add them to your dashboard."}
               </p>
             </div>
 
             {/* Modal Tabs */}
             <div className="flex items-center gap-2 border-b border-white/10 pb-3 mb-5 overflow-x-auto">
-              <button
-                type="button"
-                onClick={() => {
-                  setActiveModalTab("templates");
-                  setModalErr("");
-                  setModalSuccess("");
-                }}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer shrink-0 ${
-                  activeModalTab === "templates"
-                    ? "bg-cyan-500 text-slate-950 font-semibold"
-                    : "text-slate-400 hover:text-white hover:bg-white/5"
-                }`}
-              >
-                Enterprise Templates
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setActiveModalTab("custom");
-                  setModalErr("");
-                  setModalSuccess("");
-                }}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer shrink-0 ${
-                  activeModalTab === "custom"
-                    ? "bg-cyan-500 text-slate-950 font-semibold"
-                    : "text-slate-400 hover:text-white hover:bg-white/5"
-                }`}
-              >
-                Custom Integration
-              </button>
+              {!isPersonalAccount && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveModalTab("templates");
+                      setModalErr("");
+                      setModalSuccess("");
+                    }}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer shrink-0 ${
+                      activeModalTab === "templates"
+                        ? "bg-cyan-500 text-slate-950 font-semibold"
+                        : "text-slate-400 hover:text-white hover:bg-white/5"
+                    }`}
+                  >
+                    Enterprise Templates
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveModalTab("custom");
+                      setModalErr("");
+                      setModalSuccess("");
+                    }}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer shrink-0 ${
+                      activeModalTab === "custom"
+                        ? "bg-cyan-500 text-slate-950 font-semibold"
+                        : "text-slate-400 hover:text-white hover:bg-white/5"
+                    }`}
+                  >
+                    Custom Integration
+                  </button>
+                </>
+              )}
               <button
                 type="button"
                 onClick={() => {
