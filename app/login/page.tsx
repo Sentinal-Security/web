@@ -20,6 +20,7 @@ import {
 import { User } from "@/types/auth";
 import Footer from "@/app/partials/footer";
 import { PasswordToggleAdornment } from "@/components/PasswordToggleAdornment";
+import { DemoCaptcha } from "@/components/DemoCaptcha";
 
 export default function LoginPage() {
   return (
@@ -552,6 +553,7 @@ function LoginPageContent() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
+  const [captchaVerified, setCaptchaVerified] = useState(false);
   const [validationError, setValidationError] = useState("");
 
   // Restore remembered email on mount if previously saved (unless paramEmail passed)
@@ -711,6 +713,10 @@ function LoginPageContent() {
     }
     if (!password) {
       setValidationError("Please enter your password.");
+      return;
+    }
+    if (!captchaVerified) {
+      setValidationError("Please complete the human verification captcha.");
       return;
     }
 
@@ -1976,6 +1982,8 @@ function LoginPageContent() {
                       Forgot password?
                     </Link>
                   </div>
+
+                  <DemoCaptcha verified={captchaVerified} onVerifyChange={setCaptchaVerified} />
 
                   {/* Sign In Button */}
                   <button
