@@ -106,81 +106,25 @@ const CHALLENGE_POOL: ImageChallenge[] = [
   },
 ];
 
-function TileIllustration({ kind }: { kind: TileKind }) {
-  switch (kind) {
-    case "traffic_light":
-      return (
-        <svg viewBox="0 0 64 64" className="w-10 h-10" fill="none">
-          <rect x="23" y="8" width="18" height="38" rx="4" fill="#1e293b" stroke="#64748b" strokeWidth="2" />
-          <circle cx="32" cy="17" r="4" fill="#ef4444" />
-          <circle cx="32" cy="27" r="4" fill="#f59e0b" />
-          <circle cx="32" cy="37" r="4" fill="#22c55e" />
-          <rect x="30" y="46" width="4" height="12" fill="#64748b" />
-        </svg>
-      );
-    case "bicycle":
-      return (
-        <svg viewBox="0 0 64 64" className="w-10 h-10" fill="none">
-          <circle cx="17" cy="42" r="9" stroke="#38bdf8" strokeWidth="2.5" />
-          <circle cx="47" cy="42" r="9" stroke="#38bdf8" strokeWidth="2.5" />
-          <path d="M17 42 L28 26 L41 26 L47 42 M28 26 L33 42 L17 42 M41 26 L43 20 L48 20 M25 22 L30 22" stroke="#cbd5e1" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-      );
-    case "bus":
-      return (
-        <svg viewBox="0 0 64 64" className="w-10 h-10" fill="none">
-          <rect x="14" y="12" width="36" height="36" rx="5" fill="#0284c7" stroke="#7dd3fc" strokeWidth="2" />
-          <rect x="19" y="18" width="26" height="13" rx="2" fill="#e0f2fe" />
-          <rect x="24" y="14" width="16" height="2.5" rx="1" fill="#0f172a" />
-          <circle cx="21" cy="40" r="2.5" fill="#fef08a" />
-          <circle cx="43" cy="40" r="2.5" fill="#fef08a" />
-          <rect x="18" y="48" width="6" height="5" rx="1.5" fill="#334155" />
-          <rect x="40" y="48" width="6" height="5" rx="1.5" fill="#334155" />
-        </svg>
-      );
-    case "car":
-      return (
-        <svg viewBox="0 0 64 64" className="w-10 h-10" fill="none">
-          <path d="M14 34 L19 22 L45 22 L50 34 Z" fill="#334155" stroke="#94a3b8" strokeWidth="2" strokeLinejoin="round" />
-          <rect x="10" y="33" width="44" height="12" rx="4" fill="#6366f1" stroke="#a5b4fc" strokeWidth="2" />
-          <circle cx="17" cy="39" r="2.2" fill="#fef08a" />
-          <circle cx="47" cy="39" r="2.2" fill="#fef08a" />
-          <circle cx="19" cy="47" r="4.5" fill="#0f172a" stroke="#cbd5e1" strokeWidth="2" />
-          <circle cx="45" cy="47" r="4.5" fill="#0f172a" stroke="#cbd5e1" strokeWidth="2" />
-        </svg>
-      );
-    case "crosswalk":
-      return (
-        <svg viewBox="0 0 64 64" className="w-10 h-10" fill="none">
-          <rect x="8" y="16" width="48" height="32" rx="4" fill="#1e293b" stroke="#475569" strokeWidth="1.5" />
-          <rect x="13" y="21" width="6" height="22" rx="1" fill="#f8fafc" />
-          <rect x="23" y="21" width="6" height="22" rx="1" fill="#f8fafc" />
-          <rect x="35" y="21" width="6" height="22" rx="1" fill="#f8fafc" />
-          <rect x="45" y="21" width="6" height="22" rx="1" fill="#f8fafc" />
-        </svg>
-      );
-    case "tree":
-      return (
-        <svg viewBox="0 0 64 64" className="w-10 h-10" fill="none">
-          <rect x="29" y="40" width="6" height="14" rx="1" fill="#92400e" />
-          <circle cx="32" cy="28" r="13" fill="#15803d" stroke="#4ade80" strokeWidth="2" />
-          <circle cx="24" cy="33" r="8" fill="#166534" />
-          <circle cx="40" cy="33" r="8" fill="#166534" />
-        </svg>
-      );
-    case "building":
-      return (
-        <svg viewBox="0 0 64 64" className="w-10 h-10" fill="none">
-          <rect x="16" y="12" width="32" height="42" rx="2" fill="#334155" stroke="#64748b" strokeWidth="2" />
-          <rect x="22" y="18" width="5" height="6" fill="#94a3b8" />
-          <rect x="37" y="18" width="5" height="6" fill="#94a3b8" />
-          <rect x="22" y="28" width="5" height="6" fill="#94a3b8" />
-          <rect x="37" y="28" width="5" height="6" fill="#94a3b8" />
-          <rect x="28" y="42" width="8" height="12" fill="#0f172a" />
-        </svg>
-      );
-  }
-}
+const TILE_IMAGE_PATHS: Record<TileKind, string> = {
+  traffic_light: "/captcha/traffic_light.jpg",
+  bicycle: "/captcha/bicycle.jpg",
+  bus: "/captcha/bus.jpg",
+  car: "/captcha/car.jpg",
+  crosswalk: "/captcha/crosswalk.jpg",
+  tree: "/captcha/tree.jpg",
+  building: "/captcha/building.jpg",
+};
+
+const TILE_LABELS: Record<TileKind, string> = {
+  traffic_light: "Traffic light",
+  bicycle: "Bicycle",
+  bus: "Bus",
+  car: "Car",
+  crosswalk: "Crosswalk",
+  tree: "Tree",
+  building: "Building",
+};
 
 export function DemoCaptcha({ verified, onVerifyChange }: DemoCaptchaProps) {
   const [expanded, setExpanded] = useState(false);
@@ -189,6 +133,20 @@ export function DemoCaptcha({ verified, onVerifyChange }: DemoCaptchaProps) {
   const [errorMsg, setErrorMsg] = useState("");
 
   const challenge = CHALLENGE_POOL[challengeIndex];
+
+  const isExactMatch = useCallback(
+    (indices: number[]) => {
+      const expected = challenge.tiles
+        .map((tile, idx) => (tile === challenge.target ? idx : -1))
+        .filter((idx) => idx !== -1);
+      const sortedSelected = [...indices].sort((a, b) => a - b);
+      return (
+        expected.length === sortedSelected.length &&
+        expected.every((val, i) => val === sortedSelected[i])
+      );
+    },
+    [challenge]
+  );
 
   const cycleNextChallenge = useCallback(() => {
     setChallengeIndex((prev) => (prev + 1) % CHALLENGE_POOL.length);
@@ -209,22 +167,20 @@ export function DemoCaptcha({ verified, onVerifyChange }: DemoCaptchaProps) {
 
   const toggleTile = (idx: number) => {
     setErrorMsg("");
-    setSelectedIndices((prev) =>
-      prev.includes(idx) ? prev.filter((item) => item !== idx) : [...prev, idx]
-    );
+    setSelectedIndices((prev) => {
+      const next = prev.includes(idx)
+        ? prev.filter((item) => item !== idx)
+        : [...prev, idx];
+      if (isExactMatch(next)) {
+        onVerifyChange(true);
+        setExpanded(false);
+      }
+      return next;
+    });
   };
 
   const handleVerifyClick = () => {
-    const expected = challenge.tiles
-      .map((tile, idx) => (tile === challenge.target ? idx : -1))
-      .filter((idx) => idx !== -1);
-
-    const sortedSelected = [...selectedIndices].sort((a, b) => a - b);
-    const isMatch =
-      expected.length === sortedSelected.length &&
-      expected.every((val, i) => val === sortedSelected[i]);
-
-    if (isMatch) {
+    if (isExactMatch(selectedIndices)) {
       onVerifyChange(true);
       setExpanded(false);
       setErrorMsg("");
@@ -290,16 +246,22 @@ export function DemoCaptcha({ verified, onVerifyChange }: DemoCaptchaProps) {
                   type="button"
                   onClick={() => toggleTile(idx)}
                   aria-pressed={isSelected}
-                  className={`relative h-16 rounded-lg border flex items-center justify-center transition-all cursor-pointer ${
+                  className={`relative h-20 rounded-lg border overflow-hidden transition-all cursor-pointer ${
                     isSelected
-                      ? "border-cyan-400 bg-cyan-500/15 ring-1 ring-cyan-400"
-                      : "border-line-subtle bg-surface-input hover:border-ink-muted"
+                      ? "border-cyan-400 ring-2 ring-cyan-400"
+                      : "border-line-subtle hover:border-ink-muted"
                   }`}
                 >
-                  <TileIllustration kind={tile} />
+                  <img
+                    src={TILE_IMAGE_PATHS[tile]}
+                    alt={TILE_LABELS[tile]}
+                    className={`w-full h-full object-cover transition-transform ${
+                      isSelected ? "scale-95 opacity-85" : "scale-100"
+                    }`}
+                  />
                   {isSelected && (
-                    <span className="absolute top-1 right-1 w-4 h-4 rounded-full bg-cyan-500 text-slate-950 flex items-center justify-center">
-                      <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3">
+                    <span className="absolute top-1 right-1 w-5 h-5 rounded-full bg-cyan-500 text-slate-950 flex items-center justify-center shadow">
+                      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3">
                         <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                       </svg>
                     </span>
