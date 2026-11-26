@@ -2008,7 +2008,7 @@ export default function DashboardPage() {
           <div>
             <div className="flex items-center gap-2.5">
               <h1 className="text-lg font-semibold text-white tracking-tight">
-                {isEnterpriseEmployee ? "Workstation Launchpad" : "Applications"}
+                {isEnterpriseEmployee ? "My Apps" : "Applications"}
               </h1>
               {gatewayStatus === "offline" ? (
                 <span className="px-2 py-0.5 rounded text-[11px] font-mono font-medium bg-red-500/10 border border-red-500/30 text-red-300 flex items-center gap-1.5">
@@ -2023,7 +2023,7 @@ export default function DashboardPage() {
               ) : (
                 <span className="px-2 py-0.5 rounded text-[11px] font-mono font-medium bg-white/5 border border-white/10 text-slate-300 flex items-center gap-1.5">
                   <span className="w-1.5 h-1.5 rounded-full bg-cyan-400" />
-                  <span>{apps.length} active</span>
+                  <span>{apps.length} {apps.length === 1 ? "app" : "apps"}</span>
                 </span>
               )}
               {isAdmin ? (
@@ -2032,14 +2032,14 @@ export default function DashboardPage() {
                 </span>
               ) : isEnterpriseEmployee ? (
                 <span className="text-[10px] px-2 py-0.5 rounded bg-cyan-500/10 border border-cyan-400/30 text-cyan-300 font-semibold uppercase font-mono">
-                  Whitelist Policy Enforced
+                  Managed by Admin
                 </span>
               ) : null}
             </div>
             <p className="text-xs text-slate-400 mt-0.5">
               {isEnterpriseEmployee
-                ? `Whitelisted company applications for ${user?.fullName || user?.email} (${user?.role}) under ${user?.company}`
-                : `Enterprise single sign-on directory for ${user?.email || "internal tenant"}`}
+                ? `Apps assigned to you (${user?.company})`
+                : `Personal password vault & SSO directory for ${user?.email || "your account"}`}
             </p>
           </div>
 

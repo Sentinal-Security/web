@@ -48,7 +48,7 @@ export default function RegisterPage() {
 
   const handleEmailChange = (val: string) => {
     setEmail(val);
-    if (!companyManual) {
+    if (accountType === "ENTERPRISE" && !companyManual) {
       const detected = detectCompany(val);
       if (detected) setCompany(detected);
     }
@@ -86,7 +86,7 @@ export default function RegisterPage() {
 
     const isPersonal = accountType === "PERSONAL";
     const resolvedCompany = isPersonal
-      ? (company.trim() || "Personal")
+      ? "Personal"
       : (company.trim() || (email.includes("@") ? detectCompany(email) : ""));
 
     if (!isPersonal && !resolvedCompany) {
