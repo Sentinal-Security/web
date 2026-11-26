@@ -2,6 +2,7 @@ export interface AdminUser {
   id: number;
   email: string;
   fullName: string;
+  profilePicture?: string | null;
   role: "ADMIN" | "USER" | string;
   company?: string;
   mfaEnabled: boolean;
