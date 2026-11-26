@@ -4,6 +4,7 @@ export type AuditCategory =
   | "MFA_SECURITY"
   | "SSO_ACCESS"
   | "ADMIN_OPS"
+  | "BILLING"
   | "USER_TELEMETRY";
 
 export type AuditSeverity = "ALL" | "INFO" | "WARN" | "SECURITY_ALERT" | "CRITICAL";

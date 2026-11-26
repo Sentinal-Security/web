@@ -34,6 +34,7 @@ export function SecurityAuditPanel({ adminId, company }: SecurityAuditPanelProps
     { label: "MFA & Device", value: "MFA_SECURITY" },
     { label: "SSO Launches", value: "SSO_ACCESS" },
     { label: "Admin Operations", value: "ADMIN_OPS" },
+    { label: "Billing", value: "BILLING" },
     { label: "Client Telemetry", value: "USER_TELEMETRY" },
   ];
 
@@ -66,6 +67,8 @@ export function SecurityAuditPanel({ adminId, company }: SecurityAuditPanelProps
         return "bg-emerald-500/10 text-emerald-300 border-emerald-500/30";
       case "ADMIN_OPS":
         return "bg-purple-500/10 text-purple-300 border-purple-500/30";
+      case "BILLING":
+        return "bg-amber-500/10 text-amber-300 border-amber-500/30";
       case "USER_TELEMETRY":
         return "bg-slate-500/10 text-slate-300 border-slate-500/30";
       default:
