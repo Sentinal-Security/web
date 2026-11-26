@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 
 interface DemoCaptchaProps {
   verified: boolean;
@@ -13,133 +13,138 @@ type TileCategory =
   | "bus"
   | "car"
   | "crosswalk"
+  | "hydrant"
+  | "bridge"
+  | "motorcycle"
   | "tree"
   | "building";
 
-type TilePhotoId =
-  | "traffic_light_1"
-  | "traffic_light_2"
-  | "traffic_light_3"
-  | "bicycle_1"
-  | "bicycle_2"
-  | "bicycle_3"
-  | "bus_1"
-  | "bus_2"
-  | "bus_3"
-  | "bus_4"
-  | "car_1"
-  | "car_2"
-  | "car_3"
-  | "crosswalk_1"
-  | "crosswalk_2"
-  | "crosswalk_3"
-  | "tree_1"
-  | "tree_2"
-  | "building_1"
-  | "building_2";
-
 interface CaptchaTile {
-  photo: TilePhotoId;
+  photo: string;
   category: TileCategory;
 }
 
 interface ImageChallenge {
-  id: string;
   target: TileCategory;
   label: string;
   tiles: CaptchaTile[];
 }
 
-const CHALLENGE_POOL: ImageChallenge[] = [
-  {
-    id: "preset-traffic-lights",
-    target: "traffic_light",
+const CATEGORY_CATALOG: Record<TileCategory, { label: string; photos: string[] }> = {
+  traffic_light: {
     label: "traffic lights",
-    tiles: [
-      { photo: "traffic_light_1", category: "traffic_light" },
-      { photo: "car_1", category: "car" },
-      { photo: "building_1", category: "building" },
-      { photo: "bus_1", category: "bus" },
-      { photo: "traffic_light_2", category: "traffic_light" },
-      { photo: "tree_1", category: "tree" },
-      { photo: "traffic_light_3", category: "traffic_light" },
-      { photo: "bicycle_1", category: "bicycle" },
-      { photo: "crosswalk_1", category: "crosswalk" },
-    ],
+    photos: ["traffic_light_1", "traffic_light_2", "traffic_light_3", "traffic_light_4"],
   },
-  {
-    id: "preset-bicycles",
-    target: "bicycle",
+  bicycle: {
     label: "bicycles",
-    tiles: [
-      { photo: "car_2", category: "car" },
-      { photo: "bicycle_1", category: "bicycle" },
-      { photo: "tree_2", category: "tree" },
-      { photo: "bicycle_2", category: "bicycle" },
-      { photo: "bus_2", category: "bus" },
-      { photo: "traffic_light_1", category: "traffic_light" },
-      { photo: "crosswalk_2", category: "crosswalk" },
-      { photo: "bicycle_3", category: "bicycle" },
-      { photo: "building_2", category: "building" },
-    ],
+    photos: ["bicycle_1", "bicycle_2", "bicycle_3", "bicycle_4"],
   },
-  {
-    id: "preset-buses",
-    target: "bus",
+  bus: {
     label: "buses",
-    tiles: [
-      { photo: "bus_1", category: "bus" },
-      { photo: "tree_1", category: "tree" },
-      { photo: "car_3", category: "car" },
-      { photo: "traffic_light_2", category: "traffic_light" },
-      { photo: "bus_2", category: "bus" },
-      { photo: "bicycle_2", category: "bicycle" },
-      { photo: "building_1", category: "building" },
-      { photo: "bus_3", category: "bus" },
-      { photo: "bus_4", category: "bus" },
-    ],
+    photos: ["bus_1", "bus_2", "bus_3", "bus_4"],
   },
-  {
-    id: "preset-cars",
-    target: "car",
+  car: {
     label: "cars",
-    tiles: [
-      { photo: "tree_2", category: "tree" },
-      { photo: "car_1", category: "car" },
-      { photo: "bus_3", category: "bus" },
-      { photo: "crosswalk_3", category: "crosswalk" },
-      { photo: "traffic_light_3", category: "traffic_light" },
-      { photo: "car_2", category: "car" },
-      { photo: "car_3", category: "car" },
-      { photo: "building_2", category: "building" },
-      { photo: "bicycle_3", category: "bicycle" },
-    ],
+    photos: ["car_1", "car_2", "car_3", "car_4"],
   },
-  {
-    id: "preset-crosswalks",
-    target: "crosswalk",
+  crosswalk: {
     label: "crosswalks",
-    tiles: [
-      { photo: "crosswalk_1", category: "crosswalk" },
-      { photo: "bicycle_1", category: "bicycle" },
-      { photo: "car_1", category: "car" },
-      { photo: "building_1", category: "building" },
-      { photo: "crosswalk_2", category: "crosswalk" },
-      { photo: "bus_4", category: "bus" },
-      { photo: "tree_1", category: "tree" },
-      { photo: "traffic_light_1", category: "traffic_light" },
-      { photo: "crosswalk_3", category: "crosswalk" },
-    ],
+    photos: ["crosswalk_1", "crosswalk_2", "crosswalk_3", "crosswalk_4"],
   },
+  hydrant: {
+    label: "fire hydrants",
+    photos: ["hydrant_1", "hydrant_2", "hydrant_3", "hydrant_4"],
+  },
+  bridge: {
+    label: "bridges",
+    photos: ["bridge_1", "bridge_2", "bridge_3", "bridge_4"],
+  },
+  motorcycle: {
+    label: "motorcycles",
+    photos: ["motorcycle_1", "motorcycle_2", "motorcycle_3", "motorcycle_4"],
+  },
+  tree: {
+    label: "trees",
+    photos: ["tree_1", "tree_2", "tree_3", "tree_4"],
+  },
+  building: {
+    label: "buildings",
+    photos: ["building_1", "building_2", "building_3", "building_4"],
+  },
+};
+
+const TARGET_CATEGORIES: TileCategory[] = [
+  "traffic_light",
+  "bicycle",
+  "bus",
+  "car",
+  "crosswalk",
+  "hydrant",
+  "bridge",
+  "motorcycle",
 ];
+
+function shuffleArray<T>(items: T[]): T[] {
+  const arr = [...items];
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+function generateDynamicChallenge(excludeTarget?: TileCategory): ImageChallenge {
+  const candidates = excludeTarget
+    ? TARGET_CATEGORIES.filter((c) => c !== excludeTarget)
+    : TARGET_CATEGORIES;
+  const target = candidates[Math.floor(Math.random() * candidates.length)];
+
+  const targetCount = Math.random() < 0.5 ? 3 : 4;
+  const targetPhotos = shuffleArray(CATEGORY_CATALOG[target].photos)
+    .slice(0, targetCount)
+    .map((photo) => ({ photo, category: target }));
+
+  const distractorPool: CaptchaTile[] = [];
+  for (const [cat, info] of Object.entries(CATEGORY_CATALOG) as [TileCategory, { label: string; photos: string[] }][]) {
+    if (cat === target) continue;
+    for (const photo of info.photos) {
+      distractorPool.push({ photo, category: cat });
+    }
+  }
+
+  const distractors = shuffleArray(distractorPool).slice(0, 9 - targetCount);
+  const tiles = shuffleArray([...targetPhotos, ...distractors]);
+
+  return {
+    target,
+    label: CATEGORY_CATALOG[target].label,
+    tiles,
+  };
+}
 
 export function DemoCaptcha({ verified, onVerifyChange }: DemoCaptchaProps) {
   const [expanded, setExpanded] = useState(false);
-  const [challengeIndex, setChallengeIndex] = useState(0);
+  const [challenge, setChallenge] = useState<ImageChallenge>(() => ({
+    target: "bicycle",
+    label: "bicycles",
+    tiles: [
+      { photo: "bicycle_1", category: "bicycle" },
+      { photo: "car_1", category: "car" },
+      { photo: "bridge_1", category: "bridge" },
+      { photo: "bus_1", category: "bus" },
+      { photo: "bicycle_2", category: "bicycle" },
+      { photo: "hydrant_1", category: "hydrant" },
+      { photo: "motorcycle_1", category: "motorcycle" },
+      { photo: "bicycle_3", category: "bicycle" },
+      { photo: "tree_1", category: "tree" },
+    ],
+  }));
   const [selectedIndices, setSelectedIndices] = useState<number[]>([]);
   const [errorMsg, setErrorMsg] = useState("");
 
-  const challenge = CHALLENGE_POOL[challengeIndex];
+  useEffect(() => {
+    setChallenge(generateDynamicChallenge());
+  }, []);
 
   const isExactMatch = useCallback(
     (indices: number[]) => {
@@ -156,7 +161,7 @@ export function DemoCaptcha({ verified, onVerifyChange }: DemoCaptchaProps) {
   );
 
   const cycleNextChallenge = useCallback(() => {
-    setChallengeIndex((prev) => (prev + 1) % CHALLENGE_POOL.length);
+    setChallenge((prev) => generateDynamicChallenge(prev.target));
     setSelectedIndices([]);
     setErrorMsg("");
     onVerifyChange(false);
@@ -193,9 +198,9 @@ export function DemoCaptcha({ verified, onVerifyChange }: DemoCaptchaProps) {
       setErrorMsg("");
     } else {
       onVerifyChange(false);
-      setChallengeIndex((prev) => (prev + 1) % CHALLENGE_POOL.length);
+      setChallenge((prev) => generateDynamicChallenge(prev.target));
       setSelectedIndices([]);
-      setErrorMsg("Selection did not match. Try the next challenge.");
+      setErrorMsg("Selection did not match. Try the new challenge.");
     }
   };
 
@@ -240,16 +245,16 @@ export function DemoCaptcha({ verified, onVerifyChange }: DemoCaptchaProps) {
               </strong>
             </div>
             <span className="text-[10px] font-mono text-ink-muted">
-              {challengeIndex + 1}/{CHALLENGE_POOL.length}
+              3x3 GRID
             </span>
           </div>
 
-          <div className="grid grid-cols-3 gap-1.5 w-full max-w-[300px] mx-auto">
+          <div className="grid grid-cols-3 gap-1.5 w-full max-w-[340px] mx-auto">
             {challenge.tiles.map((tile, idx) => {
               const isSelected = selectedIndices.includes(idx);
               return (
                 <button
-                  key={`${challenge.id}-${idx}`}
+                  key={`${challenge.target}-${tile.photo}-${idx}`}
                   type="button"
                   onClick={() => toggleTile(idx)}
                   aria-pressed={isSelected}
