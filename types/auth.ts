@@ -8,6 +8,7 @@ export interface User {
   mfaEnabled: boolean;
   passwordResetRequired?: boolean;
   preferredMfaMethod?: "APP" | "EMAIL" | string;
+  profilePicture?: string | null;
 }
 
 export interface AuthSession {
@@ -68,6 +69,7 @@ export interface AuthResponse {
   mfaEnforced?: boolean;
   passwordResetRequired?: boolean;
   preferredMfaMethod?: "APP" | "EMAIL" | string;
+  profilePicture?: string | null;
 }
 
 export interface GenericApiResponse<T = any> {

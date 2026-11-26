@@ -6,6 +6,8 @@ import Link from "next/link";
 import { User, MfaSetupResponse } from "@/types/auth";
 import { AppIntegration, IntegrationType } from "@/types/integration";
 import { getStoredSession, updateStoredUser, clearSession } from "@/lib/session";
+import { ThemeToggleButton } from "@/components/ThemeProvider";
+import { UserAvatar, resizeImageToAvatarDataUrl } from "@/components/UserAvatar";
 import { useMfa } from "@/hooks/useMfa";
 import { useIntegrations } from "@/hooks/useIntegrations";
 import { resolveServiceUrl } from "@/lib/integrations";
@@ -668,9 +670,10 @@ export default function DashboardPage() {
   const [vaultMfaRequired, setVaultMfaRequired] = useState(true);
   const [vaultSaving, setVaultSaving] = useState(false);
 
-  // Profile Modal State (Self-Service Name Edit with Locked Credentials)
+  // Profile Modal State (Self-Service Name & Avatar Edit with Locked Credentials)
   const [profileModalOpen, setProfileModalOpen] = useState(false);
   const [editFullName, setEditFullName] = useState("");
+  const [editProfilePicture, setEditProfilePicture] = useState<string | null | undefined>(undefined);
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileError, setProfileError] = useState("");
   const [profileSuccess, setProfileSuccess] = useState("");
@@ -969,13 +972,14 @@ export default function DashboardPage() {
     setProfileError("");
     setProfileSuccess("");
 
-    const res = await updateUserProfile(user.userId, editFullName.trim());
+    const res = await updateUserProfile(user.userId, editFullName.trim(), editProfilePicture);
     setProfileSaving(false);
 
     if (res.success) {
-      updateStoredUser({ fullName: editFullName.trim() });
-      setUser((prev) => (prev ? { ...prev, fullName: editFullName.trim() } : prev));
-      setProfileSuccess("Account name updated successfully.");
+      const nextPic = res.profilePicture !== undefined ? res.profilePicture : editProfilePicture;
+      updateStoredUser({ fullName: editFullName.trim(), profilePicture: nextPic ?? null });
+      setUser((prev) => (prev ? { ...prev, fullName: editFullName.trim(), profilePicture: nextPic ?? null } : prev));
+      setProfileSuccess("Profile updated successfully.");
       setTimeout(() => {
         setProfileModalOpen(false);
         setProfileSuccess("");
@@ -1349,6 +1353,29 @@ export default function DashboardPage() {
                 </Link>
               )}
 
+              {/* Transaction Records (Admin only) */}
+              {isAdmin && sidebarPrefs.planBilling && (
+                <Link
+                  href="/users?tab=transactions"
+                  title="Transaction Records"
+                  className={`w-full flex items-center rounded-xl text-xs font-medium transition-all text-left border border-transparent hover:border-white/10 text-slate-400 hover:text-white hover:bg-white/5 ${
+                    sidebarCollapsed ? "justify-center p-2.5" : "justify-between px-3 py-2"
+                  }`}
+                >
+                  <div className={`flex items-center ${sidebarCollapsed ? "justify-center" : "gap-3"}`}>
+                    <svg className="w-4 h-4 text-cyan-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l3.5-2 3.5 2 3.5-2 3.5 2z" />
+                    </svg>
+                    {!sidebarCollapsed && <span>Transaction Records</span>}
+                  </div>
+                  {!sidebarCollapsed && (
+                    <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-emerald-950 text-emerald-400 border border-emerald-800">
+                      Invoices
+                    </span>
+                  )}
+                </Link>
+              )}
+
               {/* Developer & Integration Section */}
               {!isEnterpriseEmployee && (sidebarPrefs.apiDocs || sidebarPrefs.connectService) && !sidebarCollapsed && (
                 <div className="pt-4 px-3 pb-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">
@@ -1671,6 +1698,7 @@ export default function DashboardPage() {
           </div>
 
           <div className="flex items-center gap-2 sm:gap-3">
+            <ThemeToggleButton />
             {/* Gateway Status Badge */}
             <div className="hidden lg:inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-900/60 border border-white/10 text-[11px] text-slate-300 font-mono">
               <span
@@ -1722,9 +1750,12 @@ export default function DashboardPage() {
                 onClick={() => setProfileDropdownOpen((prev) => !prev)}
                 className="flex items-center gap-2 bg-slate-900/60 py-1 pl-1 pr-2.5 rounded-lg border border-white/10 cursor-pointer hover:border-white/20 transition-colors select-none"
               >
-                <div className="w-6 h-6 rounded-md bg-cyan-500/20 border border-cyan-500/30 flex items-center justify-center text-xs font-semibold text-cyan-300 uppercase shrink-0">
-                  {displayName.charAt(0)}
-                </div>
+                <UserAvatar
+                  fullName={displayName}
+                  email={user?.email}
+                  profilePicture={user?.profilePicture}
+                  size="sm"
+                />
                 <span className="text-xs sm:text-sm font-medium text-white truncate max-w-[120px]">{displayName}</span>
                 <svg className={`w-3.5 h-3.5 text-slate-400 shrink-0 transition-transform ${profileDropdownOpen ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
@@ -3028,6 +3059,48 @@ export default function DashboardPage() {
             )}
 
             <form onSubmit={handleSaveProfile} className="space-y-3.5">
+              <div className="flex items-center gap-4 p-3 rounded-xl bg-slate-900/60 border border-white/10">
+                <UserAvatar
+                  fullName={editFullName || user?.fullName}
+                  email={user?.email}
+                  profilePicture={editProfilePicture !== undefined ? editProfilePicture : user?.profilePicture}
+                  size="lg"
+                />
+                <div className="flex-1 space-y-1.5">
+                  <p className="text-xs font-medium text-slate-200">Profile Picture</p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <label className="px-2.5 py-1 rounded-lg bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-500/30 text-cyan-300 text-[11px] font-semibold cursor-pointer transition-colors">
+                      <span>Choose Photo</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          try {
+                            const dataUrl = await resizeImageToAvatarDataUrl(file);
+                            setEditProfilePicture(dataUrl);
+                            setProfileError("");
+                          } catch {
+                            setProfileError("Could not process the selected image.");
+                          }
+                        }}
+                      />
+                    </label>
+                    {(editProfilePicture !== undefined ? editProfilePicture : user?.profilePicture) && (
+                      <button
+                        type="button"
+                        onClick={() => setEditProfilePicture(null)}
+                        className="px-2.5 py-1 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-rose-300 text-[11px] font-semibold cursor-pointer transition-colors"
+                      >
+                        Remove Photo
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+
               <div>
                 <label className="block text-xs font-medium text-slate-300 mb-1">
                   Account Display Name <span className="text-cyan-400 font-normal">(Editable)</span>
@@ -3852,12 +3925,12 @@ export default function DashboardPage() {
             {serviceApprovalModal.status === "PENDING" && (
               <div className="mt-4 space-y-4">
                 <div className="p-3.5 rounded-xl bg-slate-900 border border-white/10 text-center space-y-1">
-                  <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Security Match Number</span>
-                  <div className="text-3xl font-extrabold text-cyan-300 font-mono tracking-widest py-1">
-                    {serviceApprovalModal.matchCode}
+                  <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Mobile Push Approval</span>
+                  <div className="text-lg font-extrabold text-cyan-300 font-mono tracking-wider py-1">
+                    YES / NO PROMPT SENT
                   </div>
                   <p className="text-[11px] text-slate-400">
-                    Open your paired <strong>Sentinel Authenticator</strong> mobile app and approve this request by selecting <strong className="text-cyan-300">{serviceApprovalModal.matchCode}</strong>. Approval is only possible from your mobile device.
+                    Open your paired <strong>Sentinel Authenticator</strong> mobile app and tap <strong className="text-cyan-300">YES</strong> to approve this request.
                   </p>
                 </div>
 

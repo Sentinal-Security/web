@@ -622,13 +622,18 @@ export async function revokeUserService(
 
 export async function updateUserProfile(
   userId: number,
-  fullName: string
+  fullName: string,
+  profilePicture?: string | null
 ): Promise<AuthResponse> {
   try {
+    const body: { userId: number; fullName: string; profilePicture?: string } = { userId, fullName };
+    if (profilePicture !== undefined) {
+      body.profilePicture = profilePicture === null ? "" : profilePicture;
+    }
     const res = await fetch(`${API_BASE_URL}/api/auth/profile`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userId, fullName }),
+      body: JSON.stringify(body),
     });
     return res.json();
   } catch (err: any) {
@@ -827,6 +832,39 @@ export async function capturePaypalOrder(
     return await res.json();
   } catch {
     return { success: false, message: "Network error capturing PayPal sandbox order" };
+  }
+}
+
+export interface BillingTransactionRecord {
+  id: number;
+  company: string;
+  userId?: number;
+  adminEmail: string;
+  orderId: string;
+  invoiceNumber: string;
+  tier: string;
+  billingCycle: string;
+  amount: number;
+  currency: string;
+  paymentMethod: string;
+  status: string;
+  createdAt: string;
+}
+
+export async function fetchBillingTransactions(
+  adminId?: number,
+  company?: string
+): Promise<{ success: boolean; message?: string; data?: BillingTransactionRecord[] }> {
+  try {
+    const params = new URLSearchParams();
+    if (adminId) params.append("adminId", adminId.toString());
+    if (company) params.append("company", company);
+    const res = await fetch(`${API_BASE_URL}/api/billing/transactions?${params.toString()}`, {
+      cache: "no-store",
+    });
+    return await res.json();
+  } catch {
+    return { success: false, message: "Network error fetching billing transaction records" };
   }
 }
 

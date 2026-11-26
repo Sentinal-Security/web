@@ -734,6 +734,7 @@ function LoginPageContent() {
             company: res.company || "",
             mfaEnabled: false,
             passwordResetRequired: res.passwordResetRequired,
+            profilePicture: res.profilePicture,
           }, res.ssoToken);
           router.push("/dashboard?setup_mfa=required");
           return;
@@ -767,6 +768,7 @@ function LoginPageContent() {
             company: res.company || "",
             mfaEnabled: false,
             passwordResetRequired: res.passwordResetRequired,
+            profilePicture: res.profilePicture,
           }, res.ssoToken);
           handleSuccessfulHandoff(res.userId || 1, res.email || email.trim(), res.ssoToken);
         }
@@ -1391,13 +1393,13 @@ function LoginPageContent() {
 
                   {mfaMode === "push" ? (
                     <div>
-                      {/* Push Mode: 2-Digit Number Matching Box */}
-                      <div className="my-5 py-5 px-6 bg-[#18293d]/80 border-2 border-[#38e1ff] rounded-2xl flex flex-col items-center justify-center shadow-[0_0_30px_rgba(56,225,255,0.2)]">
-                        <span className="text-5xl font-extrabold font-mono tracking-widest text-[#38e1ff] animate-pulse">
-                          {mfaChallenge.matchCode || "--"}
+                      {/* Push Mode: Yes/No Mobile Approval Prompt */}
+                      <div className="my-5 py-5 px-6 bg-[#18293d]/80 border-2 border-[#38e1ff] rounded-2xl flex flex-col items-center justify-center text-center shadow-[0_0_30px_rgba(56,225,255,0.2)]">
+                        <span className="text-xl font-extrabold font-mono tracking-wider text-[#38e1ff] animate-pulse">
+                          TAP YES ON MOBILE
                         </span>
-                        <span className="text-[11px] text-slate-400 mt-2 uppercase tracking-wider font-semibold">
-                          Match Code
+                        <span className="text-[11px] text-slate-300 mt-2">
+                          Open Sentinel Authenticator on your device and tap <strong className="text-[#38e1ff]">YES</strong> to approve or <strong className="text-rose-300">NO</strong> to deny.
                         </span>
                       </div>
 

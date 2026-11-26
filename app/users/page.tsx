@@ -19,6 +19,9 @@ import {
   validateSsoSession,
 } from "@/lib/api";
 import { SecurityAuditPanel } from "@/components/SecurityAuditPanel";
+import { AdminTransactionsPanel } from "@/components/AdminTransactionsPanel";
+import { ThemeToggleButton } from "@/components/ThemeProvider";
+import { UserAvatar, resizeImageToAvatarDataUrl } from "@/components/UserAvatar";
 import { useInactivityTimeout } from "@/hooks/useInactivityTimeout";
 import { InactivityWarningModal } from "@/components/session/InactivityWarningModal";
 
@@ -40,13 +43,14 @@ export default function UserManagementPage() {
   // Profile Modal State
   const [profileModalOpen, setProfileModalOpen] = useState(false);
   const [editFullName, setEditFullName] = useState("");
+  const [editProfilePicture, setEditProfilePicture] = useState<string | null | undefined>(undefined);
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileError, setProfileError] = useState("");
   const [profileSuccess, setProfileSuccess] = useState("");
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
 
   // Authentication & Guard
-  const [adminViewTab, setAdminViewTab] = useState<"directory" | "sessions" | "policy" | "audit">("directory");
+  const [adminViewTab, setAdminViewTab] = useState<"directory" | "sessions" | "policy" | "audit" | "transactions">("directory");
 
   // Organization Compliance Policy State
   const [orgPolicy, setOrgPolicy] = useState<OrganizationPolicy | null>(null);
@@ -72,7 +76,7 @@ export default function UserManagementPage() {
     if (typeof window !== "undefined") {
       const urlParams = new URLSearchParams(window.location.search);
       const tabParam = urlParams.get("tab");
-      if (tabParam === "audit" || tabParam === "sessions" || tabParam === "policy") {
+      if (tabParam === "audit" || tabParam === "sessions" || tabParam === "policy" || tabParam === "transactions") {
         setAdminViewTab(tabParam as any);
       }
     }
@@ -390,13 +394,14 @@ export default function UserManagementPage() {
     setProfileError("");
     setProfileSuccess("");
 
-    const res = await updateUserProfile(currentUser.userId, editFullName.trim());
+    const res = await updateUserProfile(currentUser.userId, editFullName.trim(), editProfilePicture);
     setProfileSaving(false);
 
     if (res.success) {
-      updateStoredUser({ fullName: editFullName.trim() });
-      setCurrentUser((prev) => (prev ? { ...prev, fullName: editFullName.trim() } : prev));
-      setProfileSuccess("Account name updated successfully.");
+      const nextPic = res.profilePicture !== undefined ? res.profilePicture : editProfilePicture;
+      updateStoredUser({ fullName: editFullName.trim(), profilePicture: nextPic ?? null });
+      setCurrentUser((prev) => (prev ? { ...prev, fullName: editFullName.trim(), profilePicture: nextPic ?? null } : prev));
+      setProfileSuccess("Profile updated successfully.");
       setTimeout(() => {
         setProfileModalOpen(false);
         setProfileSuccess("");
@@ -627,7 +632,7 @@ export default function UserManagementPage() {
   return (
     <div className="min-h-screen bg-[#030712] text-slate-100 flex flex-col font-sans selection:bg-cyan-500 selection:text-black">
       {/* Top Enterprise Bar */}
-      <header className="sticky top-0 z-40 bg-black/80 backdrop-blur-md border-b border-cyan-500/20 px-6 sm:px-10 py-3.5 flex items-center justify-between">
+      <header className="sticky top-0 z-40 bg-black/80 backdrop-blur-md border-b border-cyan-500/20 px-6 sm:px-10 py-3.5 flex items-center justify-between no-print">
         <div className="flex items-center gap-4">
           <Link href="/dashboard" className="flex items-center gap-2 group">
             <div className="w-8 h-8 rounded-lg bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400 group-hover:border-cyan-400 transition-all">
@@ -654,9 +659,10 @@ export default function UserManagementPage() {
         </div>
 
         <div className="flex items-center gap-3">
+          <ThemeToggleButton />
           <Link
             href="/dashboard"
-            className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900/80 hover:bg-slate-800 border border-white/10 text-slate-300 hover:text-white text-xs font-medium transition-all"
+            className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-surface-elevated border border-line-subtle text-ink-secondary hover:text-ink-primary text-xs font-medium transition-all"
           >
             <span>Back to Dashboard</span>
           </Link>
@@ -681,9 +687,12 @@ export default function UserManagementPage() {
               onClick={() => setProfileDropdownOpen((prev) => !prev)}
               className="flex items-center gap-2 pl-2 pr-3 py-1 rounded-xl bg-slate-900 border border-white/10 hover:border-cyan-500/40 transition-all cursor-pointer"
             >
-              <div className="w-7 h-7 rounded-lg bg-cyan-400 text-slate-950 font-bold text-xs flex items-center justify-center">
-                {currentUser?.fullName?.[0]?.toUpperCase() || "U"}
-              </div>
+              <UserAvatar
+                fullName={currentUser?.fullName}
+                email={currentUser?.email}
+                profilePicture={currentUser?.profilePicture}
+                size="sm"
+              />
               <span className="text-xs font-semibold text-white max-w-[100px] truncate hidden md:inline">
                 {currentUser?.fullName || currentUser?.email}
               </span>
@@ -785,7 +794,7 @@ export default function UserManagementPage() {
         </div>
 
         {/* Admin Navigation View Tabs */}
-        <div className="flex flex-wrap items-center gap-2 border-b border-white/10 pb-3">
+        <div className="flex flex-wrap items-center gap-2 border-b border-white/10 pb-3 no-print">
           <button
             type="button"
             onClick={() => setAdminViewTab("directory")}
@@ -859,10 +868,27 @@ export default function UserManagementPage() {
             <span>Security &amp; Audit Logs</span>
             <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
           </button>
+
+          <button
+            type="button"
+            onClick={() => setAdminViewTab("transactions")}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              adminViewTab === "transactions"
+                ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40"
+                : "bg-slate-900/60 text-slate-400 hover:text-white border border-transparent hover:border-white/10"
+            }`}
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l3.5-2 3.5 2 3.5-2 3.5 2z" />
+            </svg>
+            <span>Transaction Records</span>
+          </button>
         </div>
 
         {adminViewTab === "audit" ? (
           <SecurityAuditPanel adminId={currentUser?.userId} company={currentUser?.company} />
+        ) : adminViewTab === "transactions" ? (
+          <AdminTransactionsPanel adminId={currentUser?.userId} company={currentUser?.company} />
         ) : adminViewTab === "sessions" ? (
           <div className="space-y-6">
             {/* Session Feedback Banner */}
@@ -1294,9 +1320,12 @@ export default function UserManagementPage() {
                       <tr key={u.id} className="hover:bg-white/[0.02] transition-colors">
                         <td className="py-3 px-4">
                           <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-xl bg-slate-900 border border-white/10 flex items-center justify-center font-bold text-xs text-white">
-                              {u.fullName?.[0]?.toUpperCase() || u.email[0].toUpperCase()}
-                            </div>
+                            <UserAvatar
+                              fullName={u.fullName}
+                              email={u.email}
+                              profilePicture={u.profilePicture}
+                              size="md"
+                            />
                             <div>
                               <div className="flex items-center gap-2">
                                 <span className="font-semibold text-white">{u.fullName}</span>
@@ -2032,6 +2061,48 @@ export default function UserManagementPage() {
             )}
 
             <form onSubmit={handleSaveProfile} className="space-y-4">
+              <div className="flex items-center gap-4 p-3 rounded-xl bg-slate-900/60 border border-white/10">
+                <UserAvatar
+                  fullName={editFullName || currentUser?.fullName}
+                  email={currentUser?.email}
+                  profilePicture={editProfilePicture !== undefined ? editProfilePicture : currentUser?.profilePicture}
+                  size="lg"
+                />
+                <div className="flex-1 space-y-1.5">
+                  <p className="text-xs font-semibold text-slate-200">Profile Picture</p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <label className="px-2.5 py-1 rounded-lg bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-500/30 text-cyan-300 text-[11px] font-semibold cursor-pointer transition-colors">
+                      <span>Choose Photo</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          try {
+                            const dataUrl = await resizeImageToAvatarDataUrl(file);
+                            setEditProfilePicture(dataUrl);
+                            setProfileError("");
+                          } catch {
+                            setProfileError("Could not process the selected image.");
+                          }
+                        }}
+                      />
+                    </label>
+                    {(editProfilePicture !== undefined ? editProfilePicture : currentUser?.profilePicture) && (
+                      <button
+                        type="button"
+                        onClick={() => setEditProfilePicture(null)}
+                        className="px-2.5 py-1 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-rose-300 text-[11px] font-semibold cursor-pointer transition-colors"
+                      >
+                        Remove Photo
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+
               <div>
                 <label className="block text-xs font-semibold text-slate-300 mb-1">
                   Account Display Name <span className="text-cyan-400 font-normal">(Editable)</span>
