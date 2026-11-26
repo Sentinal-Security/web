@@ -16,7 +16,7 @@ import {
   validateSsoSession,
 } from "@/lib/api";
 
-type PlanKey = "COMMUNITY" | "PROFESSIONAL" | "ENTERPRISE";
+type PlanKey = "COMMUNITY" | "PROFESSIONAL" | "ENTERPRISE" | "PERSONAL_PLUS" | "PERSONAL_FAMILY";
 
 interface PlanTier {
   id: PlanKey;
@@ -34,6 +34,7 @@ export default function PricingPage() {
   const router = useRouter();
   const { showNoticeModal } = useBackendGuard();
   const [annualBilling, setAnnualBilling] = useState(true);
+  const [planAudience, setPlanAudience] = useState<"PERSONAL" | "ORGANIZATION">("ORGANIZATION");
   const [user, setUser] = useState<User | null>(null);
   const [currentTier, setCurrentTier] = useState<PlanKey>("COMMUNITY");
   const [companyName, setCompanyName] = useState<string>("default");
@@ -78,6 +79,11 @@ export default function PricingPage() {
       });
 
       setUser(session.user);
+      if (session.user.company?.toLowerCase() === "personal") {
+        setPlanAudience("PERSONAL");
+      } else {
+        setPlanAudience("ORGANIZATION");
+      }
       const userComp = session.user.company || "default";
       setCompanyName(userComp);
 
@@ -104,9 +110,11 @@ export default function PricingPage() {
     loadUserAndTier();
   }, [loadUserAndTier]);
 
+  const isPersonalAccount = user?.company?.toLowerCase() === "personal";
   const isAdmin = user?.role === "ADMIN";
+  const canManageBilling = Boolean(user && (isAdmin || isPersonalAccount));
 
-  const tiers: PlanTier[] = [
+  const organizationTiers: PlanTier[] = [
     {
       id: "COMMUNITY",
       name: "Community / Evaluation",
@@ -165,6 +173,67 @@ export default function PricingPage() {
     },
   ];
 
+  const personalTiers: PlanTier[] = [
+    {
+      id: "COMMUNITY",
+      name: "Personal Free",
+      description: "Essential personal password manager and two-factor vault for everyday use.",
+      monthlyPrice: 0,
+      annualPrice: 0,
+      cadence: "forever free",
+      badge: "Starter Vault",
+      highlighted: false,
+      features: [
+        "Up to 15 Saved Vault Passwords",
+        "Browser Autofill Extension Access",
+        "TOTP & Email Two-Factor Authentication",
+        "Local Device Biometric Unlock",
+      ],
+    },
+    {
+      id: "PERSONAL_PLUS",
+      name: "Personal Plus",
+      description: "Unlimited password storage, cross-device sync, and breach alerts for individuals.",
+      monthlyPrice: 4,
+      annualPrice: 3,
+      cadence: "per month",
+      badge: "Best Value",
+      highlighted: true,
+      features: [
+        "Unlimited Saved Passwords & Secure Notes",
+        "Cross-Device Vault Sync (Web, Extension & Mobile)",
+        "Password Health & Reuse Watch Alerts",
+        "Emergency Recovery Codes & Priority Support",
+      ],
+    },
+    {
+      id: "PERSONAL_FAMILY",
+      name: "Personal Family",
+      description: "Private multi-vault protection and encrypted sharing for up to 5 people.",
+      monthlyPrice: 9,
+      annualPrice: 7,
+      cadence: "per month",
+      badge: "Up to 5 Vaults",
+      highlighted: false,
+      features: [
+        "Up to 5 Private Personal Vaults",
+        "Encrypted Credential Sharing Links",
+        "Hardware Key & Passkey-Ready Storage",
+        "Automated Encrypted Vault Backups",
+      ],
+    },
+  ];
+
+  const tiers = planAudience === "PERSONAL" ? personalTiers : organizationTiers;
+
+  const getTierTotal = (tier: PlanTier, annual: boolean): number => {
+    if (tier.id === "COMMUNITY") return 0;
+    if (tier.id === "PERSONAL_PLUS") return annual ? 36.0 : 4.0;
+    if (tier.id === "PERSONAL_FAMILY") return annual ? 84.0 : 9.0;
+    if (tier.id === "PROFESSIONAL") return annual ? 168.0 : 18.0;
+    return annual ? 828.0 : 79.0;
+  };
+
   const handleSelectTier = (tier: PlanTier) => {
     // If not logged in, prompt user to sign in
     if (!user) {
@@ -177,8 +246,8 @@ export default function PricingPage() {
       return;
     }
 
-    // If not company admin, open permission warning modal
-    if (!isAdmin) {
+    // If not company admin or personal account owner, open permission warning modal
+    if (!canManageBilling) {
       setNonAdminModalOpen(true);
       return;
     }
@@ -279,9 +348,7 @@ export default function PricingPage() {
       setCurrentTier(selectedPlan.id);
       updateStoredUser({ subscriptionTier: selectedPlan.id });
 
-      const amountCharged = annualBilling
-        ? selectedPlan.id === "PROFESSIONAL" ? 168.00 : 828.00
-        : selectedPlan.id === "PROFESSIONAL" ? 18.00 : 79.00;
+      const amountCharged = getTierTotal(selectedPlan, annualBilling);
 
       const generatedInvoiceNum = captureRes.data?.invoiceNumber || ("INV-2026-" + Math.floor(10000 + Math.random() * 90000));
 
@@ -386,8 +453,31 @@ export default function PricingPage() {
             From coursework simulation and evaluation to enterprise multi-tenant access governance. Complete MFA, SSO federation, and database encryption included.
           </p>
 
-          {/* Billing Toggle Switch */}
-          <div className="mt-8 inline-flex items-center gap-3 p-1 rounded-xl bg-slate-900 border border-white/10">
+          {/* Audience Toggle (Individual vs Organization) */}
+          <div className="mt-6 flex flex-col items-center gap-3">
+            <div className="inline-flex items-center gap-2 p-1 rounded-xl bg-slate-900 border border-white/10">
+              <button
+                type="button"
+                onClick={() => setPlanAudience("PERSONAL")}
+                className={`px-4 py-2 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
+                  planAudience === "PERSONAL" ? "bg-white text-slate-950 font-bold" : "text-slate-400 hover:text-white"
+                }`}
+              >
+                Individual (Password Vault)
+              </button>
+              <button
+                type="button"
+                onClick={() => setPlanAudience("ORGANIZATION")}
+                className={`px-4 py-2 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
+                  planAudience === "ORGANIZATION" ? "bg-white text-slate-950 font-bold" : "text-slate-400 hover:text-white"
+                }`}
+              >
+                Organization (Enterprise)
+              </button>
+            </div>
+
+            {/* Billing Toggle Switch */}
+            <div className="inline-flex items-center gap-3 p-1 rounded-xl bg-slate-900 border border-white/10">
             <button
               type="button"
               onClick={() => setAnnualBilling(false)}
@@ -409,6 +499,7 @@ export default function PricingPage() {
                 Save 20%
               </span>
             </button>
+            </div>
           </div>
         </div>
 
@@ -467,7 +558,7 @@ export default function PricingPage() {
                     </div>
                     {tier.monthlyPrice > 0 && annualBilling && (
                       <p className="text-[11px] text-cyan-400/80 font-mono mt-1">
-                        Billed annually (${tier.id === "PROFESSIONAL" ? "168" : "828"} / year)
+                        Billed annually (${getTierTotal(tier, true).toFixed(0)} / year)
                       </p>
                     )}
                   </div>
@@ -507,7 +598,7 @@ export default function PricingPage() {
                     >
                       Sign In to Select Plan
                     </Link>
-                  ) : !isAdmin ? (
+                  ) : !canManageBilling ? (
                     <button
                       type="button"
                       onClick={() => setNonAdminModalOpen(true)}
@@ -701,9 +792,7 @@ export default function PricingPage() {
                   <div className="pt-3 border-t border-white/10 flex items-center justify-between">
                     <span className="text-xs font-semibold text-white">Total Due Today:</span>
                     <span className="text-xl font-extrabold text-white">
-                      ${annualBilling
-                        ? selectedPlan.id === "PROFESSIONAL" ? "168.00" : "828.00"
-                        : selectedPlan.id === "PROFESSIONAL" ? "18.00" : "79.00"}{" "}
+                      ${getTierTotal(selectedPlan, annualBilling).toFixed(2)}{" "}
                       <span className="text-xs font-normal text-slate-400">USD</span>
                     </span>
                   </div>
@@ -912,9 +1001,7 @@ export default function PricingPage() {
                   <div className="text-right">
                     <div className="text-[10px] text-slate-500 uppercase font-semibold">Total Due</div>
                     <div className="text-base font-extrabold text-[#003087]">
-                      ${annualBilling
-                        ? selectedPlan.id === "PROFESSIONAL" ? "168.00" : "828.00"
-                        : selectedPlan.id === "PROFESSIONAL" ? "18.00" : "79.00"}{" "}
+                      ${getTierTotal(selectedPlan, annualBilling).toFixed(2)}{" "}
                       USD
                     </div>
                   </div>
@@ -1000,9 +1087,7 @@ export default function PricingPage() {
                   >
                     <span>Pay Now</span>
                     <span className="text-xs font-normal opacity-90">
-                      (${annualBilling
-                        ? selectedPlan.id === "PROFESSIONAL" ? "168.00" : "828.00"
-                        : selectedPlan.id === "PROFESSIONAL" ? "18.00" : "79.00"}{" "}
+                      (${getTierTotal(selectedPlan, annualBilling).toFixed(2)}{" "}
                       USD)
                     </span>
                   </button>
