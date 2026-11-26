@@ -940,8 +940,15 @@ function LoginPageContent() {
             company: res.company,
             challengeId: res.challengeId,
             matchCode: res.matchCode,
+            preferredMfaMethod: res.preferredMfaMethod,
           });
-          setMfaMode(res.matchCode ? "push" : "totp");
+          if (res.preferredMfaMethod === "EMAIL") {
+            setMfaMode("email");
+            setEmailOtpNotice(`A 6-digit verification code was dispatched to ${res.email || "your email"}.`);
+            setEmailOtpCooldown(30);
+          } else {
+            setMfaMode(res.matchCode ? "push" : "totp");
+          }
         } else {
           saveSession({
             userId: res.userId || 1,
