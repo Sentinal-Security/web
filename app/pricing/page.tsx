@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Header from "@/app/partials/header";
 import Footer from "@/app/partials/footer";
+import { useBackendGuard } from "@/components/BackendGuard";
 import { getStoredSession, updateStoredUser, clearSession } from "@/lib/session";
 import { User } from "@/types/auth";
 import {
@@ -31,6 +32,7 @@ interface PlanTier {
 
 export default function PricingPage() {
   const router = useRouter();
+  const { showNoticeModal } = useBackendGuard();
   const [annualBilling, setAnnualBilling] = useState(true);
   const [user, setUser] = useState<User | null>(null);
   const [currentTier, setCurrentTier] = useState<PlanKey>("COMMUNITY");
@@ -216,12 +218,24 @@ export default function PricingPage() {
           targetResource: `Company Plan: ${companyName}`,
           details: `Admin ${user.email} reset subscription to Community Free tier.`,
         });
-        alert(`Successfully reset ${companyName} to Community Free tier.`);
+        showNoticeModal({
+          title: "Subscription Reset",
+          message: `Successfully reset ${companyName} to Community Free tier.`,
+          type: "success",
+        });
       } else {
-        alert(res.message || "Failed to reset subscription tier.");
+        showNoticeModal({
+          title: "Billing & Subscription Problem",
+          message: res.message || "Failed to reset subscription tier.",
+          type: "error",
+        });
       }
     } catch {
-      alert("Network error updating subscription.");
+      showNoticeModal({
+        title: "Network Error",
+        message: "Network error updating subscription.",
+        type: "error",
+      });
     }
   };
 
