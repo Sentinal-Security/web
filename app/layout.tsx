@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono, Orbitron } from "next/font/google";
-import Prewarmer from "@/app/partials/prewarmer";
+import BackendGuard from "@/components/BackendGuard";
+import { ThemeProvider } from "@/components/ThemeProvider";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -27,11 +28,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} ${orbitron.variable} h-full antialiased`}
+      data-theme="dark"
+      suppressHydrationWarning
+      className={`${geistSans.variable} ${geistMono.variable} ${orbitron.variable} dark h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">
-        <Prewarmer />
-        {children}
+      <body className="min-h-full flex flex-col bg-surface-page text-ink-primary transition-colors">
+        <ThemeProvider>
+          <BackendGuard>{children}</BackendGuard>
+        </ThemeProvider>
       </body>
     </html>
   );
