@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { getStoredSession } from "@/lib/session";
+import { ThemeToggleButton } from "@/components/ThemeProvider";
 
 export default function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -16,7 +17,7 @@ export default function Header() {
   }, []);
 
   return (
-    <header className="sticky top-0 z-50 w-full bg-black/90 backdrop-blur-md border-b border-white/10 transition-colors">
+    <header className="sticky top-0 z-50 w-full bg-surface-header backdrop-blur-md border-b border-line-subtle transition-colors">
       <div className="max-w-[1600px] mx-auto px-6 sm:px-10 lg:px-16 h-20 flex items-center justify-between">
         {/* Brand Logo */}
         <Link href="/" className="flex items-center gap-2.5 group">
@@ -115,7 +116,8 @@ export default function Header() {
         </nav>
 
         {/* Right Action */}
-        <div className="hidden md:flex items-center space-x-6">
+        <div className="hidden md:flex items-center space-x-4">
+          <ThemeToggleButton />
           {isAuthenticated ? (
             <Link
               href="/dashboard"

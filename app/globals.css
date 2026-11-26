@@ -1,31 +1,224 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #f1f5f9;
+  --foreground: #0f172a;
+  --surface-page: #f1f5f9;
+  --surface-card: #ffffff;
+  --surface-elevated: #e2e8f0;
+  --surface-input: #ffffff;
+  --surface-header: rgba(255, 255, 255, 0.92);
+  --ink-primary: #0f172a;
+  --ink-secondary: #334155;
+  --ink-muted: #475569;
+  --line-subtle: #cbd5e1;
+  --line-accent: rgba(14, 116, 144, 0.35);
+  --accent-primary: #0e7490;
+  --accent-primary-hover: #155e75;
+  --accent-primary-fg: #ffffff;
+  --accent-text: #0e7490;
+}
+
+html[data-theme="dark"] {
+  --background: #030712;
+  --foreground: #ededed;
+  --surface-page: #030712;
+  --surface-card: #070b16;
+  --surface-elevated: #0d1522;
+  --surface-input: #020617;
+  --surface-header: rgba(0, 0, 0, 0.85);
+  --ink-primary: #ffffff;
+  --ink-secondary: #cbd5e1;
+  --ink-muted: #94a3b8;
+  --line-subtle: rgba(255, 255, 255, 0.1);
+  --line-accent: rgba(6, 182, 212, 0.3);
+  --accent-primary: #3bf0ff;
+  --accent-primary-hover: #2fe0ef;
+  --accent-primary-fg: #020617;
+  --accent-text: #22d3ee;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-surface-page: var(--surface-page);
+  --color-surface-card: var(--surface-card);
+  --color-surface-elevated: var(--surface-elevated);
+  --color-surface-input: var(--surface-input);
+  --color-surface-header: var(--surface-header);
+  --color-ink-primary: var(--ink-primary);
+  --color-ink-secondary: var(--ink-secondary);
+  --color-ink-muted: var(--ink-muted);
+  --color-line-subtle: var(--line-subtle);
+  --color-line-accent: var(--line-accent);
+  --color-accent-primary: var(--accent-primary);
+  --color-accent-primary-hover: var(--accent-primary-hover);
+  --color-accent-primary-fg: var(--accent-primary-fg);
+  --color-accent-text: var(--accent-text);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
   --font-orbitron: var(--font-orbitron);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+body {
+  background: var(--surface-page);
+  color: var(--ink-primary);
+  font-family: Arial, Helvetica, sans-serif;
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+/* Crisp Light Mode semantic contrast rules (never naive inversion) */
+@media screen {
+  html[data-theme="light"] .bg-\[\#030712\],
+  html[data-theme="light"] .bg-\[\#050811\] {
+    background-color: var(--surface-page) !important;
+  }
+
+  html[data-theme="light"] .bg-\[\#070b16\],
+  html[data-theme="light"] .bg-\[\#080d1a\],
+  html[data-theme="light"] .bg-\[\#0d1522\],
+  html[data-theme="light"] .bg-\[\#0c1424\] {
+    background-color: var(--surface-card) !important;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+  }
+
+  html[data-theme="light"] .bg-black,
+  html[data-theme="light"] .bg-black\/90,
+  html[data-theme="light"] .bg-black\/80,
+  html[data-theme="light"] .bg-black\/60,
+  html[data-theme="light"] .bg-slate-950,
+  html[data-theme="light"] .bg-slate-950\/80,
+  html[data-theme="light"] .bg-slate-950\/60 {
+    background-color: var(--surface-card) !important;
+  }
+
+  html[data-theme="light"] .bg-slate-900,
+  html[data-theme="light"] .bg-slate-900\/90,
+  html[data-theme="light"] .bg-slate-900\/80,
+  html[data-theme="light"] .bg-slate-900\/60 {
+    background-color: var(--surface-elevated) !important;
+  }
+
+  html[data-theme="light"] .text-white {
+    color: var(--ink-primary) !important;
+  }
+
+  html[data-theme="light"] .text-slate-100,
+  html[data-theme="light"] .text-slate-200,
+  html[data-theme="light"] .text-slate-300,
+  html[data-theme="light"] .text-gray-300 {
+    color: var(--ink-secondary) !important;
+  }
+
+  html[data-theme="light"] .text-slate-400,
+  html[data-theme="light"] .text-slate-500,
+  html[data-theme="light"] .text-gray-400 {
+    color: var(--ink-muted) !important;
+  }
+
+  html[data-theme="light"] .text-cyan-300,
+  html[data-theme="light"] .text-cyan-400,
+  html[data-theme="light"] .text-\[\#3bf0ff\] {
+    color: var(--accent-text) !important;
+  }
+
+  html[data-theme="light"] .text-emerald-300,
+  html[data-theme="light"] .text-emerald-400 {
+    color: #047857 !important;
+  }
+
+  html[data-theme="light"] .text-rose-300,
+  html[data-theme="light"] .text-rose-400 {
+    color: #be123c !important;
+  }
+
+  html[data-theme="light"] .text-amber-300,
+  html[data-theme="light"] .text-amber-400 {
+    color: #b45309 !important;
+  }
+
+  html[data-theme="light"] .text-purple-300,
+  html[data-theme="light"] .text-purple-400 {
+    color: #6d28d9 !important;
+  }
+
+  html[data-theme="light"] .border-white\/10,
+  html[data-theme="light"] .border-white\/15,
+  html[data-theme="light"] .border-white\/5,
+  html[data-theme="light"] .border-slate-800,
+  html[data-theme="light"] .border-slate-700 {
+    border-color: var(--line-subtle) !important;
+  }
+
+  html[data-theme="light"] .bg-cyan-950,
+  html[data-theme="light"] .bg-cyan-950\/60,
+  html[data-theme="light"] .bg-cyan-500\/10,
+  html[data-theme="light"] .bg-cyan-500\/20 {
+    background-color: #ecfeff !important;
+    border-color: #a5f3fc !important;
+  }
+
+  html[data-theme="light"] .bg-emerald-950,
+  html[data-theme="light"] .bg-emerald-500\/10 {
+    background-color: #ecfdf5 !important;
+    border-color: #a7f3d0 !important;
+  }
+
+  html[data-theme="light"] .bg-rose-500\/10 {
+    background-color: #fff1f2 !important;
+    border-color: #fecdd3 !important;
+  }
+
+  html[data-theme="light"] .bg-amber-500\/10 {
+    background-color: #fffbeb !important;
+    border-color: #fde68a !important;
+  }
+
+  html[data-theme="light"] .bg-purple-500\/10 {
+    background-color: #f5f3ff !important;
+    border-color: #ddd6fe !important;
+  }
+
+  html[data-theme="light"] .bg-\[\#3bf0ff\],
+  html[data-theme="light"] .bg-cyan-400,
+  html[data-theme="light"] .bg-cyan-500 {
+    background-color: var(--accent-primary) !important;
+    color: var(--accent-primary-fg) !important;
+  }
 }
 
 .font-orbitron {
   font-family: var(--font-orbitron), system-ui, sans-serif;
+}
+
+.print-only {
+  display: none;
+}
+
+@media print {
+  body {
+    background: #ffffff !important;
+    color: #0f172a !important;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  .print-only {
+    display: block !important;
+  }
+
+  .printable-area,
+  .printable-area * {
+    background: #ffffff !important;
+    color: #0f172a !important;
+    border-color: #cbd5e1 !important;
+    box-shadow: none !important;
+  }
+
+  .printable-modal-backdrop {
+    position: static !important;
+    background: #ffffff !important;
+    padding: 0 !important;
+  }
 }
