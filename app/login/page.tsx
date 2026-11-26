@@ -1068,33 +1068,14 @@ function LoginPageContent() {
           <div className="lg:col-span-6 flex justify-center lg:justify-end">
             <div className="w-full max-w-xl xl:max-w-2xl rounded-[32px] sm:rounded-[36px] bg-[#0c1424]/85 border border-white/15 shadow-2xl backdrop-blur-xl p-8 sm:p-10 md:p-12">
               
-              {/* Top Shield Emblem */}
+              {/* Official Sentinel Logo */}
               <div className="flex justify-center mb-3">
-                <svg
-                  className="w-13 h-13 text-[#38e1ff]"
-                  viewBox="0 0 64 64"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  {/* Outer Shield Outline */}
-                  <path
-                    d="M32 4 L50 12 C50 36 32 58 32 58 C32 58 14 36 14 12 Z"
-                    className="stroke-[#38e1ff]"
-                    fill="rgba(56, 225, 255, 0.05)"
-                  />
-                  {/* Visor and Crest Inner Grid */}
-                  <path d="M32 4 V32" />
-                  <path d="M22 18 H42" />
-                  <path d="M20 27 H44" />
-                  <path d="M24 36 H40" />
-                  <path d="M28 44 H36" />
-                  {/* Visor Side Accents */}
-                  <path d="M24 20 L27 34" />
-                  <path d="M40 20 L37 34" />
-                </svg>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src="/logo.png"
+                  alt="Sentinel Security Logo"
+                  className="w-12 h-12 rounded-xl object-contain"
+                />
               </div>
 
               {extHandoffSuccess ? (
